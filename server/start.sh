@@ -38,4 +38,4 @@ echo "Press Ctrl+C to stop"
 echo ""
 
 # Start the server
-go run main.go
+go run ./cmd/server

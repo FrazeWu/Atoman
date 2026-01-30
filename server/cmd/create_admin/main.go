@@ -6,11 +6,12 @@ import (
 	"log"
 	"os"
 
+	"time"
+
 	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"time"
 )
 
 // User definitions to match the main application
@@ -73,8 +74,8 @@ func main() {
 
 	if *username == "" || *email == "" || *password == "" {
 		fmt.Println("Usage:")
-		fmt.Println("  Create new admin: go run main.go -username <name> -email <email> -password <pass>")
-		fmt.Println("  Promote existing: go run main.go -promote <username>")
+		fmt.Println("  Create new admin: go run . -username <name> -email <email> -password <pass>")
+		fmt.Println("  Promote existing: go run . -promote <username>")
 		os.Exit(1)
 	}
 

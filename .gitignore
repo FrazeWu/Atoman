@@ -1,6 +1,6 @@
 server/.env
 server/.env.production
-server/all-kanye-backend
+server/.
 *.log
 test_*
 # AGENTS.md
