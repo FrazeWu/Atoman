@@ -79,14 +79,14 @@ func RegisterHandler(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		// Create default user settings
-		if err := db.Create(&model.UserSettings{UserID: user.ID}).Error; err != nil {
+		if err := db.Create(&model.UserSettings{UserID: user.UUID}).Error; err != nil {
 			// Log error but don't fail registration
 			c.Error(err)
 		}
 
 		// Generate JWT
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-			"user_id":  user.ID,
+			"user_id":  user.UUID.String(),
 			"username": user.Username,
 			"exp":      time.Now().Add(time.Hour * 24).Unix(),
 		})
@@ -100,6 +100,7 @@ func RegisterHandler(db *gorm.DB) gin.HandlerFunc {
 		c.JSON(http.StatusCreated, gin.H{
 			"token": tokenString,
 			"user": gin.H{
+				"uuid":         user.UUID,
 				"id":           user.ID,
 				"username":     user.Username,
 				"email":        user.Email,
@@ -135,7 +136,7 @@ func LoginHandler(db *gorm.DB) gin.HandlerFunc {
 
 		// Generate JWT
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-			"user_id":  user.ID,
+			"user_id":  user.UUID.String(),
 			"username": user.Username,
 			"role":     user.Role,
 			"exp":      time.Now().Add(time.Hour * 24).Unix(),
@@ -150,6 +151,7 @@ func LoginHandler(db *gorm.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{
 			"token": tokenString,
 			"user": gin.H{
+				"uuid":         user.UUID,
 				"id":           user.ID,
 				"username":     user.Username,
 				"email":        user.Email,

@@ -254,10 +254,10 @@ const routes = [
 
 ---
 
-## Sub-module: Agents Configuration for Kanye Archive
+## Sub-module: Agents Configuration for Atoman
 
 ### Overview
-This document defines AI agents and tools to assist in building a Vue 3 website for collecting all Kanye West songs, featuring authentication, uploads, corrections, and a minimalist UI, with a clear definition of user roles and permissions.
+This document defines AI agents and tools to assist in building a Vue 3 website for collecting all Atoman songs, featuring authentication, uploads, corrections, and a minimalist UI, with a clear definition of user roles and permissions.
 
 ### Database Schema (Updated 2026-01-18)
 
@@ -355,7 +355,7 @@ To ensure content quality and proper management, the system implements a user ro
         *   `POST /api/admin/reject-album-correction/:id` - Reject album correction
 
 #### Data Agent
-- **Purpose**: Collect and structure Kanye discography data.
+- **Purpose**: Collect and structure Atoman discography data.
 - **Tools**: Web scraping (Puppeteer), APIs (Spotify, Genius), CSV/JSON processing.
 - **Responsibilities**: Scrape song metadata, populate initial database.
 
@@ -384,7 +384,7 @@ To ensure content quality and proper management, the system implements a user ro
 
 **Admin Credentials:**
 - Username: `admin`
-- Email: `admin@kanyearchive.com`
+- Email: `admin@atoman.com`
 - Password: `admin123`
 
 ### Usage
@@ -392,7 +392,7 @@ Agents work collaboratively: Frontend builds UI, Backend handles logic, Data pop
 
 ---
 
-## Sub-module: Kanye Archive — UI/UX Design Spec
+## Sub-module: Atoman — UI/UX Design Spec
 
 ### Design Style
 **极简主义 + 档案馆美学 (Minimalist Archive Aesthetic)**
@@ -443,7 +443,7 @@ bg-white border-2 border-black p-6 hover:shadow-[10px_10px_0px_0px_rgba(0,0,0,1)
 - **Height**: `h-16` (64px)
 - **Background**: white + `border-b-2 border-black`
 - **Content**:
-  - Left: `KANYE ARCHIVE` brand (`text-2xl font-black tracking-tighter`)
+  - Left: `ATOMAN` brand (`text-2xl font-black tracking-tighter`)
   - Right: nav links + user menu (Timeline | Upload | Admin Review | Username dropdown / Login)
 
 #### 2. Main Content Areas
@@ -509,7 +509,7 @@ bg-white border-2 border-black p-6 hover:shadow-[10px_10px_0px_0px_rgba(0,0,0,1)
 
 ---
 
-## Sub-module: Kanye Archive — Functional Requirements
+## Sub-module: Atoman — Functional Requirements
 
 ### 1. User Authentication
 - Email + password login/registration system
@@ -576,7 +576,7 @@ bg-white border-2 border-black p-6 hover:shadow-[10px_10px_0px_0px_rgba(0,0,0,1)
 
 ---
 
-## Sub-module: Kanye Archive — Tech Stack & Priority
+## Sub-module: Atoman — Tech Stack & Priority
 
 ### Frontend
 - Framework: Vue 3 (Composition API)

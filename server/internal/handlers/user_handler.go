@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"atoman/internal/middleware"
@@ -18,7 +19,8 @@ func SetupUserRoutes(router *gin.Engine, db *gorm.DB) {
 
 	users := router.Group("/api/users")
 	{
-		// Public routes
+		// Public routes — lookup by username (must come before /:id routes)
+		users.GET("/by-username/:username", GetUserByUsername(db))
 		users.GET("/:id/profile", GetUserProfile(db))
 		users.GET("/:id/followers", GetUserFollowers(db))
 		users.GET("/:id/following", GetUserFollowing(db))
@@ -27,6 +29,7 @@ func SetupUserRoutes(router *gin.Engine, db *gorm.DB) {
 		protected := users.Group("")
 		protected.Use(middleware.AuthMiddleware())
 		{
+			protected.GET("/me", GetCurrentUser(db))
 			protected.PUT("/me", UpdateUserProfile(db))
 			protected.GET("/me/settings", GetUserSettings(db))
 			protected.PUT("/me/settings", UpdateUserSettings(db))
@@ -97,13 +100,65 @@ func ExplorePosts(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+// GetCurrentUser returns the authenticated user's own full profile
+func GetCurrentUser(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		var user model.User
+		if err := db.Where("uuid = ?", userID).First(&user).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"data": user, "message": "ok"})
+	}
+}
+
+// GetUserByUsername looks up a user by their username (public)
+func GetUserByUsername(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		username := c.Param("username")
+		var user model.User
+
+		if err := db.Where("username = ?", username).First(&user).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			return
+		}
+
+		var followersCount, followingCount, postsCount int64
+		db.Model(&model.Follow{}).Where("following_id = ?", user.UUID).Count(&followersCount)
+		db.Model(&model.Follow{}).Where("follower_id = ?", user.UUID).Count(&followingCount)
+		db.Model(&model.Post{}).Where("user_id = ? AND status = ?", user.UUID, "published").Count(&postsCount)
+
+		c.JSON(http.StatusOK, gin.H{
+			"data": gin.H{
+				"id":              user.ID,
+				"uuid":            user.UUID,
+				"username":        user.Username,
+				"display_name":    user.DisplayName,
+				"avatar_url":      user.AvatarURL,
+				"bio":             user.Bio,
+				"website":         user.Website,
+				"role":            user.Role,
+				"created_at":      user.CreatedAt,
+				"followers_count": followersCount,
+				"following_count": followingCount,
+				"posts_count":     postsCount,
+			},
+			"message": "ok",
+		})
+	}
+}
+
 // GetUserProfile returns public profile information for a user
 func GetUserProfile(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		var user model.User
 
-		if err := db.First(&user, id).Error; err != nil {
+		if err := db.Where("uuid = ? OR username = ?", id, id).First(&user).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 			return
 		}
@@ -113,18 +168,19 @@ func GetUserProfile(db *gorm.DB) gin.HandlerFunc {
 		var followingCount int64
 		var postsCount int64
 
-		db.Model(&model.Follow{}).Where("following_id = ?", user.ID).Count(&followersCount)
-		db.Model(&model.Follow{}).Where("follower_id = ?", user.ID).Count(&followingCount)
-		db.Model(&model.Post{}).Where("user_id = ? AND status = ?", user.ID, "published").Count(&postsCount)
+		db.Model(&model.Follow{}).Where("following_id = ?", user.UUID).Count(&followersCount)
+		db.Model(&model.Follow{}).Where("follower_id = ?", user.UUID).Count(&followingCount)
+		db.Model(&model.Post{}).Where("user_id = ? AND status = ?", user.UUID, "published").Count(&postsCount)
 
 		// Get user's channels
 		var channels []model.Channel
-		db.Where("user_id = ?", user.ID).Find(&channels)
+		db.Where("user_id = ?", user.UUID).Find(&channels)
 
 		c.JSON(http.StatusOK, gin.H{
 			"data": gin.H{
 				"user": gin.H{
 					"id":           user.ID,
+					"uuid":         user.UUID,
 					"username":     user.Username,
 					"display_name": user.DisplayName,
 					"avatar_url":   user.AvatarURL,
@@ -154,11 +210,11 @@ func UpdateUserProfile(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		var user model.User
-		if err := db.First(&user, userID).Error; err != nil {
+		if err := db.Where("uuid = ?", userID).First(&user).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 			return
 		}
@@ -181,8 +237,8 @@ func UpdateUserProfile(db *gorm.DB) gin.HandlerFunc {
 // GetUserSettings returns the authenticated user's settings
 func GetUserSettings(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		var settings model.UserSettings
 		if err := db.Where("user_id = ?", userID).First(&settings).Error; err != nil {
@@ -204,8 +260,8 @@ func UpdateUserSettings(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		var settings model.UserSettings
 		if err := db.Where("user_id = ?", userID).First(&settings).Error; err != nil {
@@ -236,42 +292,42 @@ func UpdateUserSettings(db *gorm.DB) gin.HandlerFunc {
 func FollowUser(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		targetIDStr := c.Param("id")
-		targetID, err := strconv.ParseUint(targetIDStr, 10, 32)
+		targetID, err := uuid.Parse(targetIDStr)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user UUID"})
 			return
 		}
 
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
-		if userID == uint(targetID) {
+		if userID == targetID {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "You cannot follow yourself"})
 			return
 		}
 
 		// Check if target user exists
 		var targetUser model.User
-		if err := db.First(&targetUser, targetID).Error; err != nil {
+		if err := db.Where("uuid = ?", targetID).First(&targetUser).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 			return
 		}
 
 		follow := model.Follow{
 			FollowerID:  userID,
-			FollowingID: uint(targetID),
+			FollowingID: targetID,
 		}
 
-		if err := db.Where(model.Follow{FollowerID: userID, FollowingID: uint(targetID)}).FirstOrCreate(&follow).Error; err != nil {
+		if err := db.Where(model.Follow{FollowerID: userID, FollowingID: targetID}).FirstOrCreate(&follow).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to follow user"})
 			return
 		}
 
 		// Create notification
 		notification := model.Notification{
-			UserID:     uint(targetID),
+			UserID:     targetID,
 			Type:       "system",
-			Content:    "Someone started following you",
+			Content:    "有人关注了你",
 			TargetType: "user",
 			TargetID:   &userID,
 		}
@@ -285,8 +341,8 @@ func FollowUser(db *gorm.DB) gin.HandlerFunc {
 func UnfollowUser(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		targetID := c.Param("id")
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		if err := db.Where("follower_id = ? AND following_id = ?", userID, targetID).Delete(&model.Follow{}).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to unfollow user"})
@@ -309,14 +365,14 @@ func GetUserFollowers(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		// Get user details for followers
-		var followerIDs []uint
+		var followerIDs []uuid.UUID
 		for _, f := range follows {
 			followerIDs = append(followerIDs, f.FollowerID)
 		}
 
 		var users []model.User
 		if len(followerIDs) > 0 {
-			db.Where("id IN ?", followerIDs).Find(&users)
+			db.Where("uuid IN ?", followerIDs).Find(&users)
 		}
 
 		c.JSON(http.StatusOK, gin.H{"data": users, "message": "ok"})
@@ -335,14 +391,14 @@ func GetUserFollowing(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		// Get user details for following
-		var followingIDs []uint
+		var followingIDs []uuid.UUID
 		for _, f := range follows {
 			followingIDs = append(followingIDs, f.FollowingID)
 		}
 
 		var users []model.User
 		if len(followingIDs) > 0 {
-			db.Where("id IN ?", followingIDs).Find(&users)
+			db.Where("uuid IN ?", followingIDs).Find(&users)
 		}
 
 		c.JSON(http.StatusOK, gin.H{"data": users, "message": "ok"})

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// About page for Kanye West Song Archive
+// About page for Atoman
 </script>
 
 <template>
@@ -13,21 +13,21 @@
         关于这个收藏
       </h1>
 
-      <div class="space-y-6 text-lg leading-relaxed">
+      <div class="prose prose-lg text-gray-700 space-y-8">
         <p>
-          这是一个关于 Kanye West 音乐生涯的互动档案项目。我们致力于收集、整理和展示 Ye 从早期作品到最新专辑的所有音乐内容。
+          这是一个关于 Atoman 的互动档案项目。我们致力于提供一个全面可靠的分享平台。
         </p>
+        
+        <h2 class="text-3xl font-black mb-4">目标</h2>
+        <ul class="list-disc pl-6 space-y-2">
+          <li>打造最完整的内容时间线</li>
+          <li>提供纯粹无广告的体验</li>
+          <li>通过社区共同维护数据准确性</li>
+        </ul>
 
+        <h2 class="text-3xl font-black mb-4 gap-y-4">团队</h2>
         <p>
-          通过这个平台，你可以浏览他的音乐时间线、聆听经典作品、贡献新的发现，并帮助完善这个不断成长的音乐数据库。
-        </p>
-
-        <p>
-          所有内容都经过审核，确保信息的准确性和可靠性。如果你发现了遗漏的作品或需要修正的信息，欢迎提交贡献。
-        </p>
-
-        <p>
-          这个项目由热爱 Kanye West 音乐的开发者创建，希望能为粉丝提供一个全面而可靠的音乐资源。
+          致力于提供一个全面而可靠的开源资源。
         </p>
       </div>
 

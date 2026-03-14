@@ -1,6 +1,6 @@
 {
-  "name": "Kanye West Archive",
-  "description": "A minimalist black and white digital archive of Kanye West's discography featuring an interactive timeline, audio player, and song management.",
+  "name": "Atoman",
+  "description": "A minimalist black and white digital archive.",
   "requestFramePermissions": [
     "microphone"
   ]

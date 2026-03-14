@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# All Kanye Backend - Quick Start Script
+# Atoman Backend - Quick Start Script
 
 echo "======================================"
-echo "All Kanye Backend Server"
+echo "Atoman Backend Server"
 echo "======================================"
 echo ""
 

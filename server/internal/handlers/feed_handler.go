@@ -1,17 +1,23 @@
 package handlers
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/xml"
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"atoman/internal/middleware"
 	"atoman/internal/model"
+	"atoman/internal/service"
 )
 
 // SetupFeedRoutes configures feed and subscription routes
@@ -47,10 +53,10 @@ func SetupNotificationRoutes(router *gin.Engine, db *gorm.DB) {
 
 // SubscriptionInput represents the request body for subscribing
 type SubscriptionInput struct {
-	TargetType string `json:"target_type" binding:"required,oneof=internal_user internal_channel internal_collection external_rss"`
-	TargetID   *uint  `json:"target_id"` // Required for internal types
-	RssURL     string `json:"rss_url"`   // Required for external_rss
-	Title      string `json:"title"`     // Optional custom title
+	TargetType string     `json:"target_type" binding:"required,oneof=internal_user internal_channel internal_collection external_rss"`
+	TargetID   *uuid.UUID `json:"target_id"` // Required for internal types
+	RssURL     string     `json:"rss_url"`   // Required for external_rss
+	Title      string     `json:"title"`     // Optional custom title
 }
 
 // CreateSubscription creates a new feed source subscription
@@ -72,78 +78,100 @@ func CreateSubscription(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
-		// Check if target exists for internal types
-		if input.TargetType == "internal_user" {
-			var user model.User
-			if err := db.First(&user, input.TargetID).Error; err != nil {
-				c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
-				return
-			}
-			if input.Title == "" {
-				input.Title = user.Username
-			}
-		} else if input.TargetType == "internal_channel" {
-			var channel model.Channel
-			if err := db.First(&channel, input.TargetID).Error; err != nil {
-				c.JSON(http.StatusNotFound, gin.H{"error": "Channel not found"})
-				return
-			}
-			if input.Title == "" {
-				input.Title = channel.Name
-			}
-		} else if input.TargetType == "internal_collection" {
-			var collection model.Collection
-			if err := db.First(&collection, input.TargetID).Error; err != nil {
-				c.JSON(http.StatusNotFound, gin.H{"error": "Collection not found"})
-				return
-			}
-			if input.Title == "" {
-				input.Title = collection.Name
-			}
-		}
-
-		feedSource := model.FeedSource{
-			UserID:     userID,
-			SourceType: input.TargetType,
-			SourceID:   input.TargetID,
-			RssURL:     input.RssURL,
-			Title:      input.Title,
-		}
-
-		// Check if already subscribed
-		var existing model.FeedSource
-		query := db.Where("user_id = ? AND source_type = ?", userID, input.TargetType)
+		// 1. Generate unique hash for this source to allow cross-user indexing
+		var sourceHash string
 		if input.TargetType == "external_rss" {
-			query = query.Where("rss_url = ?", input.RssURL)
+			h := sha256.New()
+			h.Write([]byte(strings.TrimSpace(input.RssURL)))
+			sourceHash = hex.EncodeToString(h.Sum(nil))
 		} else {
-			query = query.Where("source_id = ?", input.TargetID)
+			// For internal types: hash by type and ID
+			sourceHash = fmt.Sprintf("%s:%s", input.TargetType, input.TargetID.String())
+			h := sha256.New()
+			h.Write([]byte(sourceHash))
+			sourceHash = hex.EncodeToString(h.Sum(nil))
 		}
 
-		if err := query.First(&existing).Error; err == nil {
+		// 2. Find or Create the global FeedSource
+		var source model.FeedSource
+		if err := db.Where("hash = ?", sourceHash).First(&source).Error; err != nil {
+			// If not found, create new source
+			source = model.FeedSource{
+				SourceType: input.TargetType,
+				SourceID:   input.TargetID,
+				RssURL:     input.RssURL,
+				Hash:       sourceHash,
+			}
+
+			// For internal sources, pre-fill title
+			if input.TargetType == "internal_user" {
+				var user model.User
+				if err := db.Where("uuid = ?", input.TargetID).First(&user).Error; err == nil {
+					source.Title = user.Username
+				}
+			} else if input.TargetType == "internal_channel" {
+				var channel model.Channel
+				if err := db.First(&channel, input.TargetID).Error; err == nil {
+					source.Title = channel.Name
+				}
+			} else if input.TargetType == "internal_collection" {
+				var collection model.Collection
+				if err := db.First(&collection, input.TargetID).Error; err == nil {
+					source.Title = collection.Name
+				}
+			} else if input.TargetType == "external_rss" {
+				// Fetch title for RSS
+				_, sourceTitle, err := service.FetchAndParseRSS(input.RssURL)
+				if err == nil {
+					source.Title = sourceTitle
+				}
+			}
+
+			if err := db.Create(&source).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create feed source"})
+				return
+			}
+
+			// Trigger first fetch if RSS
+			if input.TargetType == "external_rss" {
+				go service.SyncSingleRSS(db, source)
+			}
+		}
+
+		// 3. Check if user already subscribed to this source
+		var existingSub model.Subscription
+		if err := db.Where("user_id = ? AND feed_source_id = ?", userID, source.ID).First(&existingSub).Error; err == nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Already subscribed to this source"})
 			return
 		}
 
-		if err := db.Create(&feedSource).Error; err != nil {
+		// 4. Create the User Subscription
+		subscription := model.Subscription{
+			UserID:       userID,
+			FeedSourceID: source.ID,
+			Title:        input.Title, // User-defined custom title
+		}
+
+		if err := db.Create(&subscription).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create subscription"})
 			return
 		}
 
-		c.JSON(http.StatusCreated, gin.H{"data": feedSource, "message": "ok"})
+		c.JSON(http.StatusCreated, gin.H{"data": subscription, "message": "ok"})
 	}
 }
 
-// DeleteSubscription removes a feed source subscription
+// DeleteSubscription removes a user's subscription to a feed source
 func DeleteSubscription(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
-		if err := db.Where("id = ? AND user_id = ?", id, userID).Delete(&model.FeedSource{}).Error; err != nil {
+		if err := db.Where("id = ? AND user_id = ?", id, userID).Delete(&model.Subscription{}).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete subscription"})
 			return
 		}
@@ -152,14 +180,14 @@ func DeleteSubscription(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-// GetSubscriptions returns the authenticated user's subscriptions
+// GetSubscriptions returns the authenticated user's subscriptions with source info
 func GetSubscriptions(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
-		var subscriptions []model.FeedSource
-		if err := db.Where("user_id = ?", userID).Find(&subscriptions).Error; err != nil {
+		var subscriptions []model.Subscription
+		if err := db.Preload("FeedSource").Where("user_id = ?", userID).Find(&subscriptions).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch subscriptions"})
 			return
 		}
@@ -179,8 +207,8 @@ type TimelineItem struct {
 // GetTimeline returns a unified timeline of internal posts and external RSS items
 func GetTimeline(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
@@ -189,47 +217,52 @@ func GetTimeline(db *gorm.DB) gin.HandlerFunc {
 		sourceType := c.Query("source_type")
 		sourceID := c.Query("source_id")
 
-		var subscriptions []model.FeedSource
+		var userSubscriptions []model.Subscription
 		query := db.Where("user_id = ?", userID)
 
 		if sourceType != "" {
-			query = query.Where("source_type = ?", sourceType)
-			if sourceID != "" {
-				query = query.Where("source_id = ?", sourceID)
-			}
+			query = query.Joins("JOIN feed_sources ON feed_sources.id = subscriptions.feed_source_id").
+				Where("feed_sources.source_type = ?", sourceType)
+		}
+		if sourceID != "" {
+			query = query.Where("subscriptions.id = ?", sourceID)
 		}
 
-		if err := query.Find(&subscriptions).Error; err != nil {
+		if err := query.Preload("FeedSource").Find(&userSubscriptions).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch subscriptions"})
 			return
 		}
 
-		if len(subscriptions) == 0 {
+		if len(userSubscriptions) == 0 {
 			c.JSON(http.StatusOK, gin.H{"data": []TimelineItem{}, "message": "ok"})
 			return
 		}
 
-		var userIDs []uint
-		var channelIDs []uint
-		var collectionIDs []uint
-		var feedSourceIDs []uint
+		var userIDs []uuid.UUID
+		var channelIDs []uuid.UUID
+		var collectionIDs []uuid.UUID
+		var feedSourceIDs []uuid.UUID
 
-		for _, sub := range subscriptions {
-			switch sub.SourceType {
+		for _, sub := range userSubscriptions {
+			fs := sub.FeedSource
+			if fs == nil {
+				continue
+			}
+			switch fs.SourceType {
 			case "internal_user":
-				if sub.SourceID != nil {
-					userIDs = append(userIDs, *sub.SourceID)
+				if fs.SourceID != nil {
+					userIDs = append(userIDs, *fs.SourceID)
 				}
 			case "internal_channel":
-				if sub.SourceID != nil {
-					channelIDs = append(channelIDs, *sub.SourceID)
+				if fs.SourceID != nil {
+					channelIDs = append(channelIDs, *fs.SourceID)
 				}
 			case "internal_collection":
-				if sub.SourceID != nil {
-					collectionIDs = append(collectionIDs, *sub.SourceID)
+				if fs.SourceID != nil {
+					collectionIDs = append(collectionIDs, *fs.SourceID)
 				}
 			case "external_rss":
-				feedSourceIDs = append(feedSourceIDs, sub.ID)
+				feedSourceIDs = append(feedSourceIDs, fs.ID)
 			}
 		}
 
@@ -258,7 +291,7 @@ func GetTimeline(db *gorm.DB) gin.HandlerFunc {
 			// Get post IDs for these collections
 			var postCollections []model.PostCollection
 			db.Where("collection_id IN ?", collectionIDs).Find(&postCollections)
-			var postIDs []uint
+			var postIDs []uuid.UUID
 			for _, pc := range postCollections {
 				postIDs = append(postIDs, pc.PostID)
 			}
@@ -269,15 +302,8 @@ func GetTimeline(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		if len(orConditions) > 0 {
-			// Combine OR conditions
-			dbQuery := db.Preload("User").Where("status = ?", "published")
-
-			// This is a simplified approach. In a real app, you'd build a proper OR query
-			// For now, we just fetch all matching posts
-			if len(userIDs) > 0 {
-				dbQuery.Where("user_id IN ?", userIDs).Find(&posts)
-			}
-			// Add other posts... (simplified for this implementation)
+			combinedQuery := "(" + strings.Join(orConditions, " OR ") + ")"
+			db.Preload("User").Where("status = ?", "published").Where(combinedQuery, orArgs...).Find(&posts)
 		}
 
 		// Fetch external items
@@ -304,10 +330,6 @@ func GetTimeline(db *gorm.DB) gin.HandlerFunc {
 				PublishedAt: orbitItems[i].PublishedAt,
 			})
 		}
-
-		// Sort timeline by PublishedAt DESC
-		// Note: In a production app, this sorting and pagination should be done in the database
-		// using a UNION query or similar approach. This in-memory sort is simplified.
 
 		c.JSON(http.StatusOK, gin.H{"data": timeline, "message": "ok"})
 	}
@@ -347,7 +369,7 @@ func GetUserRSS(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		var posts []model.Post
-		if err := db.Where("user_id = ? AND status = ?", user.ID, "published").Order("created_at DESC").Limit(50).Find(&posts).Error; err != nil {
+		if err := db.Where("user_id = ? AND status = ?", user.UUID, "published").Order("created_at DESC").Limit(50).Find(&posts).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch posts"})
 			return
 		}
@@ -368,7 +390,7 @@ func GetUserRSS(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		for _, post := range posts {
-			itemURL := baseURL + "/blog/posts/" + strconv.FormatUint(uint64(post.ID), 10)
+			itemURL := baseURL + "/blog/posts/" + post.ID.String()
 			rss.Channel.Items = append(rss.Channel.Items, RSSItem{
 				Title:       post.Title,
 				Link:        itemURL,
@@ -386,8 +408,8 @@ func GetUserRSS(db *gorm.DB) gin.HandlerFunc {
 // GetNotifications returns the authenticated user's notifications
 func GetNotifications(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
@@ -415,8 +437,8 @@ func GetNotifications(db *gorm.DB) gin.HandlerFunc {
 func MarkNotificationRead(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		now := time.Now()
 		if err := db.Model(&model.Notification{}).Where("id = ? AND user_id = ?", id, userID).Update("read_at", now).Error; err != nil {
@@ -431,8 +453,8 @@ func MarkNotificationRead(db *gorm.DB) gin.HandlerFunc {
 // MarkAllNotificationsRead marks all notifications as read for the user
 func MarkAllNotificationsRead(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		now := time.Now()
 		if err := db.Model(&model.Notification{}).Where("user_id = ? AND read_at IS NULL", userID).Update("read_at", now).Error; err != nil {
@@ -447,8 +469,8 @@ func MarkAllNotificationsRead(db *gorm.DB) gin.HandlerFunc {
 // GetUnreadNotificationCount returns the count of unread notifications
 func GetUnreadNotificationCount(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		var count int64
 		if err := db.Model(&model.Notification{}).Where("user_id = ? AND read_at IS NULL", userID).Count(&count).Error; err != nil {

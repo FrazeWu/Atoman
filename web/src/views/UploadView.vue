@@ -4,7 +4,7 @@ import { reactive, ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useApi } from '@/composables/useApi';
 import { useAuthStore } from '@/stores/auth';
-
+import ArtistSelect from '@/components/ArtistSelect.vue';
 interface TrackFile {
   id: string;
   file: File;
@@ -16,7 +16,7 @@ const authStore = useAuthStore();
 const api = useApi();
 
 const formData = reactive({
-  artist: 'Kanye West',
+  artist: 'Atoman',
   album: '',
   releaseDate: new Date().toISOString().split('T')[0],
   source: '',
@@ -217,11 +217,10 @@ const handleSubmit = async () => {
       <div class="grid grid-cols-2 gap-8">
         <div class="space-y-4">
           <label class="block text-sm font-black uppercase tracking-widest">艺术家</label>
-          <input 
-            type="text" 
-            required
-            class="w-full bg-white border-2 border-black p-4 focus:shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] outline-none transition-all"
+          <ArtistSelect
             v-model="formData.artist"
+            placeholder="选择艺术家"
+            :disabled="isUploading"
           />
         </div>
         <div class="space-y-4">

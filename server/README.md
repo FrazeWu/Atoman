@@ -1,4 +1,4 @@
-# All Kanye Backend - Refactored Architecture
+# Atoman Backend - Refactored Architecture
 
 ## Overview
 
@@ -109,8 +109,8 @@ go run .
 ### Build and Run
 ```bash
 cd server
-go build -o all_kanye_server .
-./all_kanye_server
+go build -o atoman_server .
+./atoman_server
 ```
 
 ## Testing

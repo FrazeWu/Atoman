@@ -2,9 +2,9 @@ package handlers
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"atoman/internal/middleware"
@@ -74,7 +74,7 @@ func GetChannel(db *gorm.DB) gin.HandlerFunc {
 		id := c.Param("id")
 		var channel model.Channel
 
-		if err := db.Preload("User").First(&channel, id).Error; err != nil {
+		if err := db.Preload("User").First(&channel, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Channel not found"})
 			return
 		}
@@ -92,8 +92,8 @@ func CreateChannel(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		channel := model.Channel{
 			UserID:      userID,
@@ -122,13 +122,13 @@ func UpdateChannel(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		var channel model.Channel
-		if err := db.First(&channel, id).Error; err != nil {
+		if err := db.First(&channel, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Channel not found"})
 			return
 		}
 
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		if channel.UserID != userID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to update this channel"})
@@ -154,13 +154,13 @@ func DeleteChannel(db *gorm.DB) gin.HandlerFunc {
 		id := c.Param("id")
 		var channel model.Channel
 
-		if err := db.First(&channel, id).Error; err != nil {
+		if err := db.First(&channel, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Channel not found"})
 			return
 		}
 
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		if channel.UserID != userID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to delete this channel"})
@@ -195,9 +195,9 @@ func GetChannelCollections(db *gorm.DB) gin.HandlerFunc {
 func CreateCollection(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		channelIDStr := c.Param("id")
-		channelID, err := strconv.ParseUint(channelIDStr, 10, 32)
+		channelID, err := uuid.Parse(channelIDStr)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid channel ID"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid channel UUID"})
 			return
 		}
 
@@ -209,13 +209,13 @@ func CreateCollection(db *gorm.DB) gin.HandlerFunc {
 
 		// Verify channel exists and belongs to user
 		var channel model.Channel
-		if err := db.First(&channel, channelID).Error; err != nil {
+		if err := db.First(&channel, "id = ?", channelID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Channel not found"})
 			return
 		}
 
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		if channel.UserID != userID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to add collections to this channel"})
@@ -223,7 +223,7 @@ func CreateCollection(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		collection := model.Collection{
-			ChannelID:   uint(channelID),
+			ChannelID:   channelID,
 			Name:        input.Name,
 			Description: input.Description,
 			CoverURL:    input.CoverURL,
@@ -249,13 +249,13 @@ func UpdateCollection(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		var collection model.Collection
-		if err := db.Preload("Channel").First(&collection, id).Error; err != nil {
+		if err := db.Preload("Channel").First(&collection, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Collection not found"})
 			return
 		}
 
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		if collection.Channel.UserID != userID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to update this collection"})
@@ -281,13 +281,13 @@ func DeleteCollection(db *gorm.DB) gin.HandlerFunc {
 		id := c.Param("id")
 		var collection model.Collection
 
-		if err := db.Preload("Channel").First(&collection, id).Error; err != nil {
+		if err := db.Preload("Channel").First(&collection, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Collection not found"})
 			return
 		}
 
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		if collection.Channel.UserID != userID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to delete this collection"})

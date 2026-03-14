@@ -1,0 +1,7 @@
+.git
+.idea
+.vscode
+web/node_modules
+server/vendor
+*.sqlite
+dist

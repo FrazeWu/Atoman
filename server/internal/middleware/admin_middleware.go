@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"amb/internal/model"
+	"atoman/internal/model"
 )
 
 // AdminMiddleware ensures the current user has admin role

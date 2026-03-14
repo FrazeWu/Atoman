@@ -4,18 +4,18 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"amb/internal/middleware"
-	"amb/internal/model"
-	"amb/internal/storage"
+	"atoman/internal/middleware"
+	"atoman/internal/model"
+	"atoman/internal/storage"
 )
 
 // SongInput represents song creation request
@@ -69,6 +69,10 @@ func GetSongsHandler(db *gorm.DB) gin.HandlerFunc {
 			if song.Album != nil {
 				albumTitle = song.Album.Title
 				albumYear = song.Album.Year
+				// If album year is 0, use release date year
+				if albumYear == 0 && !song.ReleaseDate.IsZero() {
+					albumYear = song.ReleaseDate.Year()
+				}
 				if song.Album.CoverURL != "" {
 					coverURL = song.Album.CoverURL
 				}
@@ -98,14 +102,10 @@ func GetSongsHandler(db *gorm.DB) gin.HandlerFunc {
 // GetSongHandler retrieves a single song by ID
 func GetSongHandler(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		id, err := strconv.Atoi(c.Param("id"))
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid song ID"})
-			return
-		}
+		id := c.Param("id")
 
 		var song model.Song
-		if err := db.Preload("Album").Preload("Album.Artists").Preload("Artists").First(&song, id).Error; err != nil {
+		if err := db.Preload("Album").Preload("Album.Artists").Preload("Artists").First(&song, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Song not found"})
 			return
 		}
@@ -119,6 +119,10 @@ func GetSongHandler(db *gorm.DB) gin.HandlerFunc {
 		if song.Album != nil {
 			albumTitle = song.Album.Title
 			albumYear = song.Album.Year
+			// If album year is 0, use release date year
+			if albumYear == 0 && !song.ReleaseDate.IsZero() {
+				albumYear = song.ReleaseDate.Year()
+			}
 			if song.Album.CoverURL != "" {
 				coverURL = song.Album.CoverURL
 			}
@@ -332,15 +336,14 @@ func CreateSongHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 			albumTitle = "Unknown Album"
 		}
 
-		if err := tx.Where("title = ? AND year = ?", albumTitle, releaseDate.Year()).FirstOrCreate(&album, model.Album{Title: albumTitle, Year: releaseDate.Year()}).Error; err != nil {
+		if err := tx.Where("title = ? AND year = ?", albumTitle, releaseDate.Year()).FirstOrCreate(&album, model.Album{Title: albumTitle, Year: releaseDate.Year(), ReleaseDate: releaseDate}).Error; err != nil {
 			tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process album"})
 			return
 		}
-
-		if album.ID != 0 {
+		if album.ID != uuid.Nil {
 			var existingAssoc int64
-			tx.Model(&album).Where("artist_id = ?", artist.ID).Association("Artists").Count()
+			tx.Table("album_artists").Where("album_id = ? AND artist_id = ?", album.ID, artist.ID).Count(&existingAssoc)
 			if existingAssoc == 0 {
 				if err := tx.Model(&album).Association("Artists").Append(&artist); err != nil {
 					tx.Rollback()
@@ -362,15 +365,10 @@ func CreateSongHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 
 		// 3. Create Song
 		// Get User ID from context
-		var userID *uint
+		var userID *uuid.UUID
 		if idVal, exists := c.Get("user_id"); exists {
-			// Convert float64 (from JWT JSON) to uint
-			if fID, ok := idVal.(float64); ok {
-				uID := uint(fID)
-				userID = &uID
-			} else if uID, ok := idVal.(uint); ok {
-				userID = &uID
-			}
+			uid := idVal.(uuid.UUID)
+			userID = &uid
 		}
 
 		status := "pending"
@@ -409,7 +407,7 @@ func CreateSongHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 		tx.Commit()
 
 		// Reload song with associations for response
-		db.Preload("Album").Preload("Artists").First(&song, song.ID)
+		db.Preload("Album").Preload("Artists").First(&song, "id = ?", song.ID)
 		c.JSON(http.StatusCreated, song)
 	}
 }
@@ -420,7 +418,7 @@ func UpdateSongHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 		id := c.Param("id")
 
 		var song model.Song
-		if err := db.Preload("Album").Preload("Album.Artists").First(&song, id).Error; err != nil {
+		if err := db.Preload("Album").Preload("Album.Artists").First(&song, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Song not found"})
 			return
 		}
@@ -515,15 +513,14 @@ func UpdateSongHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 			albumTitle = "Unknown Album"
 		}
 
-		if err := tx.Where("title = ? AND year = ?", albumTitle, releaseDate.Year()).FirstOrCreate(&album, model.Album{Title: albumTitle, Year: releaseDate.Year()}).Error; err != nil {
+		if err := tx.Where("title = ? AND year = ?", albumTitle, releaseDate.Year()).FirstOrCreate(&album, model.Album{Title: albumTitle, Year: releaseDate.Year(), ReleaseDate: releaseDate}).Error; err != nil {
 			tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process album"})
 			return
 		}
-
-		if album.ID != 0 {
+		if album.ID != uuid.Nil {
 			var existingAssoc int64
-			tx.Model(&album).Where("artist_id = ?", artist.ID).Association("Artists").Count()
+			tx.Table("album_artists").Where("album_id = ? AND artist_id = ?", album.ID, artist.ID).Count(&existingAssoc)
 			if existingAssoc == 0 {
 				if err := tx.Model(&album).Association("Artists").Append(&artist); err != nil {
 					tx.Rollback()
@@ -573,7 +570,7 @@ func UpdateSongHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 		tx.Commit()
 
 		// Reload song with associations for response
-		db.Preload("Album").Preload("Album.Artists").Preload("Artists").First(&song, song.ID)
+		db.Preload("Album").Preload("Album.Artists").Preload("Artists").First(&song, "id = ?", song.ID)
 		c.JSON(http.StatusOK, song)
 	}
 }
@@ -584,15 +581,10 @@ func DeleteSongHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 		id := c.Param("id")
 
 		var song model.Song
-		if err := db.First(&song, id).Error; err != nil {
+		if err := db.First(&song, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Song not found"})
 			return
 		}
-
-		// Optionally delete from S3 (commented out for safety - you may want to keep files)
-		// if song.AudioURL != "" {
-		// 	// Extract key from URL and delete from S3
-		// }
 
 		if err := db.Delete(&song).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete song"})

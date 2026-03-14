@@ -11,7 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"gorm.io/gorm"
 
-	"amb/internal/model"
+	"atoman/internal/model"
 )
 
 // InitS3Client initializes and returns an S3 client configured for Oracle Object Storage
@@ -40,8 +40,15 @@ func ValidateS3Connection(s3Client *s3.S3) error {
 		Bucket: aws.String(bucket),
 	})
 	if err != nil {
-		log.Printf("S3 validation failed: %v", err)
-		return err
+		log.Printf("Bucket %s not found or inaccessible, attempting to create it (err: %v)", bucket, err)
+		_, createErr := s3Client.CreateBucket(&s3.CreateBucketInput{
+			Bucket: aws.String(bucket),
+		})
+		if createErr != nil {
+			log.Printf("Failed to create bucket %s: %v", bucket, createErr)
+			return createErr
+		}
+		log.Printf("Successfully created bucket: %s", bucket)
 	}
 
 	log.Printf("S3 connection validated successfully for bucket: %s", bucket)

@@ -1,20 +1,15 @@
-FROM --platform=linux/arm64 golang:1.23-alpine
+FROM --platform=linux/arm64 alpine:latest
 
-RUN apk add --no-cache gcc musl-dev sqlite-dev
+# Install runtime dependencies
+RUN apk --no-cache add ca-certificates tzdata sqlite-libs
 
-ENV GOPROXY=https://goproxy.cn,https://mirrors.aliyun.com/goproxy/,direct
-ENV GO111MODULE=on
-ENV CGO_ENABLED=1
+WORKDIR /root/
 
-WORKDIR /app
+# Copy the binary built outside
+COPY main .
 
-COPY go.mod go.sum ./
-RUN go mod download
-
-COPY . .
-
-RUN CGO_ENABLED=1 go build -o main .
-
+# Expose port
 EXPOSE 8080
 
+# Run the application
 CMD ["./main"]

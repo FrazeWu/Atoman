@@ -95,12 +95,168 @@ export interface PlayerState {
 }
 
 export interface User {
-  id?: number;
-  username: string;
-  email: string;
-  role?: string;
-  created_at?: string;
-  updated_at?: string;
+  id?: number
+  username: string
+  email: string
+  role?: 'user' | 'admin'
+  display_name?: string
+  avatar_url?: string
+  bio?: string
+  website?: string
+  location?: string
+  is_active?: boolean
+  created_at?: string
+  updated_at?: string
+}
+
+// ===== Blog Types =====
+
+export interface Channel {
+  id: number
+  user_id: number
+  user?: User
+  name: string
+  description?: string
+  cover_url?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Collection {
+  id: number
+  channel_id: number
+  channel?: Channel
+  name: string
+  description?: string
+  cover_url?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Post {
+  id: number
+  user_id: number
+  user?: User
+  title: string
+  content: string
+  summary?: string
+  cover_url?: string
+  status: 'draft' | 'published'
+  allow_comments: boolean
+  pinned: boolean
+  collections?: Collection[]
+  likes_count?: number
+  comments_count?: number
+  created_at: string
+  updated_at: string
+}
+
+export interface Comment {
+  id: number
+  post_id: number
+  user_id: number
+  user?: User
+  content: string
+  status: 'visible' | 'hidden'
+  created_at: string
+  updated_at: string
+}
+
+export interface Like {
+  id: number
+  user_id: number
+  target_type: 'post' | 'comment'
+  target_id: number
+  created_at: string
+}
+
+export interface BookmarkFolder {
+  id: number
+  user_id: number
+  name: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Bookmark {
+  id: number
+  user_id: number
+  post_id: number
+  post?: Post
+  bookmark_folder_id?: number
+  created_at: string
+}
+
+// ===== Feed / Orbit Types =====
+
+export interface FeedSource {
+  id: number
+  source_type: 'internal_user' | 'internal_channel' | 'internal_collection' | 'external_rss'
+  source_id?: number
+  rss_url?: string
+  hash: string
+  title?: string
+  last_fetched_at?: string
+  created_at: string
+}
+
+export interface Subscription {
+  id: number
+  user_id: number
+  feed_source_id: number
+  feed_source?: FeedSource
+  title?: string
+  created_at: string
+}
+
+export interface OrbitItem {
+  id: number
+  feed_source_id: number
+  feed_source?: FeedSource
+  guid: string
+  title: string
+  link: string
+  summary: string
+  author: string
+  published_at: string
+  fetched_at: string
+}
+
+// Unified timeline item returned by GET /api/feed/timeline
+export interface TimelineItem {
+  type: 'post' | 'orbit_item'
+  post?: Post
+  orbit_item?: OrbitItem
+  published_at: string
+}
+
+// ===== Notification Types =====
+
+export interface Notification {
+  id: number
+  user_id: number
+  type: 'comment' | 'like' | 'bookmark' | 'system'
+  content: string
+  target_type?: string
+  target_id?: number
+  read_at?: string
+  created_at: string
+}
+
+// ===== Profile Types =====
+
+export interface UserProfile {
+  id: number
+  username: string
+  display_name?: string
+  avatar_url?: string
+  bio?: string
+  website?: string
+  role: string
+  followers_count?: number
+  following_count?: number
+  posts_count?: number
+  created_at: string
 }
 
 export interface AuthState {

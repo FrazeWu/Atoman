@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"atoman/internal/middleware"
@@ -50,7 +51,7 @@ type PostInput struct {
 
 // CollectionActionInput represents the request body for adding a post to a collection
 type CollectionActionInput struct {
-	CollectionID uint `json:"collection_id" binding:"required"`
+	CollectionID uuid.UUID `json:"collection_id" binding:"required"`
 }
 
 // GetPosts returns a list of published posts, optionally filtered
@@ -83,7 +84,7 @@ func GetPost(db *gorm.DB) gin.HandlerFunc {
 		id := c.Param("id")
 		var post model.Post
 
-		if err := db.Preload("User").Preload("Collections").First(&post, id).Error; err != nil {
+		if err := db.Preload("User").Preload("Collections").First(&post, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Post not found"})
 			return
 		}
@@ -91,8 +92,8 @@ func GetPost(db *gorm.DB) gin.HandlerFunc {
 		// If post is draft, only owner can view it
 		if post.Status == "draft" {
 			// Try to get user from context (might not exist if not logged in)
-			userIDFloat, exists := c.Get("user_id")
-			if !exists || uint(userIDFloat.(float64)) != post.UserID {
+			userIDVal, exists := c.Get("user_id")
+			if !exists || userIDVal.(uuid.UUID) != post.UserID {
 				c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to view this draft"})
 				return
 			}
@@ -111,8 +112,8 @@ func CreatePost(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		allowComments := true
 		if input.AllowComments != nil {
@@ -149,13 +150,13 @@ func UpdatePost(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		var post model.Post
-		if err := db.First(&post, id).Error; err != nil {
+		if err := db.First(&post, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Post not found"})
 			return
 		}
 
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		if post.UserID != userID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to update this post"})
@@ -188,13 +189,13 @@ func DeletePost(db *gorm.DB) gin.HandlerFunc {
 		id := c.Param("id")
 		var post model.Post
 
-		if err := db.First(&post, id).Error; err != nil {
+		if err := db.First(&post, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Post not found"})
 			return
 		}
 
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		if post.UserID != userID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to delete this post"})
@@ -241,8 +242,8 @@ func UnpinPost(db *gorm.DB) gin.HandlerFunc {
 // GetDrafts returns a list of drafts for the authenticated user
 func GetDrafts(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		var posts []model.Post
 		if err := db.Preload("Collections").Where("user_id = ? AND status = ?", userID, "draft").Order("updated_at DESC").Find(&posts).Error; err != nil {
@@ -265,13 +266,13 @@ func AddPostToCollection(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		var post model.Post
-		if err := db.First(&post, postID).Error; err != nil {
+		if err := db.First(&post, "id = ?", postID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Post not found"})
 			return
 		}
 
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		if post.UserID != userID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to modify this post"})
@@ -280,7 +281,7 @@ func AddPostToCollection(db *gorm.DB) gin.HandlerFunc {
 
 		// Verify collection exists and belongs to user's channel
 		var collection model.Collection
-		if err := db.Preload("Channel").First(&collection, input.CollectionID).Error; err != nil {
+		if err := db.Preload("Channel").First(&collection, "id = ?", input.CollectionID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Collection not found"})
 			return
 		}
@@ -307,13 +308,13 @@ func RemovePostFromCollection(db *gorm.DB) gin.HandlerFunc {
 		collectionID := c.Param("collection_id")
 
 		var post model.Post
-		if err := db.First(&post, postID).Error; err != nil {
+		if err := db.First(&post, "id = ?", postID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Post not found"})
 			return
 		}
 
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		if post.UserID != userID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to modify this post"})
@@ -321,7 +322,7 @@ func RemovePostFromCollection(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		var collection model.Collection
-		if err := db.First(&collection, collectionID).Error; err != nil {
+		if err := db.First(&collection, "id = ?", collectionID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Collection not found"})
 			return
 		}
@@ -342,13 +343,13 @@ func updatePostStatus(c *gin.Context, db *gorm.DB, status string) {
 	id := c.Param("id")
 	var post model.Post
 
-	if err := db.First(&post, id).Error; err != nil {
+	if err := db.First(&post, "id = ?", id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Post not found"})
 		return
 	}
 
-	userIDFloat, _ := c.Get("user_id")
-	userID := uint(userIDFloat.(float64))
+	userIDVal, _ := c.Get("user_id")
+	userID := userIDVal.(uuid.UUID)
 
 	if post.UserID != userID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to modify this post"})
@@ -367,13 +368,13 @@ func updatePostPin(c *gin.Context, db *gorm.DB, pinned bool) {
 	id := c.Param("id")
 	var post model.Post
 
-	if err := db.First(&post, id).Error; err != nil {
+	if err := db.First(&post, "id = ?", id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Post not found"})
 		return
 	}
 
-	userIDFloat, _ := c.Get("user_id")
-	userID := uint(userIDFloat.(float64))
+	userIDVal, _ := c.Get("user_id")
+	userID := userIDVal.(uuid.UUID)
 
 	if post.UserID != userID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to modify this post"})

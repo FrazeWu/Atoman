@@ -3,16 +3,16 @@ package handlers
 import (
 	"log"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"amb/internal/middleware"
-	"amb/internal/model"
-	"amb/internal/storage"
+	"atoman/internal/middleware"
+	"atoman/internal/model"
+	"atoman/internal/storage"
 )
 
 func SetupAdminRoutes(router *gin.Engine, db *gorm.DB, s3Client *s3.S3) {
@@ -58,10 +58,9 @@ func GetPendingSongsHandler(db *gorm.DB) gin.HandlerFunc {
 func ApproveSongHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		now := time.Now()
 
 		var song model.Song
-		if err := db.First(&song, id).Error; err != nil {
+		if err := db.First(&song, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Song not found"})
 			return
 		}
@@ -101,7 +100,6 @@ func ApproveSongHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 			return
 		}
 
-		_ = now
 		c.JSON(http.StatusOK, gin.H{"message": "Song approved"})
 	}
 }
@@ -109,14 +107,9 @@ func ApproveSongHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 func RejectSongHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		songID, err := strconv.ParseUint(id, 10, 32)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid song ID"})
-			return
-		}
 
 		var song model.Song
-		if err := db.Preload("Album").First(&song, songID).Error; err != nil {
+		if err := db.Preload("Album").First(&song, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Song not found"})
 			return
 		}
@@ -158,21 +151,21 @@ func GetPendingSongCorrectionsHandler(db *gorm.DB) gin.HandlerFunc {
 func ApproveSongCorrectionHandler(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		adminID, _ := c.Get("user_id")
+		adminIDVal, _ := c.Get("user_id")
+		adminID := adminIDVal.(uuid.UUID)
 		now := time.Now()
 
 		var correction model.SongCorrection
-		if err := db.Preload("Song").First(&correction, id).Error; err != nil {
+		if err := db.Preload("Song").First(&correction, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Correction not found"})
 			return
 		}
 
 		tx := db.Begin()
 
-		uid := uint(adminID.(float64))
 		if err := tx.Model(&model.SongCorrection{}).Where("id = ?", id).Updates(map[string]interface{}{
 			"status":      "approved",
-			"approved_by": uid,
+			"approved_by": adminID,
 			"approved_at": now,
 		}).Error; err != nil {
 			tx.Rollback()
@@ -208,13 +201,13 @@ func ApproveSongCorrectionHandler(db *gorm.DB) gin.HandlerFunc {
 func RejectSongCorrectionHandler(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		adminID, _ := c.Get("user_id")
+		adminIDVal, _ := c.Get("user_id")
+		adminID := adminIDVal.(uuid.UUID)
 		now := time.Now()
 
-		uid := uint(adminID.(float64))
 		if err := db.Model(&model.SongCorrection{}).Where("id = ?", id).Updates(map[string]interface{}{
 			"status":      "rejected",
-			"rejected_by": uid,
+			"rejected_by": adminID,
 			"rejected_at": now,
 		}).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reject correction"})
@@ -244,7 +237,7 @@ func ApproveAlbumHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 		id := c.Param("id")
 
 		var album model.Album
-		if err := db.First(&album, id).Error; err != nil {
+		if err := db.First(&album, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Album not found"})
 			return
 		}
@@ -277,14 +270,9 @@ func ApproveAlbumHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 func RejectAlbumHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		albumID, err := strconv.ParseUint(id, 10, 32)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid album ID"})
-			return
-		}
 
 		var album model.Album
-		if err := db.First(&album, albumID).Error; err != nil {
+		if err := db.First(&album, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Album not found"})
 			return
 		}
@@ -322,21 +310,21 @@ func GetPendingAlbumCorrectionsHandler(db *gorm.DB) gin.HandlerFunc {
 func ApproveAlbumCorrectionHandler(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		adminID, _ := c.Get("user_id")
+		adminIDVal, _ := c.Get("user_id")
+		adminID := adminIDVal.(uuid.UUID)
 		now := time.Now()
 
 		var correction model.AlbumCorrection
-		if err := db.Preload("Album").Preload("Album.Artists").First(&correction, id).Error; err != nil {
+		if err := db.Preload("Album").Preload("Album.Artists").First(&correction, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Correction not found"})
 			return
 		}
 
 		tx := db.Begin()
 
-		uid := uint(adminID.(float64))
 		if err := tx.Model(&model.AlbumCorrection{}).Where("id = ?", id).Updates(map[string]interface{}{
 			"status":      "approved",
-			"approved_by": uid,
+			"approved_by": adminID,
 			"approved_at": now,
 		}).Error; err != nil {
 			tx.Rollback()
@@ -345,7 +333,7 @@ func ApproveAlbumCorrectionHandler(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		var album model.Album
-		if err := tx.First(&album, correction.AlbumID).Error; err != nil {
+		if err := tx.First(&album, "id = ?", correction.AlbumID).Error; err != nil {
 			tx.Rollback()
 			c.JSON(http.StatusNotFound, gin.H{"error": "Album not found"})
 			return
@@ -376,19 +364,19 @@ func ApproveAlbumCorrectionHandler(db *gorm.DB) gin.HandlerFunc {
 func RejectAlbumCorrectionHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		adminID, _ := c.Get("user_id")
+		adminIDVal, _ := c.Get("user_id")
+		adminID := adminIDVal.(uuid.UUID)
 		now := time.Now()
 
 		var correction model.AlbumCorrection
-		if err := db.First(&correction, id).Error; err != nil {
+		if err := db.First(&correction, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Correction not found"})
 			return
 		}
 
-		uid := uint(adminID.(float64))
 		if err := db.Model(&model.AlbumCorrection{}).Where("id = ?", id).Updates(map[string]interface{}{
 			"status":      "rejected",
-			"rejected_by": uid,
+			"rejected_by": adminID,
 			"rejected_at": now,
 		}).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reject correction"})

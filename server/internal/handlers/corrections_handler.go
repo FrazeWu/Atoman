@@ -11,22 +11,23 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"amb/internal/middleware"
-	"amb/internal/model"
+	"atoman/internal/middleware"
+	"atoman/internal/model"
 )
 
 type SongCorrectionInput struct {
-	SongID         uint   `json:"song_id" binding:"required"`
-	FieldName      string `json:"field_name" binding:"required"`
-	CurrentValue   string `json:"current_value"`
-	CorrectedValue string `json:"corrected_value" binding:"required"`
-	Reason         string `json:"reason"`
+	SongID         uuid.UUID `json:"song_id" binding:"required"`
+	FieldName      string    `json:"field_name" binding:"required"`
+	CurrentValue   string    `json:"current_value"`
+	CorrectedValue string    `json:"corrected_value" binding:"required"`
+	Reason         string    `json:"reason"`
 }
 
 type AlbumCorrectionFormInput struct {
-	AlbumID              uint                  `form:"album_id" binding:"required"`
+	AlbumID              uuid.UUID             `form:"album_id" binding:"required"`
 	CorrectedTitle       string                `form:"corrected_title"`
 	CorrectedReleaseDate string                `form:"corrected_release_date"`
 	Reason               string                `form:"reason"`
@@ -43,14 +44,10 @@ func SetupCorrectionRoutes(router *gin.Engine, db *gorm.DB, s3Client *s3.S3) {
 
 func CreateSongCorrectionHandler(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var uid uint
+		var uid uuid.UUID
 		var userRole string
 		if idVal, exists := c.Get("user_id"); exists {
-			if fID, ok := idVal.(float64); ok {
-				uid = uint(fID)
-			} else if uID, ok := idVal.(uint); ok {
-				uid = uID
-			}
+			uid = idVal.(uuid.UUID)
 		}
 		if roleVal, exists := c.Get("role"); exists {
 			if role, ok := roleVal.(string); ok {
@@ -67,7 +64,7 @@ func CreateSongCorrectionHandler(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		status := "pending"
-		var approvedBy *uint
+		var approvedBy *uuid.UUID
 		var approvedAt *time.Time
 		if userRole == "admin" {
 			status = "approved"
@@ -104,14 +101,10 @@ func CreateSongCorrectionHandler(db *gorm.DB) gin.HandlerFunc {
 
 func CreateAlbumCorrectionHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var uid uint
+		var uid uuid.UUID
 		var userRole string
 		if idVal, exists := c.Get("user_id"); exists {
-			if fID, ok := idVal.(float64); ok {
-				uid = uint(fID)
-			} else if uID, ok := idVal.(uint); ok {
-				uid = uID
-			}
+			uid = idVal.(uuid.UUID)
 		}
 		if roleVal, exists := c.Get("role"); exists {
 			if role, ok := roleVal.(string); ok {
@@ -127,7 +120,7 @@ func CreateAlbumCorrectionHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc 
 		}
 
 		var originalAlbum model.Album
-		if err := db.Preload("Artists").First(&originalAlbum, input.AlbumID).Error; err != nil {
+		if err := db.Preload("Artists").First(&originalAlbum, "id = ?", input.AlbumID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Original album not found"})
 			return
 		}
@@ -145,7 +138,7 @@ func CreateAlbumCorrectionHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc 
 		}
 
 		status := "pending"
-		var approvedBy *uint
+		var approvedBy *uuid.UUID
 		var approvedAt *time.Time
 		if userRole == "admin" {
 			status = "approved"
@@ -181,7 +174,7 @@ func CreateAlbumCorrectionHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc 
 		}
 
 		if input.Cover != nil {
-			log.Printf("Uploading new cover for album %d", input.AlbumID)
+			log.Printf("Uploading new cover for album %v", input.AlbumID)
 			src, err := input.Cover.Open()
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to open cover file"})

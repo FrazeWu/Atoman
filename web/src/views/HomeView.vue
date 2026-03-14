@@ -47,7 +47,7 @@ const shouldShowYear = (index: number) => {
   <div class="relative pt-12 pb-48">
     <div class="max-w-6xl mx-auto px-8 mb-12">
       <h1 class="text-5xl font-black italic tracking-tighter border-l-8 border-black pl-6">
-        KANYE WEST<br />SONG TIMELINE
+        ATOMAN<br />TIMELINE
       </h1>
       <p class="mt-4 text-gray-500 max-w-lg">
         An interactive archival project cataloging the evolution of sound, fashion, and culture through the lens of Ye.

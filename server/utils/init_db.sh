@@ -3,7 +3,7 @@
 set -e
 
 echo "========================================="
-echo " Kanye Archive - Database Initialization"
+echo " Atoman - Database Initialization"
 echo "========================================="
 echo ""
 
@@ -53,7 +53,7 @@ echo ""
 cd cmd/create_admin
 go run main.go <<EOF
 admin
-admin@kanyearchive.com
+admin@atoman.com
 admin123
 EOF
 
@@ -64,7 +64,7 @@ echo "========================================="
 echo ""
 echo "Admin credentials:"
 echo "  Username: admin"
-echo "  Email: admin@kanyearchive.com"
+echo "  Email: admin@atoman.com"
 echo "  Password: admin123"
 echo ""
 echo "⚠️  CHANGE THIS PASSWORD IN PRODUCTION!"

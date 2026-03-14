@@ -5,20 +5,21 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"amb/internal/middleware"
-	"amb/internal/model"
-	"amb/internal/storage"
+	"atoman/internal/middleware"
+	"atoman/internal/model"
+	"atoman/internal/storage"
 )
 
 type AlbumInput struct {
-	Title       string `form:"title" binding:"required"`
-	Artist      string `form:"artist" binding:"required"`
+	Title       string `form:"title"`
+	Artist      string `form:"artist"`
 	Year        int    `form:"year"`
 	ReleaseDate string `form:"release_date"`
 	CoverURL    string `form:"cover_url"`
@@ -50,7 +51,7 @@ func GetAlbumHandler(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		var album model.Album
-		if err := db.Preload("Artists").First(&album, id).Error; err != nil {
+		if err := db.Preload("Artists").First(&album, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Album not found"})
 			return
 		}
@@ -70,7 +71,7 @@ func UpdateAlbumHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 		id := c.Param("id")
 
 		var album model.Album
-		if err := db.Preload("Artists").First(&album, id).Error; err != nil {
+		if err := db.Preload("Artists").First(&album, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Album not found"})
 			return
 		}
@@ -157,6 +158,34 @@ func UpdateAlbumHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 			album.Year = input.Year
 		}
 
+		// Handle ReleaseDate
+		if input.ReleaseDate != "" {
+			timeZone, err := time.LoadLocation("Asia/Shanghai")
+			if err != nil {
+				timeZone = time.UTC
+			}
+			parsedDate, err := time.ParseInLocation("2006-01-02", input.ReleaseDate, timeZone)
+			if err == nil {
+				album.ReleaseDate = parsedDate
+			}
+		}
+
+		// Handle Artist - find or create artist and update association
+		if input.Artist != "" {
+			var artist model.Artist
+			result := db.Where("name = ?", input.Artist).First(&artist)
+			if result.Error == gorm.ErrRecordNotFound {
+				artist = model.Artist{Name: input.Artist}
+				if err := db.Create(&artist).Error; err != nil {
+					log.Printf("Failed to create artist: %v", err)
+				} else {
+					db.Model(&album).Association("Artists").Replace(&artist)
+				}
+			} else if result.Error == nil {
+				db.Model(&album).Association("Artists").Replace(&artist)
+			}
+		}
+
 		if err := db.Save(&album).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update album"})
 			return
@@ -168,6 +197,18 @@ func UpdateAlbumHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 
 func DeleteAlbumHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.JSON(http.StatusNotImplemented, gin.H{"error": "Album deletion not yet implemented via direct API, use admin tools"})
+		id := c.Param("id")
+		var album model.Album
+		if err := db.First(&album, "id = ?", id).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Album not found"})
+			return
+		}
+
+		if err := db.Delete(&album).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete album"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Album deleted successfully"})
 	}
 }

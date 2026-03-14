@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"atoman/internal/middleware"
@@ -46,14 +47,14 @@ type CommentInput struct {
 
 // LikeInput represents the request body for liking/unliking
 type LikeInput struct {
-	TargetType string `json:"target_type" binding:"required,oneof=post comment"`
-	TargetID   uint   `json:"target_id" binding:"required"`
+	TargetType string    `json:"target_type" binding:"required,oneof=post comment"`
+	TargetID   uuid.UUID `json:"target_id" binding:"required"`
 }
 
 // BookmarkInput represents the request body for bookmarking
 type BookmarkInput struct {
-	PostID           uint  `json:"post_id" binding:"required"`
-	BookmarkFolderID *uint `json:"bookmark_folder_id"`
+	PostID           uuid.UUID  `json:"post_id" binding:"required"`
+	BookmarkFolderID *uuid.UUID `json:"bookmark_folder_id"`
 }
 
 // BookmarkFolderInput represents the request body for creating a bookmark folder
@@ -97,8 +98,8 @@ func CreateComment(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		comment := model.Comment{
 			PostID:  post.ID,
@@ -117,7 +118,7 @@ func CreateComment(db *gorm.DB) gin.HandlerFunc {
 			notification := model.Notification{
 				UserID:     post.UserID,
 				Type:       "comment",
-				Content:    "Someone commented on your post",
+				Content:    "有人评论了你的文章",
 				TargetType: "post",
 				TargetID:   &post.ID,
 			}
@@ -139,8 +140,8 @@ func DeleteComment(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		// Check if user is comment owner or post owner
 		if comment.UserID != userID && comment.Post.UserID != userID {
@@ -166,10 +167,10 @@ func ToggleLike(db *gorm.DB, isLike bool) gin.HandlerFunc {
 			return
 		}
 
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
-		var targetOwnerID uint
+		var targetOwnerID uuid.UUID
 		if input.TargetType == "post" {
 			var post model.Post
 			if err := db.First(&post, input.TargetID).Error; err != nil {
@@ -204,7 +205,7 @@ func ToggleLike(db *gorm.DB, isLike bool) gin.HandlerFunc {
 				notification := model.Notification{
 					UserID:     targetOwnerID,
 					Type:       "like",
-					Content:    "Someone liked your " + input.TargetType,
+					Content:    "有人点赞了你的" + func() string { if input.TargetType == "post" { return "文章" }; return "评论" }(),
 					TargetType: input.TargetType,
 					TargetID:   &input.TargetID,
 				}
@@ -239,8 +240,8 @@ func GetPostLikesCount(db *gorm.DB) gin.HandlerFunc {
 // GetBookmarks returns the authenticated user's bookmarks
 func GetBookmarks(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		var bookmarks []model.Bookmark
 		query := db.Preload("Post").Preload("Post.User").Where("user_id = ?", userID)
@@ -273,8 +274,8 @@ func CreateBookmark(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		if input.BookmarkFolderID != nil {
 			var folder model.BookmarkFolder
@@ -300,7 +301,7 @@ func CreateBookmark(db *gorm.DB) gin.HandlerFunc {
 			notification := model.Notification{
 				UserID:     post.UserID,
 				Type:       "bookmark",
-				Content:    "Someone bookmarked your post",
+				Content:    "有人收藏了你的文章",
 				TargetType: "post",
 				TargetID:   &post.ID,
 			}
@@ -315,8 +316,8 @@ func CreateBookmark(db *gorm.DB) gin.HandlerFunc {
 func DeleteBookmark(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		if err := db.Where("id = ? AND user_id = ?", id, userID).Delete(&model.Bookmark{}).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete bookmark"})
@@ -330,8 +331,8 @@ func DeleteBookmark(db *gorm.DB) gin.HandlerFunc {
 // GetBookmarkFolders returns the authenticated user's bookmark folders
 func GetBookmarkFolders(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		var folders []model.BookmarkFolder
 		if err := db.Where("user_id = ?", userID).Order("created_at DESC").Find(&folders).Error; err != nil {
@@ -352,8 +353,8 @@ func CreateBookmarkFolder(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		folder := model.BookmarkFolder{
 			UserID: userID,
@@ -373,8 +374,8 @@ func CreateBookmarkFolder(db *gorm.DB) gin.HandlerFunc {
 func DeleteBookmarkFolder(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		userIDFloat, _ := c.Get("user_id")
-		userID := uint(userIDFloat.(float64))
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
 
 		// Start transaction to delete folder and update bookmarks
 		err := db.Transaction(func(tx *gorm.DB) error {

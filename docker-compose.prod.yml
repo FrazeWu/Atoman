@@ -1,16 +1,14 @@
 services:
   postgres:
     image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: atoman
-      POSTGRES_USER: atoman
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    env_file:
+      - ./server/.env.prod
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
       - app-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U atoman"]
+      test: [ "CMD-SHELL", "pg_isready -d $$POSTGRES_DB -U $$POSTGRES_USER" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -20,22 +18,21 @@ services:
     image: minio/minio
     ports:
       - "9000:9000"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+    env_file:
+      - ./server/.env.prod
     command: server /data
     volumes:
       - minio-data:/data
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
       interval: 30s
       timeout: 20s
       retries: 3
     restart: unless-stopped
 
-  backend:
+  server:
     build:
       context: ./server
       dockerfile: Dockerfile
@@ -53,22 +50,22 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/api/songs"]
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/api/songs" ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
     restart: unless-stopped
 
-  frontend:
+  web:
     build:
-      context: .
-      dockerfile: ./web/Dockerfile
+      context: ./web
+      dockerfile: Dockerfile
     ports:
       - "80:80"
       - "443:443"
     depends_on:
-      backend:
+      server:
         condition: service_healthy
     networks:
       - app-network

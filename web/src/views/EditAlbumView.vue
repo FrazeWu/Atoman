@@ -5,7 +5,7 @@ import { useRouter, useRoute } from 'vue-router';
 import { useApi } from '@/composables/useApi';
 import { useAuthStore } from '@/stores/auth';
 import { usePlayerStore } from '@/stores/player.ts';
-
+import ArtistSelect from '@/components/ArtistSelect.vue';
 interface TrackItem {
   id: string;
   title: string;
@@ -244,17 +244,12 @@ const handleSubmit = async () => {
 
       const correctionFormData = new FormData();
       correctionFormData.append('album_id', String(albumId));
-      correctionFormData.append('artist', formData.artist);
-      correctionFormData.append('album', formData.album);
-      correctionFormData.append('releaseDate', formData.releaseDate);
-      correctionFormData.append('originalArtist', originalFormData.artist);
-      correctionFormData.append('originalAlbum', originalFormData.album);
-      correctionFormData.append('originalReleaseDate', originalFormData.releaseDate);
+      correctionFormData.append('corrected_title', formData.album);
+      correctionFormData.append('corrected_release_date', formData.releaseDate);
       correctionFormData.append('reason', reason.value);
       if (coverFile.value) {
         correctionFormData.append('cover', coverFile.value);
       }
-
       try {
         const response = await fetch(`${api.url}/corrections/album`, {
           method: 'POST',
@@ -278,13 +273,34 @@ const handleSubmit = async () => {
       }
     }
   } else {
-    if (coverFile.value) {
+    // Admin 直接更新专辑信息
+    const hasMetadataChanges = 
+      formData.artist !== originalFormData.artist ||
+      formData.album !== originalFormData.album ||
+      formData.releaseDate !== originalFormData.releaseDate;
+
+    if (coverFile.value || hasMetadataChanges) {
       currentTrackIndex.value = 1;
 
-      try {
-        const albumData = new FormData();
-        albumData.append('cover', coverFile.value);
+      const albumData = new FormData();
 
+      // 只有当有新封面文件时才添加
+      if (coverFile.value) {
+        albumData.append('cover', coverFile.value);
+      }
+
+      // 如果艺术家/专辑名/发行日期有变化，添加到表单
+      if (formData.artist) {
+        albumData.append('artist', formData.artist);
+      }
+      if (formData.album) {
+        albumData.append('title', formData.album);
+      }
+      if (formData.releaseDate) {
+        albumData.append('release_date', formData.releaseDate);
+      }
+
+      try {
         const response = await fetch(`${api.url}/albums/${albumId}`, {
           method: 'PUT',
           headers: {
@@ -295,22 +311,35 @@ const handleSubmit = async () => {
 
         if (response.ok) {
           successCount++;
-          console.log('Album cover updated successfully');
+          console.log('Album updated successfully');
         } else {
           const error = await response.json();
-          console.error('Failed to update album cover:', error);
+          console.error('Failed to update album:', error);
           failCount++;
         }
       } catch (e) {
-        console.error('Error updating album cover:', e);
+        console.error('Error updating album:', e);
         failCount++;
       }
     }
   }
 
   // Original song processing logic (apply to all users, but statuses will differ on backend)
+  // 对于现有歌曲，如果没有修改则跳过
   for (let i = 0; i < tracks.value.length; i++) {
     const track = tracks.value[i];
+
+    // 如果是现有歌曲，检查是否有修改
+    if (track.isExisting && track.songId) {
+      const originalSong = albumSongs.value.find(s => s.id === track.songId);
+      // 如果歌曲标题没有变化，跳过
+      if (originalSong && originalSong.title === track.title) {
+        console.log(`Skipping unchanged track: ${track.title}`);
+        successCount++; // Count as success since we're keeping the existing song
+        continue;
+      }
+    }
+
     currentTrackIndex.value = i + 1;
 
     console.log(`Processing track ${i + 1}/${tracks.value.length}:`, track.title);
@@ -383,7 +412,7 @@ const handleSubmit = async () => {
 
     alert(message);
     if (failCount === 0) {
-      router.back();
+      router.push('/');
     }
   } else {
     alert('提交失败，请重试。');
@@ -412,11 +441,10 @@ const cancel = () => {
       <div class="grid grid-cols-2 gap-8">
         <div class="space-y-4">
           <label class="block text-sm font-black uppercase tracking-widest">艺术家</label>
-          <input 
-            type="text" 
-            required
-            class="w-full bg-white border-2 border-black p-4 focus:shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] outline-none transition-all"
+          <ArtistSelect
             v-model="formData.artist"
+            placeholder="选择艺术家"
+            :disabled="isSaving"
           />
         </div>
         <div class="space-y-4">
