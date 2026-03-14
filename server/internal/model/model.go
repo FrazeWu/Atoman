@@ -44,6 +44,150 @@ func (UserSettings) TableName() string {
 	return "user_settings"
 }
 
+type Channel struct {
+	ID          uint      `json:"id" gorm:"primaryKey"`
+	UserID      uint      `json:"user_id" gorm:"not null;index"`
+	User        *User     `json:"user,omitempty" gorm:"foreignKey:UserID"`
+	Name        string    `json:"name" gorm:"not null"`
+	Description string    `json:"description" gorm:"type:text"`
+	CoverURL    string    `json:"cover_url" gorm:"type:text"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+func (Channel) TableName() string { return "channels" }
+
+type Collection struct {
+	ID          uint      `json:"id" gorm:"primaryKey"`
+	ChannelID   uint      `json:"channel_id" gorm:"not null;index"`
+	Channel     *Channel  `json:"channel,omitempty" gorm:"foreignKey:ChannelID"`
+	Name        string    `json:"name" gorm:"not null"`
+	Description string    `json:"description" gorm:"type:text"`
+	CoverURL    string    `json:"cover_url" gorm:"type:text"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+func (Collection) TableName() string { return "collections" }
+
+type Post struct {
+	ID            uint         `json:"id" gorm:"primaryKey"`
+	UserID        uint         `json:"user_id" gorm:"not null;index"`
+	User          *User        `json:"user,omitempty" gorm:"foreignKey:UserID"`
+	Title         string       `json:"title" gorm:"not null"`
+	Content       string       `json:"content" gorm:"type:text;not null"`
+	Summary       string       `json:"summary" gorm:"type:text"`
+	CoverURL      string       `json:"cover_url" gorm:"type:text"`
+	Status        string       `json:"status" gorm:"default:'draft'"` // draft / published
+	AllowComments bool         `json:"allow_comments" gorm:"default:true"`
+	Pinned        bool         `json:"pinned" gorm:"default:false"`
+	Collections   []Collection `json:"collections,omitempty" gorm:"many2many:post_collections;"`
+	CreatedAt     time.Time    `json:"created_at"`
+	UpdatedAt     time.Time    `json:"updated_at"`
+}
+
+func (Post) TableName() string { return "posts" }
+
+type PostCollection struct {
+	PostID       uint `json:"post_id" gorm:"primaryKey"`
+	CollectionID uint `json:"collection_id" gorm:"primaryKey"`
+}
+
+func (PostCollection) TableName() string { return "post_collections" }
+
+type Comment struct {
+	ID        uint      `json:"id" gorm:"primaryKey"`
+	PostID    uint      `json:"post_id" gorm:"not null;index"`
+	Post      *Post     `json:"post,omitempty" gorm:"foreignKey:PostID"`
+	UserID    uint      `json:"user_id" gorm:"not null;index"`
+	User      *User     `json:"user,omitempty" gorm:"foreignKey:UserID"`
+	Content   string    `json:"content" gorm:"type:text;not null"`
+	Status    string    `json:"status" gorm:"default:'visible'"` // visible / hidden
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (Comment) TableName() string { return "comments" }
+
+type Like struct {
+	ID         uint      `json:"id" gorm:"primaryKey"`
+	UserID     uint      `json:"user_id" gorm:"not null;index"`
+	User       *User     `json:"user,omitempty" gorm:"foreignKey:UserID"`
+	TargetType string    `json:"target_type" gorm:"not null"` // post / comment
+	TargetID   uint      `json:"target_id" gorm:"not null"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+func (Like) TableName() string { return "likes" }
+
+type BookmarkFolder struct {
+	ID        uint      `json:"id" gorm:"primaryKey"`
+	UserID    uint      `json:"user_id" gorm:"not null;index"`
+	User      *User     `json:"user,omitempty" gorm:"foreignKey:UserID"`
+	Name      string    `json:"name" gorm:"not null"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (BookmarkFolder) TableName() string { return "bookmark_folders" }
+
+type Bookmark struct {
+	ID               uint            `json:"id" gorm:"primaryKey"`
+	UserID           uint            `json:"user_id" gorm:"not null;index"`
+	User             *User           `json:"user,omitempty" gorm:"foreignKey:UserID"`
+	PostID           uint            `json:"post_id" gorm:"not null;index"`
+	Post             *Post           `json:"post,omitempty" gorm:"foreignKey:PostID"`
+	BookmarkFolderID *uint           `json:"bookmark_folder_id" gorm:"index"`
+	BookmarkFolder   *BookmarkFolder `json:"bookmark_folder,omitempty" gorm:"foreignKey:BookmarkFolderID"`
+	CreatedAt        time.Time       `json:"created_at"`
+}
+
+func (Bookmark) TableName() string { return "bookmarks" }
+
+type FeedSource struct {
+	ID            uint       `json:"id" gorm:"primaryKey"`
+	UserID        uint       `json:"user_id" gorm:"not null;index"` // 订阅者
+	User          *User      `json:"user,omitempty" gorm:"foreignKey:UserID"`
+	SourceType    string     `json:"source_type" gorm:"not null"` // internal_user | internal_channel | internal_collection | external_rss
+	SourceID      *uint      `json:"source_id"`                   // 站内资源 ID（外部 RSS 时为 null）
+	RssURL        string     `json:"rss_url" gorm:"type:text"`    // 外部 RSS URL（站内时为空）
+	Title         string     `json:"title"`                       // 用户自定义名称
+	LastFetchedAt *time.Time `json:"last_fetched_at"`
+	CreatedAt     time.Time  `json:"created_at"`
+}
+
+func (FeedSource) TableName() string { return "feed_sources" }
+
+// OrbitItem 仅存外部 RSS 抓取条目，站内内容动态 JOIN Post 表
+type OrbitItem struct {
+	ID           uint        `json:"id" gorm:"primaryKey"`
+	FeedSourceID uint        `json:"feed_source_id" gorm:"not null;index"`
+	FeedSource   *FeedSource `json:"feed_source,omitempty" gorm:"foreignKey:FeedSourceID"`
+	GUID         string      `json:"guid" gorm:"not null"` // RSS item guid 或 link，用于去重
+	Title        string      `json:"title"`
+	Link         string      `json:"link" gorm:"type:text"`
+	Summary      string      `json:"summary" gorm:"type:text"`
+	Author       string      `json:"author"`
+	PublishedAt  time.Time   `json:"published_at"`
+	FetchedAt    time.Time   `json:"fetched_at"`
+}
+
+func (OrbitItem) TableName() string { return "orbit_items" }
+
+type Notification struct {
+	ID         uint       `json:"id" gorm:"primaryKey"`
+	UserID     uint       `json:"user_id" gorm:"not null;index"` // 接收者
+	User       *User      `json:"user,omitempty" gorm:"foreignKey:UserID"`
+	Type       string     `json:"type" gorm:"not null"` // comment / like / bookmark / system
+	Content    string     `json:"content" gorm:"type:text;not null"`
+	TargetType string     `json:"target_type" gorm:"type:text"` // post / comment / nil
+	TargetID   *uint      `json:"target_id"`
+	ReadAt     *time.Time `json:"read_at"`
+	CreatedAt  time.Time  `json:"created_at"`
+}
+
+func (Notification) TableName() string { return "notifications" }
+
 type Artist struct {
 	ID        uint      `json:"id" gorm:"primaryKey"`
 	Name      string    `json:"name" gorm:"unique;not null"`
