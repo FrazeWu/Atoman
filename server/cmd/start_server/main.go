@@ -73,6 +73,8 @@ func main() {
 	log.Println("Running database migrations...")
 	db.AutoMigrate(
 		&model.User{},
+		&model.Follow{},
+		&model.UserSettings{},
 		&model.Artist{},
 		&model.Album{},
 		&model.AlbumArtist{},
@@ -113,6 +115,7 @@ func main() {
 	})
 
 	handlers.SetupAuthRoutes(r, db)
+	handlers.SetupUserRoutes(r, db)
 	handlers.SetupSongRoutes(r, db, s3Client)
 	handlers.SetupAlbumRoutes(r, db, s3Client)
 	handlers.SetupArtistRoutes(r, db)

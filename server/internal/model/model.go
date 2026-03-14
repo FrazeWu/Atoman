@@ -5,17 +5,43 @@ import (
 )
 
 type User struct {
-	ID        uint      `json:"id" gorm:"primaryKey;column:id"`
-	Username  string    `json:"username" gorm:"unique;not null;column:username"`
-	Email     string    `json:"email" gorm:"unique;not null;column:email"`
-	Password  string    `json:"-" gorm:"not null;column:password"`
-	Role      string    `json:"role" gorm:"default:'user';column:role"`
-	CreatedAt time.Time `json:"created_at" gorm:"column:created_at"`
-	UpdatedAt time.Time `json:"updated_at" gorm:"column:updated_at"`
+	ID          uint      `json:"id" gorm:"primaryKey;column:id"`
+	Username    string    `json:"username" gorm:"unique;not null;column:username"`
+	Email       string    `json:"email" gorm:"unique;not null;column:email"`
+	Password    string    `json:"-" gorm:"not null;column:password"`
+	Role        string    `json:"role" gorm:"default:'user';column:role"` // user / moderator / admin
+	DisplayName string    `json:"display_name" gorm:"column:display_name"`
+	AvatarURL   string    `json:"avatar_url" gorm:"column:avatar_url"`
+	Bio         string    `json:"bio" gorm:"type:text;column:bio"`
+	Website     string    `json:"website" gorm:"column:website"`
+	Location    string    `json:"location" gorm:"column:location"`
+	IsActive    bool      `json:"is_active" gorm:"default:true;column:is_active"`
+	CreatedAt   time.Time `json:"created_at" gorm:"column:created_at"`
+	UpdatedAt   time.Time `json:"updated_at" gorm:"column:updated_at"`
 }
 
 func (User) TableName() string {
 	return "Users"
+}
+
+type Follow struct {
+	FollowerID  uint      `json:"follower_id" gorm:"primaryKey"`
+	FollowingID uint      `json:"following_id" gorm:"primaryKey"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+func (Follow) TableName() string {
+	return "follows"
+}
+
+type UserSettings struct {
+	UserID             uint `json:"user_id" gorm:"primaryKey"`
+	EmailNotifications bool `json:"email_notifications" gorm:"default:true"`
+	PrivateProfile     bool `json:"private_profile" gorm:"default:false"`
+}
+
+func (UserSettings) TableName() string {
+	return "user_settings"
 }
 
 type Artist struct {

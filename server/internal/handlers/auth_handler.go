@@ -10,7 +10,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
-	"amb/internal/model"
+	"atoman/internal/model"
 )
 
 func HashPassword(password string) (string, error) {
@@ -78,6 +78,12 @@ func RegisterHandler(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Create default user settings
+		if err := db.Create(&model.UserSettings{UserID: user.ID}).Error; err != nil {
+			// Log error but don't fail registration
+			c.Error(err)
+		}
+
 		// Generate JWT
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 			"user_id":  user.ID,
@@ -94,10 +100,13 @@ func RegisterHandler(db *gorm.DB) gin.HandlerFunc {
 		c.JSON(http.StatusCreated, gin.H{
 			"token": tokenString,
 			"user": gin.H{
-				"id":       user.ID,
-				"username": user.Username,
-				"email":    user.Email,
-				"role":     user.Role,
+				"id":           user.ID,
+				"username":     user.Username,
+				"email":        user.Email,
+				"role":         user.Role,
+				"display_name": user.DisplayName,
+				"avatar_url":   user.AvatarURL,
+				"is_active":    user.IsActive,
 			},
 		})
 	}
@@ -141,10 +150,13 @@ func LoginHandler(db *gorm.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{
 			"token": tokenString,
 			"user": gin.H{
-				"id":       user.ID,
-				"username": user.Username,
-				"email":    user.Email,
-				"role":     user.Role,
+				"id":           user.ID,
+				"username":     user.Username,
+				"email":        user.Email,
+				"role":         user.Role,
+				"display_name": user.DisplayName,
+				"avatar_url":   user.AvatarURL,
+				"is_active":    user.IsActive,
 			},
 		})
 	}
