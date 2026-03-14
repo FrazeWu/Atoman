@@ -127,6 +127,11 @@ func main() {
 
 	handlers.SetupAuthRoutes(r, db)
 	handlers.SetupUserRoutes(r, db)
+	handlers.SetupBlogChannelRoutes(r, db)
+	handlers.SetupBlogPostRoutes(r, db)
+	handlers.SetupBlogInteractionRoutes(r, db)
+	handlers.SetupFeedRoutes(r, db)
+	handlers.SetupNotificationRoutes(r, db)
 	handlers.SetupSongRoutes(r, db, s3Client)
 	handlers.SetupAlbumRoutes(r, db, s3Client)
 	handlers.SetupArtistRoutes(r, db)
