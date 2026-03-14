@@ -1,19 +1,19 @@
-server/.env
-server/.env.production
+server/.env.dev
+server/.env.prod
+server/database.sqlite
+server/uploads
 server/.
 *.log
 test_*
 # AGENTS.md
 .DS_Store
-server/database.sqlite
-server/database.sqlite-shm
-server/database.sqlite-wal
-server/uploads
+
 
 nginx/ssl/*.pem
 nginx/ssl/*.key
 nginx/ssl/*.crt
+
 web/node_modules
 web/dist
-web/.env.development
-web/.env.production
+web/.env.dev
+web/.env.prod
