@@ -1,0 +1,233 @@
+/* ─── Editor layout ──────────────────────────────────────────────────────── */
+
+.md-editor-wrap {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  border: 2px solid #000;
+  background: #fff;
+  overflow: hidden;
+}
+
+/* Left pane – CodeMirror */
+.md-editor-left {
+  flex: 1.5;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 2px solid #000;
+  overflow: hidden;
+}
+
+/* Right pane – TOC + Preview */
+.md-editor-right {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: #fafaf9;
+  overflow: hidden;
+  min-width: 220px;
+}
+
+.md-preview-pane {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem 1.5rem 3rem;
+}
+
+/* Mobile: hide right pane */
+@media (max-width: 767px) {
+  .md-editor-right {
+    display: none;
+  }
+  .md-editor-right.mobile-visible {
+    display: flex;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    z-index: 10;
+    background: #fff;
+  }
+  .md-editor-left {
+    flex: 1;
+  }
+}
+
+/* ─── CodeMirror Base ─────────────────────────────────────────────────────── */
+
+.cm-editor {
+  height: 100%;
+  outline: none !important;
+  font-size: 0.9rem;
+}
+
+.cm-editor.cm-focused {
+  outline: none !important;
+}
+
+.cm-scroller {
+  font-family: ui-monospace, SFMono-Regular, Menlo, 'Courier New', monospace !important;
+  line-height: 1.7 !important;
+  padding: 0.75rem 0 !important;
+}
+
+/* ─── Gutter (line numbers) ──────────────────────────────────────────────── */
+
+.cm-gutters {
+  border-right: 2px solid #000 !important;
+  background: #f9fafb !important;
+  color: #9ca3af !important;
+  padding-right: 0 !important;
+  min-width: 42px;
+}
+
+.cm-gutter.cm-lineNumberGutter {
+  min-width: 42px;
+}
+
+.cm-lineNumbers .cm-gutterElement {
+  padding: 0 10px 0 6px !important;
+  min-width: 42px;
+  text-align: right;
+  font-size: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  user-select: none;
+}
+
+/* ─── Active line ─────────────────────────────────────────────────────────── */
+
+.cm-activeLine {
+  background-color: #fffdf0 !important;
+}
+
+.cm-activeLineGutter {
+  background-color: #f0eed6 !important;
+  color: #374151 !important;
+}
+
+/* ─── First-line title decoration ─────────────────────────────────────────── */
+
+.cm-line.cm-title-h1 {
+  font-family: inherit !important;
+  font-size: 1.75rem !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.025em !important;
+  line-height: 1.25 !important;
+  color: #000 !important;
+}
+
+.cm-line.cm-title-h2 {
+  font-family: inherit !important;
+  font-size: 1.4rem !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.02em !important;
+  line-height: 1.3 !important;
+  color: #111 !important;
+}
+
+.cm-line.cm-title-h3 {
+  font-family: inherit !important;
+  font-size: 1.15rem !important;
+  font-weight: 900 !important;
+  line-height: 1.35 !important;
+  color: #1f2937 !important;
+}
+
+.cm-line.cm-title-h4 {
+  font-family: inherit !important;
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+  color: #374151 !important;
+}
+
+/* ─── Selection ───────────────────────────────────────────────────────────── */
+
+.cm-selectionBackground,
+.cm-editor ::selection {
+  background: rgba(0, 0, 0, 0.12) !important;
+}
+
+/* ─── Cursor ──────────────────────────────────────────────────────────────── */
+
+.cm-cursor {
+  border-left-color: #000 !important;
+  border-left-width: 2px !important;
+}
+
+/* ─── Content padding ─────────────────────────────────────────────────────── */
+
+.cm-content {
+  padding: 0 1.5rem !important;
+  caret-color: #000;
+}
+
+/* ─── Preview prose ───────────────────────────────────────────────────────── */
+
+.md-preview-pane h1 { font-size: 1.75rem; font-weight: 900; margin: 1rem 0 0.5rem; line-height: 1.2; letter-spacing: -0.025em; }
+.md-preview-pane h2 { font-size: 1.375rem; font-weight: 900; margin: 1.5rem 0 0.4rem; line-height: 1.2; border-left: 4px solid #000; padding-left: 0.75rem; }
+.md-preview-pane h3 { font-size: 1.1rem; font-weight: 900; margin: 1.25rem 0 0.3rem; }
+.md-preview-pane h4 { font-size: 1rem; font-weight: 700; margin: 1rem 0 0.25rem; }
+.md-preview-pane p { margin: 0.6rem 0; line-height: 1.75; font-size: 0.9rem; color: #1a1a1a; }
+.md-preview-pane a { font-weight: 700; text-decoration: underline; }
+.md-preview-pane a:hover { opacity: 0.6; }
+.md-preview-pane code {
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  padding: 0.1em 0.35em;
+  font-size: 0.85em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.md-preview-pane pre {
+  background: #111;
+  color: #f8f8f2;
+  padding: 1rem 1.25rem;
+  border: 2px solid #000;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+}
+.md-preview-pane pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font-size: 0.875rem;
+}
+.md-preview-pane blockquote {
+  border-left: 4px solid #000;
+  padding: 0.25rem 0 0.25rem 1rem;
+  margin: 0.75rem 0;
+  color: #555;
+}
+.md-preview-pane ul { list-style-type: disc; padding-left: 1.5rem; margin: 0.4rem 0; }
+.md-preview-pane ol { list-style-type: decimal; padding-left: 1.5rem; margin: 0.4rem 0; }
+.md-preview-pane li { margin: 0.15rem 0; font-size: 0.9rem; }
+.md-preview-pane hr { border: none; border-top: 2px solid #000; margin: 1rem 0; }
+.md-preview-pane img { max-width: 100%; border: 2px solid #000; }
+.md-preview-pane strong { font-weight: 900; }
+.md-preview-pane em { font-style: italic; }
+.md-preview-pane table { border-collapse: collapse; width: 100%; margin: 0.75rem 0; font-size: 0.875rem; }
+.md-preview-pane th, .md-preview-pane td { border: 2px solid #000; padding: 0.35rem 0.6rem; text-align: left; }
+.md-preview-pane th { font-weight: 900; background: #f3f4f6; }
+
+/* KaTeX */
+.md-preview-pane .katex-display {
+  margin: 1rem 0;
+  overflow-x: auto;
+}
+.md-preview-pane .katex {
+  font-size: 1rem;
+}
+
+/* highlight.js code theme (inside pre) */
+.md-preview-pane .hljs-keyword,
+.md-preview-pane .hljs-built_in { color: #ff79c6; }
+.md-preview-pane .hljs-string { color: #f1fa8c; }
+.md-preview-pane .hljs-number { color: #bd93f9; }
+.md-preview-pane .hljs-comment { color: #6272a4; font-style: italic; }
+.md-preview-pane .hljs-function,
+.md-preview-pane .hljs-title { color: #50fa7b; }
+.md-preview-pane .hljs-variable,
+.md-preview-pane .hljs-attr { color: #8be9fd; }

@@ -1,25 +1,18 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
-import HomeView from "@/views/HomeView.vue";
-import UploadView from "@/views/UploadView.vue";
-import LoginView from "@/views/LoginView.vue";
-import AdminReviewView from "@/views/AdminReviewView.vue";
-import AlbumDetailView from "@/views/AlbumDetailView.vue";
-import EditAlbumView from "@/views/EditAlbumView.vue";
-import AboutView from "@/views/AboutView.vue";
 import { useAuthStore } from "@/stores/auth";
 
 const routes: RouteRecordRaw[] = [
-  { path: "/", component: () => import("@/views/orbit/OrbitView.vue") },
-  { path: "/music", component: HomeView },
-  { path: "/about", component: AboutView },
-  { path: "/artist=:artist/album=:album", component: AlbumDetailView },
-  { path: "/artist=:artist/album=:album/edit", component: EditAlbumView },
-  { path: "/upload", component: UploadView },
-  { path: "/login", component: LoginView },
-  { path: "/register", component: LoginView },
+  { path: "/", component: () => import("@/views/feed/FeedView.vue") },
+  { path: "/music", component: () => import("@/views/HomeView.vue") },
+  { path: "/about", component: () => import("@/views/AboutView.vue") },
+  { path: "/artist=:artist/album=:album", component: () => import("@/views/AlbumDetailView.vue") },
+  { path: "/artist=:artist/album=:album/edit", component: () => import("@/views/EditAlbumView.vue") },
+  { path: "/upload", component: () => import("@/views/UploadView.vue") },
+  { path: "/login", component: () => import("@/views/LoginView.vue") },
+  { path: "/register", component: () => import("@/views/LoginView.vue") },
   {
     path: "/admin/review",
-    component: AdminReviewView,
+    component: () => import("@/views/AdminReviewView.vue"),
     beforeEnter: (to, from, next) => {
       const authStore = useAuthStore();
       if (authStore.user?.role === "admin") {
@@ -70,9 +63,17 @@ const routes: RouteRecordRaw[] = [
       else next("/login");
     }
   },
-  // Orbit routes
-  // Redirect /orbit to / for consistency since it's now the home page
-  { path: "/orbit", redirect: "/" },
+  {
+    path: "/blog/notifications",
+    component: () => import("@/views/blog/NotificationsView.vue"),
+    beforeEnter: (to, from, next) => {
+      const authStore = useAuthStore();
+      if (authStore.isAuthenticated) next();
+      else next("/login");
+    }
+  },
+  // Feed routes
+  { path: "/feed", component: () => import("@/views/feed/FeedView.vue") },
 ];
 
 const router = createRouter({

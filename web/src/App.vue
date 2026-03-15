@@ -1,22 +1,39 @@
+<template>
+  <n-config-provider :theme-overrides="themeOverrides">
+    <div style="display:flex;flex-direction:column;min-height:100vh">
+      <AppTopbar />
+      <main style="flex:1;padding-bottom:128px">
+        <router-view />
+      </main>
+      <AudioPlayer />
+    </div>
+  </n-config-provider>
+</template>
 
 <script setup lang="ts">
 import { onMounted, watch } from 'vue'
-import AppTopbar from './components/AppTopbar.vue'
-import AudioPlayer from './components/AudioPlayer.vue'
+import { NConfigProvider } from 'naive-ui'
+import AppTopbar from '@/components/AppTopbar.vue'
+import AudioPlayer from '@/components/AudioPlayer.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useFeedStore } from '@/stores/feed'
+
+const themeOverrides = {
+  common: {
+    primaryColor: '#000000',
+    primaryColorHover: '#333333',
+    primaryColorPressed: '#000000',
+    borderRadius: '0px',
+  },
+}
 
 const authStore = useAuthStore()
 const feedStore = useFeedStore()
 
-// Start polling when authenticated
 onMounted(() => {
-  if (authStore.isAuthenticated) {
-    feedStore.startPolling()
-  }
+  if (authStore.isAuthenticated) feedStore.startPolling()
 })
 
-// Also watch for login/logout
 watch(() => authStore.isAuthenticated, (authenticated) => {
   if (authenticated) {
     feedStore.startPolling()
@@ -25,13 +42,3 @@ watch(() => authStore.isAuthenticated, (authenticated) => {
   }
 })
 </script>
-
-<template>
-  <div class="flex flex-col min-h-screen">
-    <AppTopbar />
-    <main class="flex-grow pb-32">
-      <router-view></router-view>
-    </main>
-    <AudioPlayer />
-  </div>
-</template>

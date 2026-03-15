@@ -8,11 +8,8 @@ export function useApi() {
   return {
     url: apiUrl,
     songs: `${apiUrl}/songs`,
+    artists: `${apiUrl}/artists`,
     corrections: `${apiUrl}/corrections`,
-    correctionsBatch: `${apiUrl}/corrections/batch`,
-    adminPending: `${apiUrl}/admin/pending`,
-    adminApprove: (id: number) => `${apiUrl}/admin/approve/${id}`,
-    adminReject: (id: number) => `${apiUrl}/admin/reject/${id}`,
     
     blog: {
       channels: `${apiUrl}/blog/channels`,
@@ -22,20 +19,21 @@ export function useApi() {
       collection: (id: number) => `${apiUrl}/blog/collections/${id}`,
       
       posts: `${apiUrl}/blog/posts`,
-      post: (id: number) => `${apiUrl}/blog/posts/${id}`,
-      postPublish: (id: number) => `${apiUrl}/blog/posts/${id}/publish`,
-      postUnpublish: (id: number) => `${apiUrl}/blog/posts/${id}/unpublish`,
-      postPin: (id: number) => `${apiUrl}/blog/posts/${id}/pin`,
-      postUnpin: (id: number) => `${apiUrl}/blog/posts/${id}/unpin`,
+      post: (id: number | string) => `${apiUrl}/blog/posts/${id}`,
+      postPublish: (id: number | string) => `${apiUrl}/blog/posts/${id}/publish`,
+      postUnpublish: (id: number | string) => `${apiUrl}/blog/posts/${id}/unpublish`,
+      postPin: (id: number | string) => `${apiUrl}/blog/posts/${id}/pin`,
+      postUnpin: (id: number | string) => `${apiUrl}/blog/posts/${id}/unpin`,
       drafts: `${apiUrl}/blog/posts/drafts`,
-      postCollections: (id: number) => `${apiUrl}/blog/posts/${id}/collections`,
-      postCollection: (id: number, collectionId: number) => `${apiUrl}/blog/posts/${id}/collections/${collectionId}`,
+      postCollections: (id: number | string) => `${apiUrl}/blog/posts/${id}/collections`,
+      postCollection: (id: number | string, collectionId: number | string) => `${apiUrl}/blog/posts/${id}/collections/${collectionId}`,
+      uploadImage: `${apiUrl}/blog/upload-image`,
       
       comments: `${apiUrl}/blog/comments`,
-      postComments: (id: number) => `${apiUrl}/blog/posts/${id}/comments`,
+      postComments: (id: number | string) => `${apiUrl}/blog/posts/${id}/comments`,
       
       likes: `${apiUrl}/blog/likes`,
-      postLikesCount: (id: number) => `${apiUrl}/blog/posts/${id}/likes/count`,
+      postLikesCount: (id: number | string) => `${apiUrl}/blog/posts/${id}/likes/count`,
       
       bookmarks: `${apiUrl}/blog/bookmarks`,
       bookmark: (id: number) => `${apiUrl}/blog/bookmarks/${id}`,
@@ -55,7 +53,7 @@ export function useApi() {
       following: (id: number | string) => `${apiUrl}/users/${id}/following`,
     },
     
-    orbit: {
+    feed: {
       subscriptions: `${apiUrl}/feed/subscriptions`,
       subscription: (id: number) => `${apiUrl}/feed/subscriptions/${id}`,
       timeline: `${apiUrl}/feed/timeline`,
