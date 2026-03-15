@@ -216,6 +216,33 @@ func GetLocalPathFromURL(url string) string {
 	return ""
 }
 
+// SaveFileToPath writes an io.Reader to the specified destination path.
+// The caller is responsible for creating parent directories beforehand.
+func SaveFileToPath(reader interface{ Read([]byte) (int, error) }, destPath string) error {
+	dst, err := os.Create(destPath)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+
+	buf := make([]byte, 32*1024)
+	for {
+		n, readErr := reader.Read(buf)
+		if n > 0 {
+			if _, writeErr := dst.Write(buf[:n]); writeErr != nil {
+				return writeErr
+			}
+		}
+		if readErr != nil {
+			if readErr.Error() == "EOF" {
+				break
+			}
+			return readErr
+		}
+	}
+	return nil
+}
+
 // DeleteSongAndS3Objects deletes a song record and its associated files
 func DeleteSongAndS3Objects(db *gorm.DB, s3Client *s3.S3, song *model.Song) error {
 	if song.AudioURL != "" {

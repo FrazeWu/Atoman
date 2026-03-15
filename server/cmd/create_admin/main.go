@@ -1,100 +1,100 @@
 package main
 
 import (
-	"flag"
+	"bufio"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
-	"time"
-
+	"github.com/glebarez/sqlite"
 	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
-	"gorm.io/driver/sqlite"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
+	"atoman/internal/model"
 )
 
-// User definitions to match the main application
-type User struct {
-	ID        uint      `json:"id" gorm:"primaryKey;column:id"`
-	Username  string    `json:"username" gorm:"unique;not null;column:username"`
-	Email     string    `json:"email" gorm:"unique;not null;column:email"`
-	Password  string    `json:"-" gorm:"not null;column:password"`
-	Role      string    `json:"role" gorm:"default:'user';column:role"`
-	CreatedAt time.Time `json:"created_at" gorm:"column:createdAt"`
-	UpdatedAt time.Time `json:"updated_at" gorm:"column:updatedAt"`
-}
-
-func (User) TableName() string {
-	return "Users"
-}
-
 func main() {
-	// Parse flags
-	username := flag.String("username", "", "Admin username")
-	email := flag.String("email", "", "Admin email")
-	password := flag.String("password", "", "Admin password")
-	promote := flag.String("promote", "", "Existing username to promote to admin")
-	flag.Parse()
-
-	// Load env
-	if err := godotenv.Load("../../.env"); err != nil {
-		log.Println("Warning: .env file not found, trying current directory")
-		godotenv.Load()
+	// Load env: prefer .env, fallback to .env.dev
+	if err := godotenv.Load(".env"); err != nil {
+		if err2 := godotenv.Load(".env.dev"); err2 != nil {
+			log.Println("No .env file found, using system environment variables")
+		} else {
+			log.Println("Loaded .env.dev")
+		}
+	} else {
+		log.Println("Loaded .env")
 	}
 
-	// Connect to DB
-	dbPath := "../../database.sqlite"
-	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		dbPath = "database.sqlite"
+	dbType := os.Getenv("DATABASE_TYPE")
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbType == "" || dbURL == "" {
+		log.Fatal("DATABASE_TYPE and DATABASE_URL must be set")
 	}
 
-	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	var dialector gorm.Dialector
+	switch dbType {
+	case "postgres", "postgresql":
+		dialector = postgres.Open(dbURL)
+	case "sqlite":
+		dialector = sqlite.Open(dbURL)
+	default:
+		log.Fatalf("Unsupported DATABASE_TYPE: %s (expected: postgres or sqlite)", dbType)
+	}
+
+	db, err := gorm.Open(dialector, &gorm.Config{})
 	if err != nil {
-		log.Fatal("Failed to connect to database:", err)
+		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
-	// Auto migrate to ensure Role column exists
-	db.AutoMigrate(&User{})
+	scanner := bufio.NewScanner(os.Stdin)
 
-	if *promote != "" {
-		// Promote existing user
-		var user User
-		if err := db.Where("username = ?", *promote).First(&user).Error; err != nil {
-			log.Fatalf("User %s not found", *promote)
-		}
+	username := prompt(scanner, "Username: ")
+	email := prompt(scanner, "Email: ")
+	password := prompt(scanner, "Password: ")
 
-		user.Role = "admin"
-		if err := db.Save(&user).Error; err != nil {
-			log.Fatal("Failed to update user role:", err)
+	if len(password) < 6 {
+		log.Fatal("Password must be at least 6 characters")
+	}
+
+	// Check if user already exists
+	var existing model.User
+	if db.Where("username = ? OR email = ?", username, email).First(&existing).Error == nil {
+		// User exists — update role to admin
+		if err := db.Model(&existing).Update("role", "admin").Error; err != nil {
+			log.Fatalf("Failed to update user role: %v", err)
 		}
-		fmt.Printf("Successfully promoted %s to admin\n", *promote)
+		fmt.Printf("User '%s' already exists. Role updated to admin.\n", existing.Username)
 		return
 	}
 
-	if *username == "" || *email == "" || *password == "" {
-		fmt.Println("Usage:")
-		fmt.Println("  Create new admin: go run . -username <name> -email <email> -password <pass>")
-		fmt.Println("  Promote existing: go run . -promote <username>")
-		os.Exit(1)
-	}
-
-	// Create new admin
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(*password), bcrypt.DefaultCost)
+	hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		log.Fatal("Failed to hash password:", err)
+		log.Fatalf("Failed to hash password: %v", err)
 	}
 
-	user := User{
-		Username: *username,
-		Email:    *email,
-		Password: string(hashedPassword),
+	user := model.User{
+		Username: username,
+		Email:    email,
+		Password: string(hashed),
 		Role:     "admin",
+		IsActive: true,
 	}
 
 	if err := db.Create(&user).Error; err != nil {
-		log.Fatal("Failed to create admin user:", err)
+		log.Fatalf("Failed to create admin user: %v", err)
 	}
 
-	fmt.Printf("Successfully created admin user %s\n", *username)
+	// Create default user settings
+	_ = db.Create(&model.UserSettings{UserID: user.UUID})
+
+	fmt.Printf("Admin user '%s' created successfully.\n", username)
+}
+
+func prompt(scanner *bufio.Scanner, label string) string {
+	fmt.Print(label)
+	scanner.Scan()
+	return strings.TrimSpace(scanner.Text())
 }

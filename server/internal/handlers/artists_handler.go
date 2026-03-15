@@ -25,8 +25,13 @@ func SetupArtistRoutes(router *gin.Engine, db *gorm.DB) {
 
 func GetArtistsHandler(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		q := c.Query("q")
+		query := db.Order("name ASC")
+		if q != "" {
+			query = query.Where("LOWER(name) LIKE LOWER(?)", "%"+q+"%")
+		}
 		var artists []model.Artist
-		if err := db.Order("name ASC").Find(&artists).Error; err != nil {
+		if err := query.Find(&artists).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch artists"})
 			return
 		}

@@ -10,7 +10,6 @@ import (
 	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
-
 )
 
 var Enforcer *casbin.Enforcer
@@ -63,20 +62,40 @@ m = g(r.sub, p.sub) && keyMatch2(r.obj, p.obj) && regexMatch(r.act, p.act)
 }
 
 func initDefaultPolicies() {
+	policyAdded := false
+
 	// Anonymous policies
-	Enforcer.AddPolicy("anonymous", "/api/auth/*", "POST")
-	Enforcer.AddPolicy("anonymous", "/api/*", "GET")
-	Enforcer.AddPolicy("anonymous", "/uploads/*", "(GET|HEAD)")
+	if ok, _ := Enforcer.AddPolicy("anonymous", "/api/auth/*", "POST"); ok {
+		policyAdded = true
+	}
+	if ok, _ := Enforcer.AddPolicy("anonymous", "/api/*", "GET"); ok {
+		policyAdded = true
+	}
+	if ok, _ := Enforcer.AddPolicy("anonymous", "/uploads/*", "(GET|HEAD)"); ok {
+		policyAdded = true
+	}
 
 	// User policies (can do most things, ownership enforced by handlers)
-	Enforcer.AddPolicy("user", "/api/*", "(GET|POST|PUT|DELETE)")
-	Enforcer.AddPolicy("user", "/uploads/*", "(GET|HEAD)")
+	if ok, _ := Enforcer.AddPolicy("user", "/api/*", "(GET|POST|PUT|DELETE)"); ok {
+		policyAdded = true
+	}
+	if ok, _ := Enforcer.AddPolicy("user", "/uploads/*", "(GET|HEAD)"); ok {
+		policyAdded = true
+	}
 
 	// Admin policies
-	Enforcer.AddPolicy("admin", "/api/*", "(GET|POST|PUT|DELETE)")
-	Enforcer.AddPolicy("admin", "/uploads/*", "(GET|HEAD)")
+	if ok, _ := Enforcer.AddPolicy("admin", "/api/*", "(GET|POST|PUT|DELETE)"); ok {
+		policyAdded = true
+	}
+	if ok, _ := Enforcer.AddPolicy("admin", "/uploads/*", "(GET|HEAD)"); ok {
+		policyAdded = true
+	}
 
-	Enforcer.SavePolicy()
+	if policyAdded {
+		if err := Enforcer.SavePolicy(); err != nil {
+			log.Printf("Casbin SavePolicy warning: %v", err)
+		}
+	}
 }
 
 // CasbinMiddleware is the Gin middleware for Casbin authorization
