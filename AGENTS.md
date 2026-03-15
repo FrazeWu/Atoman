@@ -16,6 +16,15 @@ subscriptions. It supports private/self-hosted deployment.
 **Development Notes:**
 - **临时逻辑修改**: 暂时不需要登录也可以修改文章内容 (Temporarily allow article editing without login)
 
+**Recent Changes (2026-03-15):**
+- Feed module fully implemented: RSS feed subscription with groups, read/unread state, pagination ("load more"), podcast episode support
+- Podcast episodes in FeedView now use the shared music `usePlayerStore` (`playSong`) instead of native `<audio controls>` — only a single ▶ 播放 / ■ 播放中 button is shown per episode
+- `usePlayerStore.playSong()` accepts a temporary `Song`-shaped object built from `FeedItem` fields (`enclosure_url` → `audio_url`, `title`, `author`, `image_url`, etc.)
+- Feed model additions: `FeedItemRead` (per-user read tracking), `SubscriptionGroup` (folder grouping), `EnclosureURL/Type/Duration/ImageURL` on `FeedItem`
+- `AutoMigrate` in `start_server/main.go` now includes `FeedItemRead` and `SubscriptionGroup`
+- RSS cron (`rss_cron.go`) populates enclosure/duration/image fields from iTunes/RSS enclosure tags
+- `feed_handler.go` adds routes: mark-read, mark-all-read, groups CRUD (`GET/POST/PUT/DELETE /feed/groups`), set-group (`PUT /feed/subscriptions/:id/group`), timeline supports `group_id` filter and `is_read` injection
+
 **License:** GPL
 
 ## Tech Stack
