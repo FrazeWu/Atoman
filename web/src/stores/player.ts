@@ -85,19 +85,6 @@ export const usePlayerStore = defineStore('player', () => {
     }
   };
 
-  const fetchSongById = async (id: number): Promise<Song | null> => {
-    try {
-      const response = await fetch(`${API_URL}/songs/${id}`);
-      if (response.ok) {
-        return await response.json();
-      }
-      return null;
-    } catch (error) {
-      console.error(`Failed to fetch song ${id}:`, error);
-      return null;
-    }
-  };
-
   const playSong = (song: Song) => {
     if (currentSong.value?.id === song.id) {
       togglePlay();
@@ -183,7 +170,6 @@ export const usePlayerStore = defineStore('player', () => {
     currentTime,
     duration,
     fetchSongs,
-    fetchSongById,
     playSong,
     togglePlay,
     playNext,

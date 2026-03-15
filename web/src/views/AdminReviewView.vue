@@ -406,78 +406,64 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="max-w-5xl mx-auto px-8 py-20">
-    <div class="mb-12">
-      <h1 class="text-4xl font-black tracking-tighter mb-4">审核队列</h1>
-      <p class="text-gray-500">
+  <div class="page-container">
+    <div class="page-header">
+      <h1 class="page-title">审核队列</h1>
+      <p class="page-desc">
         审核用户提交的内容修正和新增。共 <strong>{{ reviewItems.length }}</strong> 项待审核。
       </p>
     </div>
 
     <!-- 加载状态 -->
-    <div v-if="loading" class="text-center py-20">
-      <p class="text-gray-400 font-medium">加载中...</p>
+    <div v-if="loading" class="state-loading">
+      <p>加载中...</p>
     </div>
 
     <!-- 空状态 -->
-    <div v-else-if="reviewItems.length === 0" 
-      class="text-center py-20 bg-gray-50 border-2 border-dashed border-gray-200">
-      <p class="text-gray-400 font-medium">暂无待审核内容</p>
+    <div v-else-if="reviewItems.length === 0" class="state-empty">
+      <p>暂无待审核内容</p>
     </div>
 
     <!-- 审核列表 -->
-    <div v-else class="space-y-6">
-      <div 
-        v-for="item in reviewItems" 
+    <div v-else class="review-list">
+      <div
+        v-for="item in reviewItems"
         :key="item.id"
-        class="bg-white border-2 border-black p-8 hover:shadow-[15px_15px_0px_0px_rgba(0,0,0,1)] transition-shadow"
+        class="review-card"
       >
         <!-- 头部：类型标签 + 元信息 -->
-        <div class="flex justify-between items-start mb-6 pb-4 border-b-2 border-gray-100">
-          <div class="flex-1">
-            <div class="flex items-center gap-3 mb-2">
-              <span class="bg-black text-white px-3 py-1 text-xs font-black uppercase tracking-widest">
-                {{ getTypeLabel(item.type) }}
-              </span>
-              <span class="text-gray-400 text-sm">
-                {{ new Date(item.created_at).toLocaleString('zh-CN') }}
-              </span>
+        <div class="card-header">
+          <div class="card-meta">
+            <div class="card-meta-top">
+              <span class="type-badge">{{ getTypeLabel(item.type) }}</span>
+              <span class="card-date">{{ new Date(item.created_at).toLocaleString('zh-CN') }}</span>
             </div>
-            
-            <h2 class="text-2xl font-black mb-1">
-              {{ item.target_title || item.album || '未命名' }}
-            </h2>
-            
-            <p class="text-gray-500 font-bold">
-              {{ item.artist }}
-            </p>
-            
-            <p class="text-sm text-gray-400 mt-2">
-              提交者: {{ item.user?.username }}
-            </p>
+            <h2 class="card-title">{{ item.target_title || item.album || '未命名' }}</h2>
+            <p class="card-artist">{{ item.artist }}</p>
+            <p class="card-submitter">提交者: {{ item.user?.username }}</p>
           </div>
 
           <!-- 操作按钮 -->
-          <div class="flex gap-3">
-            <button 
+          <div class="action-btns">
+            <button
               @click="
                 item.type === 'song_batch' ? approveSongBatch(item) :
                 item.type === 'album_upload' ? approveAlbum(item) :
                 approveCorrection(item)
               "
               :disabled="processingItems.has(item.id)"
-              class="bg-black text-white px-6 py-3 font-bold hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              class="btn-approve"
             >
               {{ processingItems.has(item.id) ? '处理中...' : '通过' }}
             </button>
-            <button 
+            <button
               @click="
                 item.type === 'song_batch' ? rejectSongBatch(item) :
                 item.type === 'album_upload' ? rejectAlbum(item) :
                 rejectCorrection(item)
               "
               :disabled="processingItems.has(item.id)"
-              class="bg-white text-black border-2 border-black px-6 py-3 font-bold hover:bg-red-600 hover:text-white hover:border-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              class="btn-reject"
             >
               {{ processingItems.has(item.id) ? '处理中...' : '驳回' }}
             </button>
@@ -485,196 +471,160 @@ onMounted(async () => {
         </div>
 
         <!-- 内容区：根据类型显示不同内容 -->
-        
+
         <!-- 歌曲批次上传 -->
-        <div v-if="item.type === 'song_batch'" class="space-y-4">
-          <div class="flex items-center gap-6 mb-4">
-            <div v-if="item.cover_url" class="w-32 h-32 border-2 border-black shrink-0">
-              <img :src="item.cover_url" class="w-full h-full object-cover grayscale" alt="专辑封面" />
+        <div v-if="item.type === 'song_batch'" class="content-section">
+          <div class="batch-info-row">
+            <div v-if="item.cover_url" class="batch-cover">
+              <img :src="item.cover_url" class="batch-cover-img" alt="专辑封面" />
             </div>
-            <div v-else class="w-32 h-32 border-2 border-gray-300 bg-gray-100 flex items-center justify-center shrink-0">
-              <span class="text-gray-400 font-bold text-xs">无封面</span>
+            <div v-else class="batch-cover-placeholder">
+              <span>无封面</span>
             </div>
-            <div>
-              <p class="text-sm font-black uppercase tracking-widest text-gray-500 mb-1">专辑信息</p>
-              <p class="text-xl font-black mb-1">{{ item.album }}</p>
-              <p class="font-bold text-gray-600">{{ item.artist }}</p>
-              <p class="text-sm text-gray-500 mt-2">
-                <span class="font-black">{{ item.count }}</span> 首歌曲
-              </p>
+            <div class="batch-details">
+              <p class="meta-label">专辑信息</p>
+              <p class="batch-album">{{ item.album }}</p>
+              <p class="batch-artist">{{ item.artist }}</p>
+              <p class="batch-count"><strong>{{ item.count }}</strong> 首歌曲</p>
             </div>
           </div>
 
           <!-- 上传信息 -->
-          <div class="grid grid-cols-3 gap-4 p-4 bg-gray-50 border border-gray-200 text-sm">
-            <div>
-              <p class="text-xs font-black uppercase tracking-widest text-gray-500 mb-1">上传时间</p>
-              <p class="font-bold">{{ formatDate(item.created_at) }}</p>
+          <div class="info-grid">
+            <div class="info-cell">
+              <p class="meta-label">上传时间</p>
+              <p class="info-value">{{ formatDate(item.created_at) }}</p>
             </div>
-            <div>
-              <p class="text-xs font-black uppercase tracking-widest text-gray-500 mb-1">上传者</p>
-              <p class="font-bold">{{ item.user?.username || '匿名用户' }}</p>
+            <div class="info-cell">
+              <p class="meta-label">上传者</p>
+              <p class="info-value">{{ item.user?.username || '匿名用户' }}</p>
             </div>
-            <div>
-              <p class="text-xs font-black uppercase tracking-widest text-gray-500 mb-1">存储位置</p>
-              <div class="flex items-center gap-2">
-                <span v-if="isLocalStorage(item)" class="inline-block px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-black">
-                  🟡 本地暂存
-                </span>
-                <span v-else class="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs font-black">
-                  🔵 云端存储
-                </span>
-              </div>
+            <div class="info-cell">
+              <p class="meta-label">存储位置</p>
+              <span v-if="isLocalStorage(item)" class="storage-badge storage-local">🟡 本地暂存</span>
+              <span v-else class="storage-badge storage-cloud">🔵 云端存储</span>
             </div>
           </div>
 
           <!-- 歌曲列表 -->
-          <div class="space-y-2">
-            <p class="text-sm font-black uppercase tracking-widest text-gray-500 mb-2">曲目列表</p>
-            <div 
-              v-for="song in item.songs" 
+          <div class="tracklist-section">
+            <p class="meta-label" style="margin-bottom:0.5rem">曲目列表</p>
+            <div
+              v-for="song in item.songs"
               :key="song.id"
-              class="flex items-center gap-4 p-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+              class="track-row"
             >
-              <span class="text-gray-400 font-mono w-8 text-right text-sm">
-                {{ formatTrackNumber(song.track_number) }}
-              </span>
-              <div class="flex-1 font-bold">{{ song.title }}</div>
-              <div class="flex items-center gap-2 text-xs">
-                <span 
+              <span class="track-num">{{ formatTrackNumber(song.track_number) }}</span>
+              <div class="track-title">{{ song.title }}</div>
+              <div class="track-badges">
+                <span
                   v-if="song.audio_source === 'local'"
-                  class="px-2 py-1 bg-yellow-50 text-yellow-700 font-bold border border-yellow-200"
+                  class="track-badge badge-local"
                   title="本地暂存"
-                >
-                  LOCAL
-                </span>
-                <span 
+                >LOCAL</span>
+                <span
                   v-else
-                  class="px-2 py-1 bg-blue-50 text-blue-700 font-bold border border-blue-200"
+                  class="track-badge badge-s3"
                   title="云端存储"
-                >
-                  S3
-                </span>
+                >S3</span>
               </div>
-              <button 
+              <button
                 @click="playAudio(song.audio_url)"
-                class="text-xs font-black uppercase tracking-widest bg-white border border-black px-3 py-1 hover:bg-black hover:text-white transition-colors"
+                class="btn-play"
               >
                 ▶ 试听
               </button>
-              <a 
-                :href="song.audio_url" 
-                target="_blank" 
-                class="text-gray-400 hover:text-black text-sm transition-colors"
+              <a
+                :href="song.audio_url"
+                target="_blank"
+                class="btn-download"
                 title="下载"
-              >
-                ⬇
-              </a>
+              >⬇</a>
             </div>
           </div>
         </div>
 
         <!-- 专辑上传 -->
-        <div v-else-if="item.type === 'album_upload'" class="space-y-4">
-          <div class="flex items-center gap-6 mb-4">
-            <div v-if="item.cover_url" class="w-48 h-48 border-2 border-black shrink-0">
-              <img :src="item.cover_url" class="w-full h-full object-cover" alt="专辑封面" />
+        <div v-else-if="item.type === 'album_upload'" class="content-section">
+          <div class="batch-info-row">
+            <div v-if="item.cover_url" class="album-cover">
+              <img :src="item.cover_url" class="album-cover-img" alt="专辑封面" />
             </div>
-            <div v-else class="w-48 h-48 border-2 border-gray-300 bg-gray-100 flex items-center justify-center shrink-0">
-              <span class="text-gray-400 font-bold">无封面</span>
+            <div v-else class="album-cover-placeholder">
+              <span>无封面</span>
             </div>
-            <div>
-              <p class="text-sm font-black uppercase tracking-widest text-gray-500 mb-2">专辑信息</p>
-              <p class="text-2xl font-black mb-2">{{ item.target_title }}</p>
-              <p class="text-lg font-bold text-gray-600">{{ item.artist }}</p>
+            <div class="batch-details">
+              <p class="meta-label">专辑信息</p>
+              <p class="album-title">{{ item.target_title }}</p>
+              <p class="album-artist">{{ item.artist }}</p>
             </div>
           </div>
 
           <!-- 上传信息 -->
-          <div class="grid grid-cols-3 gap-4 p-4 bg-gray-50 border border-gray-200 text-sm">
-            <div>
-              <p class="text-xs font-black uppercase tracking-widest text-gray-500 mb-1">上传时间</p>
-              <p class="font-bold">{{ formatDate(item.created_at) }}</p>
+          <div class="info-grid">
+            <div class="info-cell">
+              <p class="meta-label">上传时间</p>
+              <p class="info-value">{{ formatDate(item.created_at) }}</p>
             </div>
-            <div>
-              <p class="text-xs font-black uppercase tracking-widest text-gray-500 mb-1">上传者</p>
-              <p class="font-bold">{{ item.user?.username || '匿名用户' }}</p>
+            <div class="info-cell">
+              <p class="meta-label">上传者</p>
+              <p class="info-value">{{ item.user?.username || '匿名用户' }}</p>
             </div>
-            <div>
-              <p class="text-xs font-black uppercase tracking-widest text-gray-500 mb-1">存储位置</p>
-              <div class="flex items-center gap-2">
-                <span v-if="isLocalStorage(item)" class="inline-block px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-black">
-                  🟡 本地暂存
-                </span>
-                <span v-else class="inline-block px-2 py-1 bg-blue-100 text-blue-800 text-xs font-black">
-                  🔵 云端存储
-                </span>
-              </div>
+            <div class="info-cell">
+              <p class="meta-label">存储位置</p>
+              <span v-if="isLocalStorage(item)" class="storage-badge storage-local">🟡 本地暂存</span>
+              <span v-else class="storage-badge storage-cloud">🔵 云端存储</span>
             </div>
           </div>
         </div>
 
         <!-- 纠错：封面类型 -->
-        <div v-else-if="item.field_name === 'cover_url'" class="space-y-4">
-          <div class="grid grid-cols-2 gap-6">
+        <div v-else-if="item.field_name === 'cover_url'" class="content-section">
+          <div class="correction-grid">
             <div>
-              <p class="text-sm font-black uppercase tracking-widest text-gray-500 mb-3">原封面</p>
-              <div class="border-2 border-gray-300">
-                <img 
+              <p class="meta-label">原封面</p>
+              <div class="cover-before">
+                <img
                   v-if="item.current_value"
-                  :src="item.current_value" 
-                  class="w-full aspect-square object-cover" 
+                  :src="item.current_value"
+                  class="cover-compare-img"
                   alt="原封面"
                 />
-                <div v-else class="w-full aspect-square bg-gray-200 flex items-center justify-center">
-                  <span class="text-gray-400">无封面</span>
-                </div>
+                <div v-else class="cover-empty"><span>无封面</span></div>
               </div>
             </div>
-            
             <div>
-              <p class="text-sm font-black uppercase tracking-widest text-gray-500 mb-3">修改后</p>
-              <div class="border-2 border-black">
-                <img 
-                  :src="item.corrected_value" 
-                  class="w-full aspect-square object-cover" 
+              <p class="meta-label">修改后</p>
+              <div class="cover-after">
+                <img
+                  :src="item.corrected_value"
+                  class="cover-compare-img"
                   alt="新封面"
                 />
               </div>
             </div>
           </div>
-
-          <div v-if="item.reason" class="mt-4 p-4 bg-gray-50 border-l-4 border-black">
-            <p class="text-sm font-black uppercase tracking-widest text-gray-500 mb-1">修改原因</p>
-            <p class="text-gray-700">{{ item.reason }}</p>
+          <div v-if="item.reason" class="reason-box">
+            <p class="meta-label">修改原因</p>
+            <p class="reason-text">{{ item.reason }}</p>
           </div>
         </div>
 
         <!-- 纠错：文本类型 -->
-        <div v-else class="space-y-4">
-          <div class="grid grid-cols-2 gap-6">
+        <div v-else class="content-section">
+          <div class="correction-grid">
             <div>
-              <p class="text-sm font-black uppercase tracking-widest text-gray-500 mb-3">
-                原 {{ getFieldLabel(item.field_name || '') }}
-              </p>
-              <div class="p-4 bg-gray-50 border-2 border-gray-300 font-mono text-sm min-h-20">
-                {{ item.current_value || '（无）' }}
-              </div>
+              <p class="meta-label">原 {{ getFieldLabel(item.field_name || '') }}</p>
+              <div class="text-before">{{ item.current_value || '（无）' }}</div>
             </div>
-            
             <div>
-              <p class="text-sm font-black uppercase tracking-widest text-gray-500 mb-3">
-                修改后 {{ getFieldLabel(item.field_name || '') }}
-              </p>
-              <div class="p-4 bg-green-50 border-2 border-black font-mono text-sm min-h-20">
-                {{ item.corrected_value }}
-              </div>
+              <p class="meta-label">修改后 {{ getFieldLabel(item.field_name || '') }}</p>
+              <div class="text-after">{{ item.corrected_value }}</div>
             </div>
           </div>
-
-          <div v-if="item.reason" class="p-4 bg-gray-50 border-l-4 border-black">
-            <p class="text-sm font-black uppercase tracking-widest text-gray-500 mb-1">修改原因</p>
-            <p class="text-gray-700">{{ item.reason }}</p>
+          <div v-if="item.reason" class="reason-box">
+            <p class="meta-label">修改原因</p>
+            <p class="reason-text">{{ item.reason }}</p>
           </div>
         </div>
 
@@ -684,5 +634,395 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-/* 额外样式如果需要 */
+.page-container {
+  max-width: 1024px;
+  margin: 0 auto;
+  padding: 5rem 2rem;
+}
+
+.page-header {
+  margin-bottom: 3rem;
+}
+
+.page-title {
+  font-size: 2.5rem;
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  margin: 0 0 1rem 0;
+}
+
+.page-desc {
+  color: #6b7280;
+}
+
+.state-loading,
+.state-empty {
+  text-align: center;
+  padding: 5rem 0;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.state-empty {
+  background: #f9fafb;
+  border: 2px dashed #e5e7eb;
+}
+
+.review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.review-card {
+  background: #fff;
+  border: 2px solid #000;
+  padding: 2rem;
+  transition: box-shadow 0.2s;
+}
+.review-card:hover {
+  box-shadow: 15px 15px 0px 0px rgba(0,0,0,1);
+}
+
+/* Card header */
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #f3f4f6;
+}
+
+.card-meta { flex: 1; }
+
+.card-meta-top {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.type-badge {
+  background: #000;
+  color: #fff;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.card-date {
+  color: #9ca3af;
+  font-size: 0.875rem;
+}
+
+.card-title {
+  font-size: 1.5rem;
+  font-weight: 900;
+  margin: 0 0 0.25rem 0;
+}
+
+.card-artist {
+  color: #6b7280;
+  font-weight: 700;
+  margin: 0 0 0.5rem 0;
+}
+
+.card-submitter {
+  font-size: 0.875rem;
+  color: #9ca3af;
+  margin: 0;
+}
+
+.action-btns {
+  display: flex;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  margin-left: 1rem;
+}
+
+.btn-approve {
+  background: #000;
+  color: #fff;
+  padding: 0.75rem 1.5rem;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-approve:hover:not(:disabled) { background: #16a34a; }
+.btn-approve:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-reject {
+  background: #fff;
+  color: #000;
+  border: 2px solid #000;
+  padding: 0.75rem 1.5rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-reject:hover:not(:disabled) {
+  background: #dc2626;
+  color: #fff;
+  border-color: #dc2626;
+}
+.btn-reject:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Content sections */
+.content-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.batch-info-row {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.batch-cover {
+  width: 8rem;
+  height: 8rem;
+  border: 2px solid #000;
+  flex-shrink: 0;
+}
+.batch-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: grayscale(1);
+}
+
+.batch-cover-placeholder {
+  width: 8rem;
+  height: 8rem;
+  border: 2px solid #d1d5db;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #9ca3af;
+}
+
+.batch-details { flex: 1; }
+
+.meta-label {
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #6b7280;
+  margin: 0 0 0.25rem 0;
+}
+
+.batch-album {
+  font-size: 1.25rem;
+  font-weight: 900;
+  margin: 0 0 0.25rem 0;
+}
+
+.batch-artist {
+  font-weight: 700;
+  color: #4b5563;
+  margin: 0 0 0.5rem 0;
+}
+
+.batch-count {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.album-cover {
+  width: 12rem;
+  height: 12rem;
+  border: 2px solid #000;
+  flex-shrink: 0;
+}
+.album-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.album-cover-placeholder {
+  width: 12rem;
+  height: 12rem;
+  border: 2px solid #d1d5db;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-weight: 700;
+  color: #9ca3af;
+}
+
+.album-title {
+  font-size: 1.5rem;
+  font-weight: 900;
+  margin: 0 0 0.5rem 0;
+}
+
+.album-artist {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #4b5563;
+  margin: 0;
+}
+
+/* Info grid */
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  padding: 1rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  font-size: 0.875rem;
+}
+
+.info-cell { }
+
+.info-value {
+  font-weight: 700;
+  margin: 0;
+}
+
+.storage-badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+.storage-local { background: #fef9c3; color: #713f12; }
+.storage-cloud { background: #dbeafe; color: #1e40af; }
+
+/* Track list */
+.tracklist-section { }
+
+.track-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  background: #f9fafb;
+  transition: background 0.2s;
+}
+.track-row:hover { background: #f3f4f6; }
+
+.track-num {
+  font-family: monospace;
+  color: #9ca3af;
+  width: 2rem;
+  text-align: right;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+.track-title {
+  flex: 1;
+  font-weight: 700;
+}
+
+.track-badges {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.track-badge {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.badge-local { background: #fefce8; color: #713f12; border: 1px solid #fde68a; }
+.badge-s3 { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+
+.btn-play {
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: #fff;
+  border: 1px solid #000;
+  padding: 0.25rem 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.btn-play:hover { background: #000; color: #fff; }
+
+.btn-download {
+  color: #9ca3af;
+  font-size: 0.875rem;
+  text-decoration: none;
+  flex-shrink: 0;
+  transition: color 0.2s;
+}
+.btn-download:hover { color: #000; }
+
+/* Correction: cover */
+.correction-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.cover-before { border: 2px solid #d1d5db; }
+.cover-after { border: 2px solid #000; }
+
+.cover-compare-img {
+  width: 100%;
+  aspect-ratio: 1/1;
+  object-fit: cover;
+  display: block;
+}
+
+.cover-empty {
+  width: 100%;
+  aspect-ratio: 1/1;
+  background: #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+}
+
+/* Correction: text */
+.text-before {
+  padding: 1rem;
+  background: #f9fafb;
+  border: 2px solid #d1d5db;
+  font-family: monospace;
+  font-size: 0.875rem;
+  min-height: 5rem;
+}
+
+.text-after {
+  padding: 1rem;
+  background: #f0fdf4;
+  border: 2px solid #000;
+  font-family: monospace;
+  font-size: 0.875rem;
+  min-height: 5rem;
+}
+
+.reason-box {
+  padding: 1rem;
+  background: #f9fafb;
+  border-left: 4px solid #000;
+}
+
+.reason-text {
+  color: #374151;
+  margin: 0;
+}
 </style>

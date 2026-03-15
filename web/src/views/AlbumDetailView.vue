@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRoute, RouterLink } from 'vue-router';
-import { usePlayerStore } from '@/stores/player.ts';
+import { usePlayerStore } from '@/stores/player';
 import { useAuthStore } from '@/stores/auth';
 
 const route = useRoute();
@@ -37,58 +37,60 @@ player.fetchSongs();
 </script>
 
 <template>
-  <div class="max-w-5xl mx-auto px-8 py-20">
-    <RouterLink to="/" class="inline-flex items-center gap-2 mb-8 font-bold hover:underline">
-      ← 返回时间线
-    </RouterLink>
+  <div class="page-container">
+    <RouterLink to="/" class="back-link">← 返回时间线</RouterLink>
 
-    <div v-if="albumInfo" class="space-y-8">
-      <div class="flex gap-8 items-start">
+    <div v-if="albumInfo" class="album-content">
+      <!-- Album header -->
+      <div class="album-header">
         <img
           :src="albumInfo.cover || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22300%22 height=%22300%22 fill=%22%23000%22/%3E%3C/svg%3E'"
-          class="w-64 h-64 border-4 border-black object-cover flex-shrink-0 shadow-[15px_15px_0px_0px_rgba(0,0,0,1)] hover:shadow-none"
-          :alt="albumInfo.title" />
-        <div class="flex-1">
-          <h1 class="text-5xl font-black tracking-tighter mb-2">
+          class="album-cover"
+          :alt="albumInfo.title"
+        />
+        <div class="album-info">
+          <h1 class="album-title">
             {{ albumInfo.title }}
-            <span v-if="albumInfo.status === 'pending'"
-              class="inline-block bg-yellow-400 text-yellow-900 text-base font-bold px-3 py-1 rounded-full ml-4 align-middle">
-              待审核
-            </span>
+            <span v-if="albumInfo.status === 'pending'" class="pending-badge">待审核</span>
           </h1>
-          <p class="text-xl font-bold text-gray-600 mb-1">{{ albumInfo.artist }}</p>
-          <p class="text-lg text-gray-500 mb-6">{{ albumInfo.trackCount === 1 ? 'track' : 'tracks' }}</p>
+          <p class="album-artist">{{ albumInfo.artist }}</p>
+          <p class="album-tracks">{{ albumInfo.trackCount }} {{ albumInfo.trackCount === 1 ? 'track' : 'tracks' }}</p>
 
-          <div class="flex gap-4">
-            <button @click="player.playSong(albumSongs[0])"
-              class="bg-white text-black px-8 py-4 font-black text-sm uppercase tracking-widest hover:bg-black hover:text-white border-4 border-black transition-all shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-none">
+          <div class="album-actions">
+            <button @click="player.playSong(albumSongs[0])" class="btn-play-album">
               ▶ 播放专辑
             </button>
-            <RouterLink v-if="authStore.isAuthenticated"
+            <RouterLink
+              v-if="authStore.isAuthenticated"
               :to="`/artist=${singerName.replace(/ /g, '_')}/album=${albumName.replace(/ /g, '_')}/edit`"
-              class="border-4 border-black px-8 py-4 font-black text-sm uppercase tracking-widest hover:bg-black hover:text-white transition-all shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] hover:shadow-none inline-block text-center">
+              class="btn-edit-album"
+            >
               编辑专辑
             </RouterLink>
           </div>
         </div>
       </div>
 
-      <div class="border-2 border-black bg-white">
-        <div class="border-b-2 border-black bg-gray-50 px-6 py-3">
-          <h2 class="font-black uppercase tracking-widest text-sm">歌曲列表</h2>
+      <!-- Track list -->
+      <div class="tracklist-container">
+        <div class="tracklist-header">
+          <h2 class="tracklist-heading">歌曲列表</h2>
         </div>
-        <div class="divide-y-2 divide-gray-100">
-          <div v-for="(song, index) in albumSongs" :key="song.id"
-            class="flex items-center gap-6 px-6 py-4 hover:bg-gray-50 transition-colors">
-            <span class="text-xl font-black text-gray-400 w-12 text-right">{{ String(index + 1).padStart(2, '0')
-              }}</span>
-            <div class="flex-grow">
-              <h3 class="font-bold text-lg">{{ song.title }}</h3>
+        <div class="tracklist-body">
+          <div
+            v-for="(song, index) in albumSongs"
+            :key="song.id"
+            class="track-row"
+          >
+            <span class="track-num">{{ String(index + 1).padStart(2, '0') }}</span>
+            <div class="track-title">
+              <h3>{{ song.title }}</h3>
             </div>
-            <button @click="player.playSong(song)" :class="['border-2 border-black px-5 py-2 font-black text-sm uppercase tracking-widest transition-all',
-              (player.currentSong?.id === song.id && player.isPlaying)
-                ? 'bg-black text-white'
-                : 'hover:bg-black hover:text-white']">
+            <button
+              @click="player.playSong(song)"
+              class="btn-track-play"
+              :class="{ 'btn-track-active': player.currentSong?.id === song.id && player.isPlaying }"
+            >
               {{ (player.currentSong?.id === song.id && player.isPlaying) ? '⏸ 暂停' : '▶ 播放' }}
             </button>
           </div>
@@ -96,8 +98,209 @@ player.fetchSongs();
       </div>
     </div>
 
-    <div v-else class="text-center py-20">
-      <p class="text-2xl font-black text-gray-400">专辑未找到</p>
+    <div v-else class="not-found">
+      <p>专辑未找到</p>
     </div>
   </div>
 </template>
+
+<style scoped>
+.page-container {
+  max-width: 1024px;
+  margin: 0 auto;
+  padding: 5rem 2rem;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  font-weight: 700;
+  text-decoration: none;
+  color: #000;
+  transition: opacity 0.2s;
+}
+.back-link:hover { text-decoration: underline; }
+
+.album-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.album-header {
+  display: flex;
+  gap: 2rem;
+  align-items: flex-start;
+}
+
+.album-cover {
+  width: 16rem;
+  height: 16rem;
+  border: 4px solid #000;
+  object-fit: cover;
+  flex-shrink: 0;
+  box-shadow: 15px 15px 0px 0px rgba(0,0,0,1);
+  transition: box-shadow 0.2s;
+}
+.album-cover:hover { box-shadow: none; }
+
+.album-info { flex: 1; }
+
+.album-title {
+  font-size: 3rem;
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.pending-badge {
+  display: inline-block;
+  background: #facc15;
+  color: #713f12;
+  font-size: 0.875rem;
+  font-weight: 700;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+}
+
+.album-artist {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #4b5563;
+  margin: 0 0 0.25rem 0;
+}
+
+.album-tracks {
+  font-size: 1.125rem;
+  color: #6b7280;
+  margin: 0 0 1.5rem 0;
+}
+
+.album-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.btn-play-album {
+  background: #fff;
+  color: #000;
+  padding: 1rem 2rem;
+  font-weight: 900;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border: 4px solid #000;
+  cursor: pointer;
+  box-shadow: 8px 8px 0px 0px rgba(0,0,0,1);
+  transition: all 0.2s;
+}
+.btn-play-album:hover {
+  background: #000;
+  color: #fff;
+  box-shadow: none;
+}
+
+.btn-edit-album {
+  display: inline-block;
+  text-align: center;
+  text-decoration: none;
+  padding: 1rem 2rem;
+  font-weight: 900;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border: 4px solid #000;
+  color: #000;
+  box-shadow: 8px 8px 0px 0px rgba(0,0,0,1);
+  transition: all 0.2s;
+}
+.btn-edit-album:hover {
+  background: #000;
+  color: #fff;
+  box-shadow: none;
+}
+
+/* Track list */
+.tracklist-container {
+  border: 2px solid #000;
+  background: #fff;
+}
+
+.tracklist-header {
+  border-bottom: 2px solid #000;
+  background: #f9fafb;
+  padding: 0.75rem 1.5rem;
+}
+
+.tracklist-heading {
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.tracklist-body { }
+
+.track-row {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 2px solid #f3f4f6;
+  transition: background 0.2s;
+}
+.track-row:last-child { border-bottom: none; }
+.track-row:hover { background: #f9fafb; }
+
+.track-num {
+  font-size: 1.25rem;
+  font-weight: 900;
+  color: #9ca3af;
+  width: 3rem;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.track-title {
+  flex: 1;
+}
+.track-title h3 {
+  font-weight: 700;
+  font-size: 1.125rem;
+  margin: 0;
+}
+
+.btn-track-play {
+  border: 2px solid #000;
+  padding: 0.5rem 1.25rem;
+  font-weight: 900;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  background: #fff;
+  color: #000;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.btn-track-play:hover,
+.btn-track-play.btn-track-active {
+  background: #000;
+  color: #fff;
+}
+
+.not-found {
+  text-align: center;
+  padding: 5rem 0;
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: #9ca3af;
+}
+</style>

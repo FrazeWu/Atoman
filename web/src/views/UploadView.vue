@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router';
 import { useApi } from '@/composables/useApi';
 import { useAuthStore } from '@/stores/auth';
 import ArtistSelect from '@/components/ArtistSelect.vue';
+import AConfirm from '@/components/ui/AConfirm.vue';
 interface TrackFile {
   id: string;
   file: File;
@@ -32,6 +33,10 @@ const draggingIndex = ref<number | null>(null);
 const isUploading = ref(false);
 const currentTrackIndex = ref(0);
 const totalTracks = ref(0);
+const showDeleteConfirm = ref(false);
+const deleteConfirmTitle = ref('请确认删除');
+const deleteConfirmMessage = ref('该操作不可撤销，是否继续？');
+let pendingDeleteAction: (() => void) | null = null;
 
 onMounted(() => {
   if (!authStore.isAuthenticated) {
@@ -105,9 +110,37 @@ const removeTrack = (index: number) => {
 };
 
 const removeAllTracks = () => {
-  if (confirm('确定要删除所有歌曲吗？')) {
-    tracks.value = [];
-  }
+  tracks.value = [];
+};
+
+const requestDeleteAction = (title: string, message: string, action: () => void) => {
+  deleteConfirmTitle.value = title;
+  deleteConfirmMessage.value = message;
+  pendingDeleteAction = action;
+  showDeleteConfirm.value = true;
+};
+
+const cancelDeleteAction = () => {
+  showDeleteConfirm.value = false;
+  pendingDeleteAction = null;
+};
+
+const confirmDeleteAction = () => {
+  const action = pendingDeleteAction;
+  cancelDeleteAction();
+  if (action) action();
+};
+
+const requestRemoveCover = () => {
+  requestDeleteAction('删除封面', '确定删除当前封面吗？', removeCover);
+};
+
+const requestRemoveTrack = (index: number) => {
+  requestDeleteAction('移除歌曲', '确定移除这首歌曲吗？', () => removeTrack(index));
+};
+
+const requestRemoveAllTracks = () => {
+  requestDeleteAction('删除所有歌曲', '确定删除列表中的所有歌曲吗？', removeAllTracks);
 };
 
 const onDragStart = (index: number) => {
@@ -207,140 +240,139 @@ const handleSubmit = async () => {
 </script>
 
 <template>
-  <div class="max-w-3xl mx-auto px-8 py-20">
-    <h1 class="text-4xl font-black tracking-tighter mb-8">贡献新档案</h1>
-    <p class="text-gray-500 mb-12">
-      帮助我们完善 Ye 的音乐史料库。支持批量上传和拖拽排序。
-    </p>
+  <div class="page-container">
+    <h1 class="page-title">贡献新档案</h1>
+    <p class="page-desc">帮助我们完善 Ye 的音乐史料库。支持批量上传和拖拽排序。</p>
 
-    <form class="space-y-8">
-      <div class="grid grid-cols-2 gap-8">
-        <div class="space-y-4">
-          <label class="block text-sm font-black uppercase tracking-widest">艺术家</label>
+    <form class="form-stack">
+      <!-- Artist + Album row -->
+      <div class="form-row-2">
+        <div class="field">
+          <label class="field-label">艺术家</label>
           <ArtistSelect
             v-model="formData.artist"
             placeholder="选择艺术家"
             :disabled="isUploading"
           />
         </div>
-        <div class="space-y-4">
-          <label class="block text-sm font-black uppercase tracking-widest">专辑名称</label>
-          <input 
-            type="text" 
+        <div class="field">
+          <label class="field-label">专辑名称</label>
+          <input
+            type="text"
             required
-            class="w-full bg-white border-2 border-black p-4 focus:shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] outline-none transition-all"
+            class="form-input"
             v-model="formData.album"
           />
         </div>
       </div>
 
-       <div class="space-y-4">
-         <label class="block text-sm font-black uppercase tracking-widest">发行日期</label>
-         <input
-           type="date"
-           required
-           class="w-full bg-white border-2 border-black p-4 focus:shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] outline-none transition-all"
-           v-model="formData.releaseDate"
-         />
-       </div>
+      <!-- Release date -->
+      <div class="field">
+        <label class="field-label">发行日期</label>
+        <input
+          type="date"
+          required
+          class="form-input"
+          v-model="formData.releaseDate"
+        />
+      </div>
 
-       <div class="space-y-4">
-         <label class="block text-sm font-black uppercase tracking-widest">信息来源</label>
-         <input
-           type="text"
-           placeholder="例如：官方网站、维基百科、音乐平台等"
-           class="w-full bg-white border-2 border-black p-4 focus:shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] outline-none transition-all"
-           v-model="formData.source"
-         />
-       </div>
+      <!-- Source -->
+      <div class="field">
+        <label class="field-label">信息来源</label>
+        <input
+          type="text"
+          placeholder="例如：官方网站、维基百科、音乐平台等"
+          class="form-input"
+          v-model="formData.source"
+        />
+      </div>
 
-      <div class="space-y-4">
-        <label class="block text-sm font-black uppercase tracking-widest">专辑封面（可选，不上传默认为纯黑）</label>
-        <input 
-          type="file" 
-          ref="coverInput" 
-          class="hidden" 
+      <!-- Cover upload -->
+      <div class="field">
+        <label class="field-label">专辑封面（可选，不上传默认为纯黑）</label>
+        <input
+          type="file"
+          ref="coverInput"
+          style="display:none"
           accept="image/*"
           @change="handleCoverChange"
         />
-        <div v-if="!coverPreview" 
+        <div
+          v-if="!coverPreview"
           @click="triggerCoverInput"
-          class="border-2 border-dashed border-black p-12 text-center cursor-pointer hover:bg-gray-100 transition-colors"
+          class="upload-zone"
         >
-          <p class="font-bold">点击上传封面图片</p>
-          <p class="text-xs text-gray-400 mt-2">不上传将默认为纯黑色</p>
+          <p class="upload-zone-title">点击上传封面图片</p>
+          <p class="upload-zone-hint">不上传将默认为纯黑色</p>
         </div>
-        <div v-else class="relative border-2 border-black inline-block">
-          <img :src="coverPreview" class="w-48 h-48 object-cover" alt="封面预览" />
-          <button 
+        <div v-else class="cover-preview-wrapper">
+          <img :src="coverPreview" class="cover-preview-img" alt="封面预览" />
+          <button
             type="button"
-            @click="removeCover"
-            class="absolute top-2 right-2 bg-black text-white px-3 py-1 text-xs font-bold hover:bg-red-600"
+            @click="requestRemoveCover"
+            class="cover-remove-btn"
           >
             删除
           </button>
         </div>
       </div>
 
-      <div class="space-y-4">
-        <label class="block text-sm font-black uppercase tracking-widest">音频文件 (支持多选)</label>
-        <input 
-          type="file" 
-          ref="fileInput" 
-          class="hidden" 
+      <!-- Audio files upload -->
+      <div class="field">
+        <label class="field-label">音频文件 (支持多选)</label>
+        <input
+          type="file"
+          ref="fileInput"
+          style="display:none"
           accept="audio/*"
           multiple
           @change="handleFileChange"
         />
-        <div 
-          @click="triggerFileInput"
-          class="border-2 border-dashed border-black p-12 text-center cursor-pointer hover:bg-gray-100 transition-colors"
-        >
-          <p class="font-bold">点击选择多个音频文件</p>
-          <p class="text-xs text-gray-400 mt-2">支持批量上传</p>
+        <div @click="triggerFileInput" class="upload-zone">
+          <p class="upload-zone-title">点击选择多个音频文件</p>
+          <p class="upload-zone-hint">支持批量上传</p>
         </div>
       </div>
 
-       <!-- Track List -->
-       <div class="space-y-4">
-         <div class="flex justify-between items-center">
-           <label class="block text-sm font-black uppercase tracking-widest">歌曲列表 (拖拽排序)</label>
-           <div class="flex gap-2">
-             <button
-               v-if="tracks.length > 0"
-               type="button"
-               @click="removeAllTracks"
-               class="px-3 py-1 text-xs border border-red-500 text-red-500 hover:bg-red-500 hover:text-white transition-colors"
-             >
-               删除所有
-             </button>
-           </div>
-         </div>
-        <div class="space-y-2 border-2 border-black p-4 bg-gray-50">
-          <div 
-            v-for="(track, index) in tracks" 
+      <!-- Track list -->
+      <div class="field">
+        <div class="tracklist-header">
+          <label class="field-label" style="margin-bottom:0">歌曲列表 (拖拽排序)</label>
+          <button
+            v-if="tracks.length > 0"
+            type="button"
+            @click="requestRemoveAllTracks"
+            class="delete-all-btn"
+          >
+            删除所有
+          </button>
+        </div>
+        <div class="tracklist">
+          <div
+            v-for="(track, index) in tracks"
             :key="track.id"
             draggable="true"
             @dragstart="onDragStart(index)"
             @dragover="onDragOver"
             @drop="onDrop(index)"
-            class="bg-white border border-gray-300 p-4 flex items-center gap-4 cursor-move hover:shadow-md transition-shadow"
-            :class="{ 'opacity-50': draggingIndex === index }"
+            class="track-item"
+            :style="draggingIndex === index ? 'opacity:0.5' : ''"
           >
-            <span class="font-mono text-gray-400 w-8 text-center">{{ index + 1 }}</span>
-            <div class="flex-1">
-              <input 
-                type="text" 
+            <span class="track-num">{{ index + 1 }}</span>
+            <div class="track-info">
+              <input
+                type="text"
                 v-model="track.title"
-                class="w-full font-bold outline-none border-b border-transparent focus:border-black transition-colors"
+                class="track-title-input"
                 placeholder="歌曲名称"
               />
-              <p class="text-xs text-gray-400 truncate">{{ track.file.name }}</p>
+              <p class="track-filename">{{ track.file.name }}</p>
             </div>
-            <button 
-              type="button" 
-              @click="removeTrack(index)"
-              class="text-red-500 font-bold hover:underline text-sm"
+            <button
+              type="button"
+              @click="requestRemoveTrack(index)"
+              class="track-remove-btn"
             >
               移除
             </button>
@@ -348,35 +380,291 @@ const handleSubmit = async () => {
         </div>
       </div>
 
-      <!-- Progress Display -->
-      <div v-if="isUploading" class="space-y-2 pt-4">
-        <div class="flex justify-between items-center text-sm font-bold">
+      <!-- Progress -->
+      <div v-if="isUploading" class="progress-section">
+        <div class="progress-header">
           <span>正在上传: {{ currentTrackIndex }} / {{ totalTracks }}</span>
-          <span>
-            {{ Math.round((currentTrackIndex / totalTracks) * 100) }}%
-          </span>
+          <span>{{ Math.round((currentTrackIndex / totalTracks) * 100) }}%</span>
         </div>
-        <div class="w-full bg-gray-200 h-2">
-          <div 
-            class="bg-black h-2 transition-all duration-300" 
+        <div class="progress-bar-bg">
+          <div
+            class="progress-bar-fill"
             :style="{ width: `${(currentTrackIndex / totalTracks) * 100}%` }"
           ></div>
         </div>
-        <p class="text-sm text-gray-500">
+        <p class="progress-desc">
           正在处理: {{ tracks[currentTrackIndex - 1]?.title }}...
         </p>
       </div>
 
-
-      <button 
+      <!-- Submit -->
+      <button
         type="button"
         @click="handleSubmit"
-        class="w-full bg-black text-white py-6 font-black uppercase tracking-widest hover:bg-white hover:text-black border-2 border-black transition-all"
+        class="submit-btn"
         :disabled="tracks.length === 0 || isUploading"
-        :class="{ 'opacity-50 cursor-not-allowed': tracks.length === 0 || isUploading }"
+        :style="tracks.length === 0 || isUploading ? 'opacity:0.5;cursor:not-allowed' : ''"
       >
         {{ isUploading ? '正在提交...' : `提交至审核队列 (${tracks.length} 首)` }}
       </button>
     </form>
+
+    <AConfirm
+      :show="showDeleteConfirm"
+      :title="deleteConfirmTitle"
+      :message="deleteConfirmMessage"
+      confirm-text="删除"
+      cancel-text="取消"
+      danger
+      @confirm="confirmDeleteAction"
+      @cancel="cancelDeleteAction"
+    />
   </div>
 </template>
+
+<style scoped>
+.page-container {
+  max-width: 768px;
+  margin: 0 auto;
+  padding: 5rem 2rem;
+}
+
+.page-title {
+  font-size: 2.5rem;
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  margin: 0 0 0.5rem 0;
+}
+
+.page-desc {
+  color: #6b7280;
+  margin-bottom: 3rem;
+}
+
+.form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.form-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.field-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.form-input {
+  width: 100%;
+  background: #fff;
+  border: 2px solid #000;
+  padding: 1rem;
+  outline: none;
+  transition: all 0.2s;
+  font-size: 1rem;
+  box-sizing: border-box;
+}
+.form-input:focus {
+  box-shadow: 5px 5px 0px 0px rgba(0,0,0,1);
+}
+
+.upload-zone {
+  border: 2px dashed #000;
+  padding: 3rem;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.upload-zone:hover { background: #f3f4f6; }
+
+.upload-zone-title {
+  font-weight: 700;
+  margin: 0 0 0.5rem 0;
+}
+
+.upload-zone-hint {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin: 0;
+}
+
+.cover-preview-wrapper {
+  position: relative;
+  border: 2px solid #000;
+  display: inline-block;
+}
+
+.cover-preview-img {
+  width: 12rem;
+  height: 12rem;
+  object-fit: cover;
+  display: block;
+}
+
+.cover-remove-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: #000;
+  color: #fff;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.cover-remove-btn:hover { background: #dc2626; }
+
+.tracklist-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.delete-all-btn {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  border: 1px solid #ef4444;
+  color: #ef4444;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.delete-all-btn:hover {
+  background: #ef4444;
+  color: #fff;
+}
+
+.tracklist {
+  border: 2px solid #000;
+  padding: 1rem;
+  background: #f9fafb;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.track-item {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  cursor: move;
+  transition: box-shadow 0.2s;
+}
+.track-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+
+.track-num {
+  font-family: monospace;
+  color: #9ca3af;
+  width: 2rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.track-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.track-title-input {
+  width: 100%;
+  font-weight: 700;
+  outline: none;
+  border: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s;
+  background: transparent;
+  font-size: 0.875rem;
+}
+.track-title-input:focus {
+  border-bottom-color: #000;
+}
+
+.track-filename {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin: 0.25rem 0 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track-remove-btn {
+  color: #ef4444;
+  font-weight: 700;
+  font-size: 0.875rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.track-remove-btn:hover { text-decoration: underline; }
+
+.progress-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 1rem;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.progress-bar-bg {
+  width: 100%;
+  background: #e5e7eb;
+  height: 0.5rem;
+}
+
+.progress-bar-fill {
+  background: #000;
+  height: 0.5rem;
+  transition: width 0.3s;
+}
+
+.progress-desc {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.submit-btn {
+  width: 100%;
+  background: #000;
+  color: #fff;
+  padding: 1.5rem;
+  font-weight: 900;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border: 2px solid #000;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.submit-btn:hover:not(:disabled) {
+  background: #fff;
+  color: #000;
+}
+</style>

@@ -1,213 +1,232 @@
-<script setup lang="ts">
-import { ref, watch, computed, onMounted } from 'vue';
-import { useApi } from '@/composables/useApi';
-
-interface Artist {
-  id: number;
-  name: string;
-  bio?: string;
-}
-
-const props = defineProps<{
-  modelValue: string;
-  placeholder?: string;
-  disabled?: boolean;
-}>();
-
-const emit = defineEmits<{
-  'update:modelValue': [value: string];
-}>();
-
-const api = useApi();
-const artists = ref<Artist[]>([]);
-const searchQuery = ref('');
-const showDropdown = ref(false);
-const showAddNew = ref(false);
-const newArtistName = ref('');
-const loading = ref(false);
-
-const filteredArtists = computed(() => {
-  if (!searchQuery.value) return artists.value;
-  const query = searchQuery.value.toLowerCase();
-  return artists.value.filter(a =>
-    a.name.toLowerCase().includes(query)
-  );
-});
-
-const selectedArtist = computed(() => {
-  return artists.value.find(a => a.name === props.modelValue);
-});
-
-const inputRef = ref<HTMLInputElement | null>(null);
-
-const fetchArtists = async () => {
-  loading.value = true;
-  try {
-    const response = await fetch(`${api.url}/artists`, {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    });
-    if (response.ok) {
-      artists.value = await response.json();
-    }
-  } catch (error) {
-    console.error('Failed to fetch artists:', error);
-  } finally {
-    loading.value = false;
-  }
-};
-
-const handleSelect = (artistName: string) => {
-  emit('update:modelValue', artistName);
-  showDropdown.value = false;
-  searchQuery.value = '';
-};
-
-const handleAddNew = async () => {
-  if (!newArtistName.value.trim()) return;
-
-  try {
-    const response = await fetch(`${api.url}/artists`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      body: JSON.stringify({
-        name: newArtistName.value.trim(),
-        bio: ''
-      })
-    });
-
-    if (response.ok) {
-      const newArtist = await response.json();
-      artists.value.push(newArtist);
-      emit('update:modelValue', newArtist.name);
-      showAddNew.value = false;
-      newArtistName.value = '';
-      showDropdown.value = false;
-    } else {
-      const error = await response.json();
-      alert(error.error || 'Failed to add artist');
-    }
-  } catch (error) {
-    console.error('Failed to add artist:', error);
-    alert('Failed to add artist');
-  }
-};
-
-const handleFocus = () => {
-  if (!props.disabled && artists.value.length === 0) {
-    fetchArtists();
-  }
-  showDropdown.value = true;
-};
-
-const handleClickOutside = (event: MouseEvent) => {
-  if (inputRef.value && !inputRef.value.contains(event.target as Node)) {
-    showDropdown.value = false;
-    showAddNew.value = false;
-  }
-};
-
-onMounted(() => {
-  fetchArtists();
-  document.addEventListener('click', handleClickOutside);
-});
-
-const handleInput = (event: Event) => {
-  const target = event.target as HTMLInputElement;
-  searchQuery.value = target.value;
-  emit('update:modelValue', target.value);
-  showDropdown.value = true;
-  showAddNew.value = false;
-};
-</script>
-
 <template>
-  <div class="relative" ref="inputRef">
-    <input
-      type="text"
-      :value="modelValue"
-      @input="handleInput"
-      @focus="handleFocus"
-      :placeholder="placeholder || '选择艺术家'"
-      :disabled="disabled"
-      class="w-full border-2 border-black p-3 outline-none focus:bg-gray-50 transition-colors"
-    />
+  <div class="artist-select" ref="wrapRef">
+    <label class="field-label">{{ label || '艺术家' }}</label>
 
-    <div
-      v-if="showDropdown && !disabled"
-      class="absolute z-10 w-full bg-white border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] max-h-60 overflow-y-auto"
-    >
-      <!-- Search input -->
-      <div class="p-3 border-b border-black">
-        <input
-          type="text"
-          v-model="searchQuery"
-          placeholder="搜索艺术家..."
-          class="w-full border-2 border-black p-2 outline-none focus:bg-gray-50"
-        />
-      </div>
+    <!-- Selected tags -->
+    <div v-if="selected.length" class="tags">
+      <span v-for="a in selected" :key="a.id" class="tag">
+        {{ a.name }}
+        <button class="tag-remove" @click="remove(a.id)">✕</button>
+      </span>
+    </div>
 
-      <!-- Artist list -->
-      <div v-if="!showAddNew">
-        <div
-          v-for="artist in filteredArtists"
-          :key="artist.id"
-          @click="handleSelect(artist.name)"
-          class="px-4 py-2 hover:bg-black hover:text-white cursor-pointer transition-colors border-b border-black last:border-b-0"
-        >
-          {{ artist.name }}
-        </div>
+    <!-- Input -->
+    <div class="input-wrap">
+      <input
+        ref="inputRef"
+        v-model="query"
+        :placeholder="placeholder || '搜索或新增艺术家'"
+        class="field-input"
+        @focus="open = true"
+        @keydown.esc="open = false"
+      />
+    </div>
 
-        <!-- Add new artist option -->
-        <div
-          @click.stop="showAddNew = true"
-          class="px-4 py-2 hover:bg-black hover:text-white cursor-pointer transition-colors font-bold"
-        >
-          + 添加新艺术家
-        </div>
-      </div>
-
-      <!-- Add new artist form -->
-      <div v-else class="p-3 border-t border-black">
-        <input
-          type="text"
-          v-model="newArtistName"
-          placeholder="新艺术家名称"
-          class="w-full border-2 border-black p-2 mb-2 outline-none focus:bg-gray-50"
-        />
-        <div class="flex gap-2">
-          <button
-            @click="handleAddNew"
-            :disabled="!newArtistName.trim()"
-            class="flex-1 bg-black text-white px-4 py-2 hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            添加
-          </button>
-          <button
-            @click="showAddNew = false"
-            class="flex-1 border-2 border-black px-4 py-2 hover:bg-gray-50 transition-colors"
-          >
-            取消
-          </button>
-        </div>
-      </div>
-
-      <!-- Loading state -->
-      <div v-if="loading" class="p-4 text-center text-gray-500">
-        加载中...
-      </div>
-
-      <!-- No results -->
+    <!-- Dropdown -->
+    <div v-if="open" class="dropdown">
+      <!-- Filtered results -->
       <div
-        v-if="!loading && !showAddNew && filteredArtists.length === 0"
-        class="p-4 text-center text-gray-500"
+        v-for="a in filtered"
+        :key="a.id"
+        class="dropdown-item"
+        @mousedown.prevent="select(a)"
       >
-        未找到艺术家
+        {{ a.name }}
       </div>
+
+      <!-- Create new -->
+      <div v-if="query.trim() && !exactMatch" class="dropdown-section">
+        <div class="dropdown-divider" />
+        <p class="dropdown-hint">新增艺术家</p>
+        <div class="new-form">
+          <input v-model="newName" placeholder="艺术家姓名" class="field-input field-input-sm" />
+          <button class="btn-create" @mousedown.prevent="createNew">添加</button>
+        </div>
+      </div>
+
+      <div v-if="!filtered.length && !query.trim()" class="dropdown-empty">输入搜索或新增</div>
     </div>
   </div>
 </template>
+
+<script setup lang="ts">
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useApi } from '@/composables/useApi'
+import { useAuthStore } from '@/stores/auth'
+import type { Artist } from '@/types'
+
+const props = defineProps<{
+  modelValue: Artist[]
+  label?: string
+  placeholder?: string
+}>()
+
+const emit = defineEmits<{
+  (e: 'update:modelValue', v: Artist[]): void
+}>()
+
+const api = useApi()
+const authStore = useAuthStore()
+
+const wrapRef = ref<HTMLElement | null>(null)
+const inputRef = ref<HTMLInputElement | null>(null)
+const query = ref('')
+const newName = ref('')
+const open = ref(false)
+const allArtists = ref<Artist[]>([])
+
+const selected = computed(() => props.modelValue)
+
+const filtered = computed(() => {
+  const q = query.value.toLowerCase()
+  const selectedIds = new Set(selected.value.map(a => a.id))
+  return allArtists.value
+    .filter(a => !selectedIds.has(a.id) && a.name.toLowerCase().includes(q))
+    .slice(0, 8)
+})
+
+const exactMatch = computed(() =>
+  allArtists.value.some(a => a.name.toLowerCase() === query.value.trim().toLowerCase())
+)
+
+const select = (a: Artist) => {
+  emit('update:modelValue', [...selected.value, a])
+  query.value = ''
+}
+
+const remove = (id: number) => {
+  emit('update:modelValue', selected.value.filter(a => a.id !== id))
+}
+
+const createNew = async () => {
+  const name = (newName.value || query.value).trim()
+  if (!name) return
+  try {
+    const res = await fetch('/api/artists', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authStore.token}`
+      },
+      body: JSON.stringify({ name })
+    })
+    if (res.ok) {
+      const d = await res.json()
+      const artist: Artist = d.data || d
+      allArtists.value.push(artist)
+      select(artist)
+      newName.value = ''
+    }
+  } catch (e) { console.error(e) }
+}
+
+const fetchArtists = async () => {
+  try {
+    const res = await fetch(api.artists || '/api/artists')
+    if (res.ok) {
+      const d = await res.json()
+      allArtists.value = d.data || d || []
+    }
+  } catch (e) { console.error(e) }
+}
+
+const clickOutside = (e: MouseEvent) => {
+  if (wrapRef.value && !wrapRef.value.contains(e.target as Node)) open.value = false
+}
+
+onMounted(() => {
+  fetchArtists()
+  document.addEventListener('click', clickOutside)
+})
+onUnmounted(() => document.removeEventListener('click', clickOutside))
+watch(query, (v) => { if (v) open.value = true })
+</script>
+
+<style scoped>
+.artist-select { position: relative; }
+.field-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #6b7280;
+  margin-bottom: 0.5rem;
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.tag {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: #000;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.25rem 0.5rem;
+}
+.tag-remove {
+  background: none;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.7rem;
+  padding: 0;
+  line-height: 1;
+}
+.input-wrap { position: relative; }
+.field-input {
+  width: 100%;
+  background: #fff;
+  border: 2px solid #000;
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  outline: none;
+  transition: box-shadow 0.2s;
+  box-sizing: border-box;
+}
+.field-input:focus { box-shadow: 5px 5px 0px 0px rgba(0,0,0,1); }
+.field-input-sm { padding: 0.5rem 0.75rem; }
+.dropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 2px);
+  background: #fff;
+  border: 2px solid #000;
+  box-shadow: 4px 4px 0px 0px rgba(0,0,0,1);
+  z-index: 50;
+  max-height: 240px;
+  overflow-y: auto;
+}
+.dropdown-item {
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.dropdown-item:hover { background: #f3f4f6; }
+.dropdown-empty { padding: 1rem; color: #9ca3af; font-size: 0.875rem; text-align: center; }
+.dropdown-section { padding: 0.5rem; }
+.dropdown-divider { height: 1px; background: #e5e7eb; margin: 0.25rem 0; }
+.dropdown-hint { font-size: 0.75rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: #9ca3af; margin: 0 0 0.5rem; }
+.new-form { display: flex; gap: 0.5rem; }
+.btn-create {
+  background: #000;
+  color: #fff;
+  border: 2px solid #000;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.btn-create:hover { background: #fff; color: #000; }
+</style>
