@@ -82,17 +82,7 @@ export interface AlbumCorrection {
   rejected_by?: number;
 }
 
-export type RepeatMode = 'none' | 'one' | 'all';
-
-export interface PlayerState {
-  currentSong: Song | null;
-  isPlaying: boolean;
-  isShuffled: boolean;
-  repeatMode: RepeatMode;
-  volume: number;
-  currentTime: number;
-  duration: number;
-}
+export type RepeatMode = 'none' | 'one' | 'all'
 
 export interface User {
   id?: number
@@ -187,7 +177,7 @@ export interface Bookmark {
   created_at: string
 }
 
-// ===== Feed / Orbit Types =====
+// ===== Feed / Types =====
 
 export interface FeedSource {
   id: number
@@ -200,18 +190,28 @@ export interface FeedSource {
   created_at: string
 }
 
+export interface SubscriptionGroup {
+  id: string
+  user_id: string
+  name: string
+  created_at: string
+  updated_at: string
+}
+
 export interface Subscription {
   id: number
   user_id: number
   feed_source_id: number
   feed_source?: FeedSource
   title?: string
+  subscription_group_id?: string
+  subscription_group?: SubscriptionGroup
   created_at: string
 }
 
-export interface OrbitItem {
-  id: number
-  feed_source_id: number
+export interface FeedItem {
+  id: string
+  feed_source_id: string
   feed_source?: FeedSource
   guid: string
   title: string
@@ -220,14 +220,19 @@ export interface OrbitItem {
   author: string
   published_at: string
   fetched_at: string
+  enclosure_url?: string
+  enclosure_type?: string
+  duration?: string
+  image_url?: string
 }
 
 // Unified timeline item returned by GET /api/feed/timeline
 export interface TimelineItem {
-  type: 'post' | 'orbit_item'
+  type: 'post' | 'feed_item'
   post?: Post
-  orbit_item?: OrbitItem
+  feed_item?: FeedItem
   published_at: string
+  is_read: boolean
 }
 
 // ===== Notification Types =====
@@ -247,6 +252,7 @@ export interface Notification {
 
 export interface UserProfile {
   id: number
+  uuid: string
   username: string
   display_name?: string
   avatar_url?: string
@@ -257,10 +263,4 @@ export interface UserProfile {
   following_count?: number
   posts_count?: number
   created_at: string
-}
-
-export interface AuthState {
-  token: string | null;
-  user: User | null;
-  isAuthenticated: boolean;
 }
