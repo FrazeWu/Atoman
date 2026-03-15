@@ -53,12 +53,12 @@ func (PostCollection) TableName() string { return "post_collections" }
 
 type Comment struct {
 	Base
-	PostID    uuid.UUID `json:"post_id" gorm:"type:uuid;not null;index"`
-	Post      *Post     `json:"post,omitempty" gorm:"foreignKey:PostID"`
-	UserID    uuid.UUID `json:"user_id" gorm:"type:uuid;not null;index"`
-	User      *User     `json:"user,omitempty" gorm:"foreignKey:UserID;references:UUID"`
-	Content   string    `json:"content" gorm:"type:text;not null"`
-	Status    string    `json:"status" gorm:"default:'visible'"` // visible / hidden
+	PostID  uuid.UUID `json:"post_id" gorm:"type:uuid;not null;index"`
+	Post    *Post     `json:"post,omitempty" gorm:"foreignKey:PostID"`
+	UserID  uuid.UUID `json:"user_id" gorm:"type:uuid;not null;index"`
+	User    *User     `json:"user,omitempty" gorm:"foreignKey:UserID;references:UUID"`
+	Content string    `json:"content" gorm:"type:text;not null"`
+	Status  string    `json:"status" gorm:"default:'visible'"` // visible / hidden
 }
 
 func (Comment) TableName() string { return "comments" }
@@ -101,7 +101,7 @@ type FeedSource struct {
 	SourceID      *uuid.UUID `json:"source_id" gorm:"type:uuid"`  // 站内资源 ID（外部 RSS 时为 null）
 	RssURL        string     `json:"rss_url" gorm:"type:text"`
 	Hash          string     `json:"hash" gorm:"type:varchar(64);uniqueIndex"` // 唯一哈希
-	Title         string     `json:"title"`                                     // 全局默认标题
+	Title         string     `json:"title"`                                    // 全局默认标题
 	LastFetchedAt *time.Time `json:"last_fetched_at"`
 }
 
@@ -110,26 +110,48 @@ func (FeedSource) TableName() string { return "feed_sources" }
 // Subscription 存储用户与订阅源的多对多关系
 type Subscription struct {
 	Base
-	UserID       uuid.UUID   `json:"user_id" gorm:"type:uuid;not null;index"`
-	User         *User       `json:"user,omitempty" gorm:"foreignKey:UserID;references:UUID"`
-	FeedSourceID uuid.UUID   `json:"feed_source_id" gorm:"type:uuid;not null;index"`
-	FeedSource   *FeedSource `json:"feed_source,omitempty" gorm:"foreignKey:FeedSourceID"`
-	Title        string      `json:"title"` // 用户自定义覆盖标题
+	UserID              uuid.UUID          `json:"user_id" gorm:"type:uuid;not null;index"`
+	User                *User              `json:"user,omitempty" gorm:"foreignKey:UserID;references:UUID"`
+	FeedSourceID        uuid.UUID          `json:"feed_source_id" gorm:"type:uuid;not null;index"`
+	FeedSource          *FeedSource        `json:"feed_source,omitempty" gorm:"foreignKey:FeedSourceID"`
+	Title               string             `json:"title"`
+	SubscriptionGroupID *uuid.UUID         `json:"subscription_group_id" gorm:"type:uuid;index"`
+	SubscriptionGroup   *SubscriptionGroup `json:"subscription,omitempty" gorm:"foreignKey:SubscriptionGroupID"`
 }
 
 func (Subscription) TableName() string { return "subscriptions" }
 
-type OrbitItem struct {
+type FeedItem struct {
 	Base
-	FeedSourceID uuid.UUID   `json:"feed_source_id" gorm:"type:uuid;not null;index"`
-	FeedSource   *FeedSource `json:"feed_source,omitempty" gorm:"foreignKey:FeedSourceID"`
-	GUID         string      `json:"guid" gorm:"not null"`
-	Title        string      `json:"title"`
-	Link         string      `json:"link" gorm:"type:text"`
-	Summary      string      `json:"summary" gorm:"type:text"`
-	Author       string      `json:"author"`
-	PublishedAt  time.Time   `json:"published_at"`
-	FetchedAt    time.Time   `json:"fetched_at"`
+	FeedSourceID  uuid.UUID   `json:"feed_source_id" gorm:"type:uuid;not null;index"`
+	FeedSource    *FeedSource `json:"feed_source,omitempty" gorm:"foreignKey:FeedSourceID"`
+	GUID          string      `json:"guid" gorm:"not null"`
+	Title         string      `json:"title"`
+	Link          string      `json:"link" gorm:"type:text"`
+	Summary       string      `json:"summary" gorm:"type:text"`
+	Author        string      `json:"author"`
+	PublishedAt   time.Time   `json:"published_at"`
+	FetchedAt     time.Time   `json:"fetched_at"`
+	EnclosureURL  string      `json:"enclosure_url" gorm:"type:text"`
+	EnclosureType string      `json:"enclosure_type"`
+	Duration      string      `json:"duration"`
+	ImageURL      string      `json:"image_url" gorm:"type:text"`
 }
 
-func (OrbitItem) TableName() string { return "orbit_items" }
+func (FeedItem) TableName() string { return "feed_items" }
+
+type FeedItemRead struct {
+	UserID     uuid.UUID `json:"user_id" gorm:"type:uuid;not null;primaryKey;index"`
+	FeedItemID uuid.UUID `json:"feed_item_id" gorm:"type:uuid;not null;primaryKey;index"`
+	ReadAt     time.Time `json:"read_at"`
+}
+
+func (FeedItemRead) TableName() string { return "feed_item_reads" }
+
+type SubscriptionGroup struct {
+	Base
+	UserID uuid.UUID `json:"user_id" gorm:"type:uuid;not null;index"`
+	Name   string    `json:"name" gorm:"not null"`
+}
+
+func (SubscriptionGroup) TableName() string { return "subscription_groups" }

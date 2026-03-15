@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -20,14 +21,11 @@ import (
 	"atoman/internal/service"
 )
 
-// SetupFeedRoutes configures feed and subscription routes
 func SetupFeedRoutes(router *gin.Engine, db *gorm.DB) {
 	feed := router.Group("/api/feed")
 	{
-		// Public routes
 		feed.GET("/rss/:username", GetUserRSS(db))
 
-		// Protected routes
 		protected := feed.Group("")
 		protected.Use(middleware.AuthMiddleware())
 		{
@@ -35,11 +33,19 @@ func SetupFeedRoutes(router *gin.Engine, db *gorm.DB) {
 			protected.DELETE("/subscriptions/:id", DeleteSubscription(db))
 			protected.GET("/subscriptions", GetSubscriptions(db))
 			protected.GET("/timeline", GetTimeline(db))
+
+			protected.POST("/timeline/mark-read", MarkItemsRead(db))
+			protected.POST("/timeline/mark-all-read", MarkAllRead(db))
+
+			protected.GET("/groups", GetSubscriptionGroups(db))
+			protected.POST("/groups", CreateSubscriptionGroup(db))
+			protected.PUT("/groups/:id", UpdateSubscriptionGroup(db))
+			protected.DELETE("/groups/:id", DeleteSubscriptionGroup(db))
+			protected.PUT("/subscriptions/:id/group", SetSubscriptionGroup(db))
 		}
 	}
 }
 
-// SetupNotificationRoutes configures notification routes
 func SetupNotificationRoutes(router *gin.Engine, db *gorm.DB) {
 	notifications := router.Group("/api/notifications")
 	notifications.Use(middleware.AuthMiddleware())
@@ -51,15 +57,64 @@ func SetupNotificationRoutes(router *gin.Engine, db *gorm.DB) {
 	}
 }
 
-// SubscriptionInput represents the request body for subscribing
-type SubscriptionInput struct {
-	TargetType string     `json:"target_type" binding:"required,oneof=internal_user internal_channel internal_collection external_rss"`
-	TargetID   *uuid.UUID `json:"target_id"` // Required for internal types
-	RssURL     string     `json:"rss_url"`   // Required for external_rss
-	Title      string     `json:"title"`     // Optional custom title
+const defaultSubscriptionGroupName = "默认分组"
+
+func getOrCreateDefaultSubscriptionGroup(db *gorm.DB, userID uuid.UUID) (*model.SubscriptionGroup, error) {
+	var canonical model.SubscriptionGroup
+
+	err := db.Transaction(func(tx *gorm.DB) error {
+		var groups []model.SubscriptionGroup
+		if err := tx.Where("user_id = ? AND name = ?", userID, defaultSubscriptionGroupName).
+			Order("created_at ASC").Find(&groups).Error; err != nil {
+			return err
+		}
+
+		switch len(groups) {
+		case 0:
+			canonical = model.SubscriptionGroup{
+				UserID: userID,
+				Name:   defaultSubscriptionGroupName,
+			}
+			if err := tx.Create(&canonical).Error; err != nil {
+				return err
+			}
+		case 1:
+			canonical = groups[0]
+		default:
+			canonical = groups[0]
+			duplicateIDs := make([]uuid.UUID, 0, len(groups)-1)
+			for _, g := range groups[1:] {
+				duplicateIDs = append(duplicateIDs, g.ID)
+			}
+
+			if err := tx.Model(&model.Subscription{}).
+				Where("user_id = ? AND subscription_group_id IN ?", userID, duplicateIDs).
+				Update("subscription_group_id", canonical.ID).Error; err != nil {
+				return err
+			}
+
+			if err := tx.Where("user_id = ? AND id IN ?", userID, duplicateIDs).
+				Delete(&model.SubscriptionGroup{}).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &canonical, nil
 }
 
-// CreateSubscription creates a new feed source subscription
+type SubscriptionInput struct {
+	TargetType string     `json:"target_type" binding:"required,oneof=internal_user internal_channel internal_collection external_rss"`
+	TargetID   *uuid.UUID `json:"target_id"`
+	RssURL     string     `json:"rss_url"`
+	Title      string     `json:"title"`
+}
+
 func CreateSubscription(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var input SubscriptionInput
@@ -68,7 +123,6 @@ func CreateSubscription(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Validate inputs based on type
 		if input.TargetType != "external_rss" && input.TargetID == nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "target_id is required for internal subscriptions"})
 			return
@@ -81,24 +135,26 @@ func CreateSubscription(db *gorm.DB) gin.HandlerFunc {
 		userIDVal, _ := c.Get("user_id")
 		userID := userIDVal.(uuid.UUID)
 
-		// 1. Generate unique hash for this source to allow cross-user indexing
+		defaultGroup, err := getOrCreateDefaultSubscriptionGroup(db, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare default group"})
+			return
+		}
+
 		var sourceHash string
 		if input.TargetType == "external_rss" {
 			h := sha256.New()
 			h.Write([]byte(strings.TrimSpace(input.RssURL)))
 			sourceHash = hex.EncodeToString(h.Sum(nil))
 		} else {
-			// For internal types: hash by type and ID
-			sourceHash = fmt.Sprintf("%s:%s", input.TargetType, input.TargetID.String())
+			raw := fmt.Sprintf("%s:%s", input.TargetType, input.TargetID.String())
 			h := sha256.New()
-			h.Write([]byte(sourceHash))
+			h.Write([]byte(raw))
 			sourceHash = hex.EncodeToString(h.Sum(nil))
 		}
 
-		// 2. Find or Create the global FeedSource
 		var source model.FeedSource
 		if err := db.Where("hash = ?", sourceHash).First(&source).Error; err != nil {
-			// If not found, create new source
 			source = model.FeedSource{
 				SourceType: input.TargetType,
 				SourceID:   input.TargetID,
@@ -106,7 +162,6 @@ func CreateSubscription(db *gorm.DB) gin.HandlerFunc {
 				Hash:       sourceHash,
 			}
 
-			// For internal sources, pre-fill title
 			if input.TargetType == "internal_user" {
 				var user model.User
 				if err := db.Where("uuid = ?", input.TargetID).First(&user).Error; err == nil {
@@ -123,7 +178,6 @@ func CreateSubscription(db *gorm.DB) gin.HandlerFunc {
 					source.Title = collection.Name
 				}
 			} else if input.TargetType == "external_rss" {
-				// Fetch title for RSS
 				_, sourceTitle, err := service.FetchAndParseRSS(input.RssURL)
 				if err == nil {
 					source.Title = sourceTitle
@@ -135,24 +189,19 @@ func CreateSubscription(db *gorm.DB) gin.HandlerFunc {
 				return
 			}
 
-			// Trigger first fetch if RSS
-			if input.TargetType == "external_rss" {
-				go service.SyncSingleRSS(db, source)
-			}
 		}
 
-		// 3. Check if user already subscribed to this source
 		var existingSub model.Subscription
 		if err := db.Where("user_id = ? AND feed_source_id = ?", userID, source.ID).First(&existingSub).Error; err == nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Already subscribed to this source"})
 			return
 		}
 
-		// 4. Create the User Subscription
 		subscription := model.Subscription{
-			UserID:       userID,
-			FeedSourceID: source.ID,
-			Title:        input.Title, // User-defined custom title
+			UserID:              userID,
+			FeedSourceID:        source.ID,
+			Title:               input.Title,
+			SubscriptionGroupID: &defaultGroup.ID,
 		}
 
 		if err := db.Create(&subscription).Error; err != nil {
@@ -160,11 +209,16 @@ func CreateSubscription(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// Always trigger immediate RSS sync for external subscriptions,
+		// even if the feed source already existed before this subscription.
+		if input.TargetType == "external_rss" {
+			go service.SyncSingleRSS(db, source)
+		}
+
 		c.JSON(http.StatusCreated, gin.H{"data": subscription, "message": "ok"})
 	}
 }
 
-// DeleteSubscription removes a user's subscription to a feed source
 func DeleteSubscription(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
@@ -180,14 +234,27 @@ func DeleteSubscription(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-// GetSubscriptions returns the authenticated user's subscriptions with source info
 func GetSubscriptions(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userIDVal, _ := c.Get("user_id")
 		userID := userIDVal.(uuid.UUID)
 
+		defaultGroup, err := getOrCreateDefaultSubscriptionGroup(db, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare default group"})
+			return
+		}
+
+		// Keep old data compatible: migrate NULL group subscriptions to default group.
+		if err := db.Model(&model.Subscription{}).
+			Where("user_id = ? AND subscription_group_id IS NULL", userID).
+			Update("subscription_group_id", defaultGroup.ID).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to normalize subscriptions"})
+			return
+		}
+
 		var subscriptions []model.Subscription
-		if err := db.Preload("FeedSource").Where("user_id = ?", userID).Find(&subscriptions).Error; err != nil {
+		if err := db.Preload("FeedSource").Preload("SubscriptionGroup").Where("user_id = ?", userID).Find(&subscriptions).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch subscriptions"})
 			return
 		}
@@ -196,15 +263,14 @@ func GetSubscriptions(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-// TimelineItem represents a unified item in the feed timeline
 type TimelineItem struct {
-	Type        string           `json:"type"` // "post" or "orbit_item"
-	Post        *model.Post      `json:"post,omitempty"`
-	OrbitItem   *model.OrbitItem `json:"orbit_item,omitempty"`
-	PublishedAt time.Time        `json:"published_at"`
+	Type        string          `json:"type"`
+	Post        *model.Post     `json:"post,omitempty"`
+	FeedItem    *model.FeedItem `json:"feed_item,omitempty"`
+	PublishedAt time.Time       `json:"published_at"`
+	IsRead      bool            `json:"is_read"`
 }
 
-// GetTimeline returns a unified timeline of internal posts and external RSS items
 func GetTimeline(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userIDVal, _ := c.Get("user_id")
@@ -212,13 +278,17 @@ func GetTimeline(db *gorm.DB) gin.HandlerFunc {
 
 		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+		if limit > 100 {
+			limit = 100
+		}
 		offset := (page - 1) * limit
 
 		sourceType := c.Query("source_type")
 		sourceID := c.Query("source_id")
+		groupID := c.Query("group_id")
 
 		var userSubscriptions []model.Subscription
-		query := db.Where("user_id = ?", userID)
+		query := db.Where("subscriptions.user_id = ?", userID)
 
 		if sourceType != "" {
 			query = query.Joins("JOIN feed_sources ON feed_sources.id = subscriptions.feed_source_id").
@@ -227,6 +297,9 @@ func GetTimeline(db *gorm.DB) gin.HandlerFunc {
 		if sourceID != "" {
 			query = query.Where("subscriptions.id = ?", sourceID)
 		}
+		if groupID != "" {
+			query = query.Where("subscriptions.subscription_group_id = ?", groupID)
+		}
 
 		if err := query.Preload("FeedSource").Find(&userSubscriptions).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch subscriptions"})
@@ -234,7 +307,7 @@ func GetTimeline(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		if len(userSubscriptions) == 0 {
-			c.JSON(http.StatusOK, gin.H{"data": []TimelineItem{}, "message": "ok"})
+			c.JSON(http.StatusOK, gin.H{"data": []TimelineItem{}, "total": 0, "page": page, "limit": limit, "message": "ok"})
 			return
 		}
 
@@ -266,10 +339,7 @@ func GetTimeline(db *gorm.DB) gin.HandlerFunc {
 			}
 		}
 
-		// Fetch internal posts
 		var posts []model.Post
-
-		// Build complex OR condition for internal sources
 		var orConditions []string
 		var orArgs []interface{}
 
@@ -279,16 +349,14 @@ func GetTimeline(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		if len(channelIDs) > 0 {
-			// Get collections for these channels
 			var channelCollections []model.Collection
 			db.Where("channel_id IN ?", channelIDs).Find(&channelCollections)
-			for _, c := range channelCollections {
-				collectionIDs = append(collectionIDs, c.ID)
+			for _, col := range channelCollections {
+				collectionIDs = append(collectionIDs, col.ID)
 			}
 		}
 
 		if len(collectionIDs) > 0 {
-			// Get post IDs for these collections
 			var postCollections []model.PostCollection
 			db.Where("collection_id IN ?", collectionIDs).Find(&postCollections)
 			var postIDs []uuid.UUID
@@ -302,17 +370,29 @@ func GetTimeline(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		if len(orConditions) > 0 {
-			combinedQuery := "(" + strings.Join(orConditions, " OR ") + ")"
-			db.Preload("User").Where("status = ?", "published").Where(combinedQuery, orArgs...).Find(&posts)
+			combined := "(" + strings.Join(orConditions, " OR ") + ")"
+			db.Preload("User").Where("status = ?", "published").Where(combined, orArgs...).Find(&posts)
 		}
 
-		// Fetch external items
-		var orbitItems []model.OrbitItem
+		var feedItems []model.FeedItem
 		if len(feedSourceIDs) > 0 {
-			db.Preload("FeedSource").Where("feed_source_id IN ?", feedSourceIDs).Order("published_at DESC").Limit(limit).Offset(offset).Find(&orbitItems)
+			db.Preload("FeedSource").Where("feed_source_id IN ?", feedSourceIDs).Order("published_at DESC").Find(&feedItems)
 		}
 
-		// Combine and sort
+		var readFeedItemIDs map[uuid.UUID]bool
+		if len(feedItems) > 0 {
+			var feedItemIDs []uuid.UUID
+			for _, fi := range feedItems {
+				feedItemIDs = append(feedItemIDs, fi.ID)
+			}
+			var reads []model.FeedItemRead
+			db.Where("user_id = ? AND feed_item_id IN ?", userID, feedItemIDs).Find(&reads)
+			readFeedItemIDs = make(map[uuid.UUID]bool, len(reads))
+			for _, r := range reads {
+				readFeedItemIDs[r.FeedItemID] = true
+			}
+		}
+
 		var timeline []TimelineItem
 
 		for i := range posts {
@@ -320,22 +400,308 @@ func GetTimeline(db *gorm.DB) gin.HandlerFunc {
 				Type:        "post",
 				Post:        &posts[i],
 				PublishedAt: posts[i].CreatedAt,
+				IsRead:      false,
 			})
 		}
 
-		for i := range orbitItems {
+		for i := range feedItems {
 			timeline = append(timeline, TimelineItem{
-				Type:        "orbit_item",
-				OrbitItem:   &orbitItems[i],
-				PublishedAt: orbitItems[i].PublishedAt,
+				Type:        "feed_item",
+				FeedItem:    &feedItems[i],
+				PublishedAt: feedItems[i].PublishedAt,
+				IsRead:      readFeedItemIDs[feedItems[i].ID],
 			})
 		}
 
-		c.JSON(http.StatusOK, gin.H{"data": timeline, "message": "ok"})
+		sort.Slice(timeline, func(i, j int) bool {
+			return timeline[i].PublishedAt.After(timeline[j].PublishedAt)
+		})
+
+		total := len(timeline)
+		start := offset
+		if start > total {
+			start = total
+		}
+		end := start + limit
+		if end > total {
+			end = total
+		}
+		paged := timeline[start:end]
+
+		c.JSON(http.StatusOK, gin.H{
+			"data":    paged,
+			"total":   total,
+			"page":    page,
+			"limit":   limit,
+			"message": "ok",
+		})
 	}
 }
 
-// RSS structs
+type MarkReadInput struct {
+	FeedItemIDs []uuid.UUID `json:"feed_item_ids" binding:"required"`
+}
+
+func MarkItemsRead(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var input MarkReadInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+		now := time.Now()
+
+		for _, itemID := range input.FeedItemIDs {
+			read := model.FeedItemRead{
+				UserID:     userID,
+				FeedItemID: itemID,
+				ReadAt:     now,
+			}
+			db.Where("user_id = ? AND feed_item_id = ?", userID, itemID).
+				FirstOrCreate(&read)
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	}
+}
+
+func MarkAllRead(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		var userSubscriptions []model.Subscription
+		db.Where("user_id = ?", userID).Preload("FeedSource").Find(&userSubscriptions)
+
+		var feedSourceIDs []uuid.UUID
+		for _, sub := range userSubscriptions {
+			if sub.FeedSource != nil && sub.FeedSource.SourceType == "external_rss" {
+				feedSourceIDs = append(feedSourceIDs, sub.FeedSource.ID)
+			}
+		}
+
+		if len(feedSourceIDs) == 0 {
+			c.JSON(http.StatusOK, gin.H{"message": "ok"})
+			return
+		}
+
+		var unreadItems []model.FeedItem
+		db.Where("feed_source_id IN ?", feedSourceIDs).Find(&unreadItems)
+
+		now := time.Now()
+		for _, item := range unreadItems {
+			read := model.FeedItemRead{
+				UserID:     userID,
+				FeedItemID: item.ID,
+				ReadAt:     now,
+			}
+			db.Where("user_id = ? AND feed_item_id = ?", userID, item.ID).
+				FirstOrCreate(&read)
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	}
+}
+
+func GetSubscriptionGroups(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		if _, err := getOrCreateDefaultSubscriptionGroup(db, userID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare default group"})
+			return
+		}
+
+		var groups []model.SubscriptionGroup
+		if err := db.Where("user_id = ?", userID).Find(&groups).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch groups"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"data": groups, "message": "ok"})
+	}
+}
+
+type GroupInput struct {
+	Name string `json:"name" binding:"required"`
+}
+
+func CreateSubscriptionGroup(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var input GroupInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		name := strings.TrimSpace(input.Name)
+		if name == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Group name is required"})
+			return
+		}
+
+		if name == defaultSubscriptionGroupName {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Default group already exists"})
+			return
+		}
+
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		var existing model.SubscriptionGroup
+		if err := db.Where("user_id = ? AND name = ?", userID, name).First(&existing).Error; err == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Group name already exists"})
+			return
+		} else if err != gorm.ErrRecordNotFound {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate group name"})
+			return
+		}
+
+		group := model.SubscriptionGroup{
+			UserID: userID,
+			Name:   name,
+		}
+
+		if err := db.Create(&group).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create group"})
+			return
+		}
+
+		c.JSON(http.StatusCreated, gin.H{"data": group, "message": "ok"})
+	}
+}
+
+func UpdateSubscriptionGroup(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		var input GroupInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		name := strings.TrimSpace(input.Name)
+		if name == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Group name is required"})
+			return
+		}
+
+		var target model.SubscriptionGroup
+		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&target).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Group not found"})
+			return
+		}
+
+		if target.Name == defaultSubscriptionGroupName {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Default group cannot be renamed"})
+			return
+		}
+
+		if name == defaultSubscriptionGroupName {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Default group name is reserved"})
+			return
+		}
+
+		var existing model.SubscriptionGroup
+		if err := db.Where("user_id = ? AND name = ? AND id <> ?", userID, name, id).First(&existing).Error; err == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Group name already exists"})
+			return
+		} else if err != gorm.ErrRecordNotFound {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate group name"})
+			return
+		}
+
+		if err := db.Model(&model.SubscriptionGroup{}).Where("id = ? AND user_id = ?", id, userID).Update("name", name).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update group"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	}
+}
+
+func DeleteSubscriptionGroup(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		var targetGroup model.SubscriptionGroup
+		if err := db.Where("id = ? AND user_id = ?", id, userID).First(&targetGroup).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Group not found"})
+			return
+		}
+
+		if targetGroup.Name == defaultSubscriptionGroupName {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Default group cannot be deleted"})
+			return
+		}
+
+		defaultGroup, err := getOrCreateDefaultSubscriptionGroup(db, userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare default group"})
+			return
+		}
+
+		db.Model(&model.Subscription{}).
+			Where("subscription_group_id = ? AND user_id = ?", id, userID).
+			Update("subscription_group_id", defaultGroup.ID)
+
+		if err := db.Where("id = ? AND user_id = ?", id, userID).Delete(&model.SubscriptionGroup{}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete group"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	}
+}
+
+type SetGroupInput struct {
+	GroupID *uuid.UUID `json:"group_id"`
+}
+
+func SetSubscriptionGroup(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		subID := c.Param("id")
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		var input SetGroupInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		var targetGroupID *uuid.UUID
+		if input.GroupID == nil {
+			defaultGroup, err := getOrCreateDefaultSubscriptionGroup(db, userID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare default group"})
+				return
+			}
+			targetGroupID = &defaultGroup.ID
+		} else {
+			targetGroupID = input.GroupID
+		}
+
+		if err := db.Model(&model.Subscription{}).
+			Where("id = ? AND user_id = ?", subID, userID).
+			Update("subscription_group_id", targetGroupID).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update subscription group"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	}
+}
+
 type RSS struct {
 	XMLName xml.Name   `xml:"rss"`
 	Version string     `xml:"version,attr"`
@@ -357,7 +723,6 @@ type RSSItem struct {
 	GUID        string `xml:"guid"`
 }
 
-// GetUserRSS generates an RSS feed for a user's published posts
 func GetUserRSS(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		username := c.Param("username")
@@ -405,7 +770,6 @@ func GetUserRSS(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-// GetNotifications returns the authenticated user's notifications
 func GetNotifications(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userIDVal, _ := c.Get("user_id")
@@ -433,7 +797,6 @@ func GetNotifications(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-// MarkNotificationRead marks a specific notification as read
 func MarkNotificationRead(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
@@ -450,7 +813,6 @@ func MarkNotificationRead(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-// MarkAllNotificationsRead marks all notifications as read for the user
 func MarkAllNotificationsRead(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userIDVal, _ := c.Get("user_id")
@@ -466,7 +828,6 @@ func MarkAllNotificationsRead(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-// GetUnreadNotificationCount returns the count of unread notifications
 func GetUnreadNotificationCount(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userIDVal, _ := c.Get("user_id")

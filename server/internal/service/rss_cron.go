@@ -24,15 +24,28 @@ type ExtRSSChannel struct {
 	Items []ExtRSSItem `xml:"item"`
 }
 
+type ExtRSSEnclosure struct {
+	URL    string `xml:"url,attr"`
+	Type   string `xml:"type,attr"`
+	Length string `xml:"length,attr"`
+}
+
+type ExtRSSITunesDuration struct {
+	Value string `xml:",chardata"`
+}
+
 type ExtRSSItem struct {
-	Title       string `xml:"title"`
-	Link        string `xml:"link"`
-	Description string `xml:"description"`
-	PubDate     string `xml:"pubDate"`
-	Content     string `xml:"encoded"`
-	Creator     string `xml:"creator"`
-	Author      string `xml:"author"`
-	GUID        string `xml:"guid"`
+	Title       string          `xml:"title"`
+	Link        string          `xml:"link"`
+	Description string          `xml:"description"`
+	PubDate     string          `xml:"pubDate"`
+	Content     string          `xml:"encoded"`
+	Creator     string          `xml:"creator"`
+	Author      string          `xml:"author"`
+	GUID        string          `xml:"guid"`
+	Enclosure   ExtRSSEnclosure `xml:"enclosure"`
+	ITunesDur   string          `xml:"duration"`
+	ITunesImage string          `xml:"image>href"`
 }
 
 // Atom Structures
@@ -133,7 +146,7 @@ func syncAllRSSFeeds(db *gorm.DB) {
 
 				// Check if item already exists for this exact FeedSource
 				var count int64
-				db.Model(&model.OrbitItem{}).Where("feed_source_id = ? AND guid = ?", src.ID, identifier).Count(&count)
+				db.Model(&model.FeedItem{}).Where("feed_source_id = ? AND guid = ?", src.ID, identifier).Count(&count)
 				if count > 0 {
 					continue // Already processed
 				}
@@ -159,17 +172,21 @@ func syncAllRSSFeeds(db *gorm.DB) {
 				}
 
 				// Insert item
-				newOrbitItem := model.OrbitItem{
-					FeedSourceID: src.ID,
-					GUID:         identifier,
-					Title:        item.Title,
-					Link:         item.Link,
-					Summary:      summary,
-					Author:       author,
-					PublishedAt:  pubDate,
-					FetchedAt:    now,
+				newFeedItem := model.FeedItem{
+					FeedSourceID:  src.ID,
+					GUID:          identifier,
+					Title:         item.Title,
+					Link:          item.Link,
+					Summary:       summary,
+					Author:        author,
+					PublishedAt:   pubDate,
+					FetchedAt:     now,
+					EnclosureURL:  item.Enclosure.URL,
+					EnclosureType: item.Enclosure.Type,
+					Duration:      item.ITunesDur,
+					ImageURL:      item.ITunesImage,
 				}
-				db.Create(&newOrbitItem)
+				db.Create(&newFeedItem)
 			}
 		}
 	}
@@ -205,7 +222,7 @@ func SyncSingleRSS(db *gorm.DB, src model.FeedSource) {
 		}
 
 		var count int64
-		db.Model(&model.OrbitItem{}).Where("feed_source_id = ? AND guid = ?", src.ID, identifier).Count(&count)
+		db.Model(&model.FeedItem{}).Where("feed_source_id = ? AND guid = ?", src.ID, identifier).Count(&count)
 		if count > 0 {
 			continue
 		}
@@ -229,17 +246,21 @@ func SyncSingleRSS(db *gorm.DB, src model.FeedSource) {
 			summary = string(runes[:1000])
 		}
 
-		newOrbitItem := model.OrbitItem{
-			FeedSourceID: src.ID,
-			GUID:         identifier,
-			Title:        item.Title,
-			Link:         item.Link,
-			Summary:      summary,
-			Author:       author,
-			PublishedAt:  pubDate,
-			FetchedAt:    now,
+		newFeedItem := model.FeedItem{
+			FeedSourceID:  src.ID,
+			GUID:          identifier,
+			Title:         item.Title,
+			Link:          item.Link,
+			Summary:       summary,
+			Author:        author,
+			PublishedAt:   pubDate,
+			FetchedAt:     now,
+			EnclosureURL:  item.Enclosure.URL,
+			EnclosureType: item.Enclosure.Type,
+			Duration:      item.ITunesDur,
+			ImageURL:      item.ITunesImage,
 		}
-		db.Create(&newOrbitItem)
+		db.Create(&newFeedItem)
 	}
 	db.Model(&src).Update("last_fetched_at", now)
 }

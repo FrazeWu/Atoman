@@ -4,9 +4,10 @@ import (
 	"log"
 	"os"
 
+	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/gin-gonic/gin"
+	"github.com/glebarez/sqlite"
 	"github.com/joho/godotenv"
-	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
@@ -16,6 +17,35 @@ import (
 	"atoman/internal/service"
 	"atoman/internal/storage"
 )
+
+func ensureSoftDeleteColumns(db *gorm.DB) {
+	softDeleteModels := []interface{}{
+		&model.User{},
+		&model.Artist{},
+		&model.Album{},
+		&model.Song{},
+		&model.Channel{},
+		&model.Collection{},
+		&model.Post{},
+		&model.Comment{},
+		&model.FeedSource{},
+		&model.FeedItem{},
+		&model.Notification{},
+		&model.AlbumCorrection{},
+		&model.SongCorrection{},
+	}
+
+	for _, m := range softDeleteModels {
+		if !db.Migrator().HasTable(m) {
+			continue
+		}
+		if !db.Migrator().HasColumn(m, "deleted_at") {
+			if err := db.Migrator().AddColumn(m, "DeletedAt"); err != nil {
+				log.Printf("WARN: failed to add deleted_at for %T: %v", m, err)
+			}
+		}
+	}
+}
 
 func main() {
 	log.Println("Starting Atoman Backend Server...")
@@ -39,26 +69,24 @@ func main() {
 
 	dbType := os.Getenv("DATABASE_TYPE")
 	if dbType == "" {
-		log.Fatal("DATABASE_TYPE environment variable is required (mysql/postgres)")
+		log.Fatal("DATABASE_TYPE environment variable is required (postgres or sqlite)")
 	}
 
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-	if dbURL == "" {
 		log.Fatal("DATABASE_URL environment variable is required")
-	}
 	}
 
 	log.Printf("Connecting to %s database: %s", dbType, dbURL)
 
 	var dialector gorm.Dialector
 	switch dbType {
-	case "mysql":
-		dialector = mysql.Open(dbURL)
 	case "postgres", "postgresql":
 		dialector = postgres.Open(dbURL)
+	case "sqlite":
+		dialector = sqlite.Open(dbURL)
 	default:
-		log.Fatal("Unsupported DATABASE_TYPE: ", dbType)
+		log.Fatal("Unsupported DATABASE_TYPE: ", dbType, " (expected: postgres or sqlite)")
 	}
 
 	db, err := gorm.Open(dialector, &gorm.Config{})
@@ -68,7 +96,7 @@ func main() {
 	log.Println("Database connected successfully")
 
 	log.Println("Running database migrations...")
-	db.AutoMigrate(
+	if err := db.AutoMigrate(
 		&model.User{},
 		&model.Follow{},
 		&model.UserSettings{},
@@ -82,7 +110,9 @@ func main() {
 		&model.Bookmark{},
 		&model.FeedSource{},
 		&model.Subscription{},
-		&model.OrbitItem{},
+		&model.FeedItem{},
+		&model.FeedItemRead{},
+		&model.SubscriptionGroup{},
 		&model.Notification{},
 		&model.Artist{},
 		&model.Album{},
@@ -91,7 +121,13 @@ func main() {
 		&model.SongArtist{},
 		&model.AlbumCorrection{},
 		&model.SongCorrection{},
-	)
+	); err != nil {
+		log.Printf("WARN: AutoMigrate completed with warning: %v", err)
+	}
+
+	// Legacy environments may have existing tables without deleted_at.
+	// Ensure these columns exist so GORM soft-delete filters don't fail.
+	ensureSoftDeleteColumns(db)
 	// Manually ensure deleted_at column exists for feed_sources if AutoMigrate fails
 	if dbType == "postgres" || dbType == "postgresql" {
 		db.Exec("ALTER TABLE feed_sources ADD COLUMN IF NOT EXISTS deleted_at timestamp with time zone")
@@ -99,18 +135,21 @@ func main() {
 	}
 	log.Println("Database migrations completed")
 
-	log.Println("Initializing S3 client...")
-	s3Client, err := storage.InitS3Client()
-	if err != nil {
-		log.Fatal("Failed to create S3 client: ", err)
+	log.Println("Initializing storage...")
+	var s3Client *s3.S3
+	if os.Getenv("STORAGE_TYPE") == "local" {
+		log.Println("Storage mode: local (S3 disabled)")
+	} else {
+		var err error
+		s3Client, err = storage.InitS3Client()
+		if err != nil {
+			log.Fatal("Failed to create S3 client: ", err)
+		}
+		if err := storage.ValidateS3Connection(s3Client); err != nil {
+			log.Fatal("Failed to validate S3 connection: ", err)
+		}
+		log.Println("S3 storage initialized")
 	}
-	log.Println("S3 client initialized")
-
-	log.Println("Validating S3 connection...")
-	if err := storage.ValidateS3Connection(s3Client); err != nil {
-		log.Fatal("Failed to validate S3 connection: ", err)
-	}
-	log.Println("S3 connection validated")
 
 	log.Println("Starting background RSS cron worker...")
 	service.StartRSSCron(db)
@@ -145,6 +184,7 @@ func main() {
 	handlers.SetupBlogChannelRoutes(r, db)
 	handlers.SetupBlogPostRoutes(r, db)
 	handlers.SetupBlogInteractionRoutes(r, db)
+	handlers.SetupBlogUploadRoutes(r, db, s3Client)
 	handlers.SetupFeedRoutes(r, db)
 	handlers.SetupNotificationRoutes(r, db)
 	handlers.SetupSongRoutes(r, db, s3Client)
