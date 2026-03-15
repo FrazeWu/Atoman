@@ -1,78 +1,65 @@
 <template>
-  <div class="max-w-5xl mx-auto px-8 py-12 pb-48">
+  <div class="a-page" style="padding-bottom:12rem">
     <!-- Loading -->
-    <div v-if="loading" class="space-y-6">
-      <div class="h-32 bg-gray-100 border-2 border-black animate-pulse" />
-      <div class="h-8 bg-gray-100 animate-pulse w-1/2" />
+    <div v-if="loading" style="display:flex;flex-direction:column;gap:1.5rem">
+      <div class="a-skeleton" style="height:8rem" />
+      <div class="a-skeleton" style="height:2rem;width:50%" />
     </div>
 
     <!-- Not found -->
-    <div v-else-if="!profile" class="text-center py-24">
-      <p class="text-4xl font-black text-gray-200">用户不存在</p>
-      <RouterLink to="/blog" class="mt-6 inline-block font-black border-b-2 border-black">← 博客首页</RouterLink>
+    <div v-else-if="!profile" style="text-align:center;padding:6rem 0">
+      <p class="a-title a-muted" style="margin-bottom:1rem">用户不存在</p>
+      <RouterLink to="/blog" class="a-link">← 博客首页</RouterLink>
     </div>
 
     <template v-else>
       <!-- Profile header -->
-      <div class="border-2 border-black p-8 mb-8 flex flex-col md:flex-row gap-6 items-start">
+      <div class="a-card" style="display:flex;flex-wrap:wrap;gap:1.5rem;align-items:flex-start;margin-bottom:2rem">
         <!-- Avatar -->
-        <div class="w-20 h-20 rounded-full bg-black flex items-center justify-center text-white text-3xl font-black flex-shrink-0">
+        <div style="width:5rem;height:5rem;border-radius:9999px;background:#000;display:flex;align-items:center;justify-content:center;color:#fff;font-size:2rem;font-weight:900;flex-shrink:0">
           {{ (profile.display_name || profile.username).charAt(0).toUpperCase() }}
         </div>
 
-        <div class="flex-1">
-          <div class="flex items-start justify-between gap-4 flex-wrap">
+        <div style="flex:1">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1rem">
             <div>
-              <h1 class="text-3xl font-black tracking-tight">{{ profile.display_name || profile.username }}</h1>
-              <p class="text-gray-500 font-medium text-sm">@{{ profile.username }}</p>
+              <h1 style="font-size:1.875rem;font-weight:900;letter-spacing:-0.025em">{{ profile.display_name || profile.username }}</h1>
+              <p class="a-muted" style="font-size:.875rem">@{{ profile.username }}</p>
             </div>
-
-            <!-- Follow / Edit button -->
-            <div class="flex gap-2">
+            <div style="display:flex;gap:.5rem">
               <button
                 v-if="authStore.isAuthenticated && !isSelf"
                 @click="toggleFollow"
-                class="font-black uppercase tracking-widest text-sm border-2 border-black px-5 py-2 transition-all"
-                :class="following ? 'bg-black text-white hover:bg-white hover:text-black' : 'hover:bg-black hover:text-white'"
+                style="font-weight:900;text-transform:uppercase;letter-spacing:.1em;font-size:.875rem;border:2px solid #000;padding:.5rem 1.25rem;cursor:pointer;transition:all .2s"
+                :style="following ? 'background:#000;color:#fff' : 'background:#fff;color:#000'"
               >
                 {{ following ? '已订阅' : '订阅' }}
               </button>
-              <RouterLink
-                v-if="isSelf"
-                to="/blog/settings"
-                class="font-black uppercase tracking-widest text-sm border-2 border-black px-5 py-2 hover:bg-black hover:text-white transition-all"
-              >
-                编辑资料
-              </RouterLink>
+              <RouterLink v-if="isSelf" to="/blog/settings" class="a-btn-outline-sm">编辑资料</RouterLink>
             </div>
           </div>
 
           <!-- Stats -->
-          <div class="flex gap-6 mt-4 text-sm font-black">
-            <span><span class="text-xl">{{ profile.posts_count ?? posts.length }}</span> 篇文章</span>
-            <span><span class="text-xl">{{ profile.followers_count ?? 0 }}</span> 订阅者</span>
-            <span><span class="text-xl">{{ profile.following_count ?? 0 }}</span> 已订阅</span>
+          <div style="display:flex;gap:1.5rem;font-weight:900;font-size:.875rem;margin-bottom:.75rem">
+            <span><span style="font-size:1.25rem">{{ profile.posts_count ?? posts.length }}</span> 篇文章</span>
+            <span><span style="font-size:1.25rem">{{ profile.followers_count ?? 0 }}</span> 订阅者</span>
+            <span><span style="font-size:1.25rem">{{ profile.following_count ?? 0 }}</span> 已订阅</span>
           </div>
 
-          <p v-if="profile.bio" class="mt-3 text-gray-600 font-medium">{{ profile.bio }}</p>
-          <a v-if="profile.website" :href="profile.website" target="_blank" class="mt-1 inline-block text-sm font-black underline hover:opacity-60">
-            {{ profile.website }}
-          </a>
+          <p v-if="profile.bio" class="a-muted">{{ profile.bio }}</p>
+          <a v-if="profile.website" :href="profile.website" target="_blank" class="a-link" style="font-size:.875rem">{{ profile.website }}</a>
         </div>
       </div>
 
       <!-- Posts -->
-      <div class="flex items-center justify-between mb-6">
-        <h2 class="text-2xl font-black tracking-tight">文章</h2>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem">
+        <h2 class="a-subtitle">文章</h2>
       </div>
-
-      <div v-if="loadingPosts" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div v-for="i in 4" :key="i" class="h-40 bg-gray-100 border-2 border-black animate-pulse" />
+      <div v-if="loadingPosts" class="a-grid-2">
+        <div v-for="i in 4" :key="i" class="a-skeleton" style="height:10rem" />
       </div>
-      <div v-else-if="!posts.length" class="border-2 border-dashed border-gray-300 p-10 text-center text-gray-400 font-medium">
-        还没有发布文章
-      </div>
-      <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <AEmpty v-else-if="!posts.length" text="还没有发布文章" />
+      <div v-else class="a-grid-2">
         <PostCard v-for="post in posts" :key="post.id" :post="post" />
       </div>
     </template>
@@ -83,6 +70,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import PostCard from '@/components/blog/PostCard.vue'
+import AEmpty from '@/components/ui/AEmpty.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useApi } from '@/composables/useApi'
 import type { UserProfile, Post } from '@/types'
@@ -119,7 +107,7 @@ const fetchPosts = async () => {
   if (!profile.value) return
   loadingPosts.value = true
   try {
-    const res = await fetch(`${api.blog.posts}?user_id=${profile.value.id}&status=published`)
+    const res = await fetch(`${api.blog.posts}?user_id=${profile.value.uuid}`)
     if (res.ok) {
       const d = await res.json()
       posts.value = d.data || []

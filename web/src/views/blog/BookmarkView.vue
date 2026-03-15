@@ -1,22 +1,17 @@
 <template>
-  <div class="max-w-5xl mx-auto px-8 py-12 pb-48">
-    <div class="flex items-center justify-between mb-8">
-      <h1 class="text-4xl font-black tracking-tighter border-l-8 border-black pl-6">我的收藏</h1>
-      <button
-        @click="showNewFolder = true"
-        class="text-xs font-black uppercase tracking-widest border-2 border-black px-4 py-2 hover:bg-black hover:text-white transition-all"
-      >
-        + 新建收藏夹
-      </button>
+  <div class="a-page-xl" style="padding-bottom:12rem">
+    <div class="a-section-header" style="margin-bottom:2rem">
+      <h1 class="a-title a-accent-l">我的收藏</h1>
+      <ABtn size="sm" outline @click="showNewFolder = true">+ 新建收藏夹</ABtn>
     </div>
 
-    <div class="flex gap-0 border-2 border-black min-h-[60vh]">
+    <div style="display:flex;border:2px solid #000;min-height:60vh">
       <!-- Left: Folder list -->
-      <div class="w-56 flex-shrink-0 border-r-2 border-black">
+      <div style="width:14rem;flex-shrink:0;border-right:2px solid #000">
         <button
           @click="activeFolder = null"
-          class="w-full text-left px-5 py-4 font-black text-sm border-b-2 border-black transition-all"
-          :class="activeFolder === null ? 'bg-black text-white' : 'hover:bg-gray-50'"
+          style="width:100%;text-align:left;padding:1rem 1.25rem;font-weight:900;font-size:.875rem;border-bottom:2px solid #000;cursor:pointer;transition:all .2s;border-right:none;border-left:none;border-top:none"
+          :style="activeFolder === null ? 'background:#000;color:#fff' : 'background:#fff;color:#000'"
         >
           全部收藏
         </button>
@@ -24,60 +19,66 @@
           v-for="folder in folders"
           :key="folder.id"
           @click="activeFolder = folder.id"
-          class="w-full text-left px-5 py-4 font-medium text-sm border-b border-gray-100 transition-all flex items-center justify-between group"
-          :class="activeFolder === folder.id ? 'bg-black text-white' : 'hover:bg-gray-50'"
+          style="width:100%;text-align:left;padding:1rem 1.25rem;font-size:.875rem;border-bottom:1px solid #f3f4f6;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:space-between;border-right:none;border-left:none;border-top:none;font-weight:500"
+          :style="activeFolder === folder.id ? 'background:#000;color:#fff' : 'background:#fff;color:#000'"
         >
           <span>{{ folder.name }}</span>
-          <button
-            @click.stop="deleteFolder(folder.id)"
-            class="text-xs opacity-0 group-hover:opacity-100 transition-opacity font-bold"
-            :class="activeFolder === folder.id ? 'text-white' : 'text-red-500'"
-          >
-            ✕
-          </button>
+          <span
+            @click.stop="requestDeleteFolder(folder.id)"
+            style="font-size:.75rem;font-weight:900;background:none;border:none;cursor:pointer;opacity:0.4;transition:opacity .2s"
+            :style="activeFolder === folder.id ? 'color:#d1d5db' : 'color:#ef4444'"
+          >✕</span>
         </button>
       </div>
 
       <!-- Right: Bookmarked posts -->
-      <div class="flex-1 p-6">
-        <div v-if="loadingPosts" class="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div v-for="i in 4" :key="i" class="h-36 bg-gray-100 border border-gray-200 animate-pulse" />
+      <div style="flex:1;padding:1.5rem">
+        <div v-if="loadingPosts" class="a-grid-2">
+          <div v-for="i in 4" :key="i" class="a-skeleton" style="height:9rem" />
         </div>
-        <div v-else-if="!filteredBookmarks.length" class="h-full flex items-center justify-center text-gray-400 font-medium">
-          暂无收藏
-        </div>
-        <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <AEmpty v-else-if="!filteredBookmarks.length" text="暂无收藏" />
+        <div v-else class="a-grid-2">
           <PostCard v-for="bm in filteredBookmarks" :key="bm.id" :post="bm.post!" />
         </div>
       </div>
     </div>
 
     <!-- New folder modal -->
-    <div v-if="showNewFolder" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div class="bg-white border-2 border-black p-8 w-full max-w-sm shadow-[20px_20px_0px_0px_rgba(0,0,0,1)]">
-        <h3 class="text-xl font-black tracking-tight mb-5">新建收藏夹</h3>
-        <input
-          v-model="newFolderName"
-          placeholder="收藏夹名称"
-          class="w-full border-2 border-black p-3 font-medium focus:outline-none mb-4"
-          @keyup.enter="createFolder"
-        />
-        <div class="flex gap-2">
-          <button @click="createFolder" class="flex-1 bg-black text-white py-2 font-black uppercase tracking-widest border-2 border-black hover:bg-white hover:text-black transition-all">
-            创建
-          </button>
-          <button @click="showNewFolder = false" class="px-5 py-2 font-black border-2 border-black hover:bg-black hover:text-white transition-all">
-            取消
-          </button>
-        </div>
+    <AModal v-if="showNewFolder" @close="showNewFolder = false" size="sm">
+      <h3 class="a-subtitle" style="margin-bottom:1.25rem">新建收藏夹</h3>
+      <input
+        v-model="newFolderName"
+        placeholder="收藏夹名称"
+        class="a-input"
+        style="margin-bottom:1rem"
+        @keyup.enter="createFolder"
+      />
+      <div style="display:flex;gap:.5rem">
+        <ABtn style="flex:1" @click="createFolder">创建</ABtn>
+        <ABtn outline @click="showNewFolder = false">取消</ABtn>
       </div>
-    </div>
+    </AModal>
+
+    <AConfirm
+      :show="showDeleteConfirm"
+      title="删除收藏夹"
+      message="确定删除这个收藏夹吗？"
+      confirm-text="删除"
+      cancel-text="取消"
+      danger
+      @confirm="confirmDeleteFolder"
+      @cancel="cancelDeleteFolder"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import PostCard from '@/components/blog/PostCard.vue'
+import ABtn from '@/components/ui/ABtn.vue'
+import AModal from '@/components/ui/AModal.vue'
+import AEmpty from '@/components/ui/AEmpty.vue'
+import AConfirm from '@/components/ui/AConfirm.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useApi } from '@/composables/useApi'
 import type { Bookmark, BookmarkFolder } from '@/types'
@@ -91,6 +92,8 @@ const activeFolder = ref<number | null>(null)
 const loadingPosts = ref(true)
 const showNewFolder = ref(false)
 const newFolderName = ref('')
+const showDeleteConfirm = ref(false)
+const pendingDeleteFolderId = ref<number | null>(null)
 
 const filteredBookmarks = computed(() => {
   if (activeFolder.value === null) return bookmarks.value.filter(b => b.post)
@@ -140,6 +143,24 @@ const deleteFolder = async (id: number) => {
     await fetchAll()
   } catch (e) {
     console.error(e)
+  }
+}
+
+const requestDeleteFolder = (id: number) => {
+  pendingDeleteFolderId.value = id
+  showDeleteConfirm.value = true
+}
+
+const cancelDeleteFolder = () => {
+  showDeleteConfirm.value = false
+  pendingDeleteFolderId.value = null
+}
+
+const confirmDeleteFolder = async () => {
+  const id = pendingDeleteFolderId.value
+  cancelDeleteFolder()
+  if (id !== null) {
+    await deleteFolder(id)
   }
 }
 

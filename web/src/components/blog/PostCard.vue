@@ -1,43 +1,28 @@
 <template>
-  <RouterLink :to="`/blog/posts/${post.id}`" class="block group">
-    <div
-      class="bg-white border-2 border-black hover:shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] transition-all duration-300 flex flex-col h-full"
-    >
+  <RouterLink :to="`/blog/posts/${post.id}`" class="post-card-link">
+    <div class="post-card">
       <!-- Cover Image -->
-      <div v-if="post.cover_url" class="border-b-2 border-black overflow-hidden">
-        <img
-          :src="post.cover_url"
-          :alt="post.title"
-          class="w-full aspect-video object-cover group-hover:scale-105 transition-transform duration-500"
-        />
+      <div v-if="post.cover_url" class="post-cover">
+        <img :src="post.cover_url" :alt="post.title" class="post-cover-img" />
       </div>
 
-      <div class="p-6 flex flex-col flex-1">
+      <div class="post-body">
         <!-- Title -->
-        <h2 class="text-xl font-black tracking-tight leading-tight mb-2 group-hover:underline line-clamp-2">
-          {{ post.title }}
-        </h2>
+        <h2 class="post-title line-clamp-2">{{ post.title }}</h2>
 
         <!-- Summary -->
-        <p v-if="post.summary" class="text-sm text-gray-600 font-medium leading-relaxed mb-4 line-clamp-3 flex-1">
-          {{ post.summary }}
-        </p>
-        <div v-else class="flex-1" />
+        <p v-if="post.summary" class="post-summary line-clamp-3">{{ post.summary }}</p>
+        <div v-else class="flex-spacer" />
 
         <!-- Meta row -->
-        <div class="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
-          <!-- Author -->
-          <div class="flex items-center gap-2">
-            <div class="w-6 h-6 rounded-full bg-black flex items-center justify-center text-white text-xs font-black">
+        <div class="post-meta">
+          <div class="post-author">
+            <div class="author-avatar">
               {{ (post.user?.display_name || post.user?.username || '?').charAt(0).toUpperCase() }}
             </div>
-            <span class="text-xs font-bold text-gray-700">
-              {{ post.user?.display_name || post.user?.username }}
-            </span>
+            <span class="author-name">{{ post.user?.display_name || post.user?.username }}</span>
           </div>
-
-          <!-- Stats -->
-          <div class="flex items-center gap-3 text-xs font-black uppercase tracking-widest text-gray-400">
+          <div class="post-stats">
             <span v-if="post.likes_count !== undefined">♥ {{ post.likes_count }}</span>
             <span v-if="post.comments_count !== undefined">💬 {{ post.comments_count }}</span>
             <span>{{ formatDate(post.created_at) }}</span>
@@ -61,6 +46,84 @@ const formatDate = (dateStr: string) => {
 </script>
 
 <style scoped>
+.post-card-link { display: block; text-decoration: none; color: inherit; }
+.post-card {
+  background: #fff;
+  border: 2px solid #000;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  transition: box-shadow 0.3s;
+}
+.post-card:hover { box-shadow: 10px 10px 0px 0px rgba(0,0,0,1); }
+.post-cover {
+  border-bottom: 2px solid #000;
+  overflow: hidden;
+}
+.post-cover-img {
+  width: 100%;
+  aspect-ratio: 16/9;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.5s;
+}
+.post-card:hover .post-cover-img { transform: scale(1.05); }
+.post-body {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.post-title {
+  font-size: 1.125rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  margin: 0 0 0.5rem;
+}
+.post-card:hover .post-title { text-decoration: underline; }
+.post-summary {
+  font-size: 0.875rem;
+  color: #4b5563;
+  font-weight: 500;
+  line-height: 1.6;
+  margin: 0 0 1rem;
+  flex: 1;
+}
+.flex-spacer { flex: 1; }
+.post-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e7eb;
+}
+.post-author { display: flex; align-items: center; gap: 0.5rem; }
+.author-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background: #000;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.author-name { font-size: 0.75rem; font-weight: 700; color: #374151; }
+.post-stats {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #9ca3af;
+}
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;

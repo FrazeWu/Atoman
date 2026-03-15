@@ -1,121 +1,62 @@
 <template>
-  <div class="max-w-2xl mx-auto px-8 py-12 pb-48">
-    <div class="flex items-center justify-between mb-10">
-      <h1 class="text-4xl font-black tracking-tighter border-l-8 border-black pl-6">编辑资料</h1>
-      <RouterLink
-        :to="`/blog/@${authStore.user?.username}`"
-        class="text-xs font-black uppercase tracking-widest border-b-2 border-black hover:opacity-60"
-      >
-        ← 我的主页
-      </RouterLink>
+  <div class="a-page-sm" style="padding-bottom:12rem">
+    <div class="a-section-header" style="margin-bottom:2.5rem">
+      <h1 class="a-title a-accent-l">编辑资料</h1>
+      <RouterLink :to="`/blog/@${authStore.user?.username}`" class="a-link">← 我的主页</RouterLink>
     </div>
 
     <!-- Avatar preview -->
-    <div class="border-2 border-black p-6 mb-8 flex items-center gap-6">
-      <div class="w-20 h-20 rounded-full bg-black flex items-center justify-center text-white text-3xl font-black flex-shrink-0 overflow-hidden">
-        <img v-if="form.avatar_url" :src="form.avatar_url" alt="avatar" class="w-full h-full object-cover" />
+    <div class="a-card" style="display:flex;align-items:center;gap:1.5rem;margin-bottom:2rem">
+      <div style="width:5rem;height:5rem;border-radius:9999px;background:#000;display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.875rem;font-weight:900;flex-shrink:0;overflow:hidden">
+        <img v-if="form.avatar_url" :src="form.avatar_url" alt="avatar" style="width:100%;height:100%;object-fit:cover" />
         <span v-else>{{ (form.display_name || authStore.user?.username || '?').charAt(0).toUpperCase() }}</span>
       </div>
-      <div class="flex-1">
-        <p class="font-black text-lg">{{ form.display_name || authStore.user?.username }}</p>
-        <p class="text-sm text-gray-400 font-medium">@{{ authStore.user?.username }}</p>
+      <div>
+        <p style="font-weight:900;font-size:1.125rem">{{ form.display_name || authStore.user?.username }}</p>
+        <p class="a-muted" style="font-size:.875rem">@{{ authStore.user?.username }}</p>
       </div>
     </div>
 
-    <form @submit.prevent="save" class="flex flex-col gap-6">
-      <!-- Display name -->
-      <div>
-        <label class="text-xs font-black uppercase tracking-widest text-gray-500 block mb-2">显示名称</label>
-        <input
-          v-model="form.display_name"
-          placeholder="用于展示的名称"
-          class="w-full border-2 border-black p-4 font-medium focus:shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] outline-none transition-all"
-        />
+    <form @submit.prevent="save" style="display:flex;flex-direction:column;gap:1.5rem">
+      <div class="a-field">
+        <label class="a-field-label">显示名称</label>
+        <input v-model="form.display_name" placeholder="用于展示的名称" class="a-input" />
+      </div>
+      <div class="a-field">
+        <label class="a-field-label">个人简介</label>
+        <textarea v-model="form.bio" placeholder="介绍一下自己..." rows="4" class="a-textarea" />
+      </div>
+      <div class="a-field">
+        <label class="a-field-label">个人网站</label>
+        <input v-model="form.website" placeholder="https://yoursite.com" type="url" class="a-input" />
+      </div>
+      <div class="a-field">
+        <label class="a-field-label">所在地</label>
+        <input v-model="form.location" placeholder="城市或地区" class="a-input" />
+      </div>
+      <div class="a-field">
+        <label class="a-field-label">头像 URL</label>
+        <input v-model="form.avatar_url" placeholder="https://example.com/avatar.jpg" class="a-input" />
       </div>
 
-      <!-- Bio -->
-      <div>
-        <label class="text-xs font-black uppercase tracking-widest text-gray-500 block mb-2">个人简介</label>
-        <textarea
-          v-model="form.bio"
-          placeholder="介绍一下自己..."
-          rows="4"
-          class="w-full border-2 border-black p-4 font-medium focus:shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] outline-none transition-all resize-none"
-        />
-      </div>
-
-      <!-- Website -->
-      <div>
-        <label class="text-xs font-black uppercase tracking-widest text-gray-500 block mb-2">个人网站</label>
-        <input
-          v-model="form.website"
-          placeholder="https://yoursite.com"
-          type="url"
-          class="w-full border-2 border-black p-4 font-medium focus:shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] outline-none transition-all"
-        />
-      </div>
-
-      <!-- Location -->
-      <div>
-        <label class="text-xs font-black uppercase tracking-widest text-gray-500 block mb-2">所在地</label>
-        <input
-          v-model="form.location"
-          placeholder="城市或地区"
-          class="w-full border-2 border-black p-4 font-medium focus:shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] outline-none transition-all"
-        />
-      </div>
-
-      <!-- Avatar URL -->
-      <div>
-        <label class="text-xs font-black uppercase tracking-widest text-gray-500 block mb-2">头像 URL</label>
-        <input
-          v-model="form.avatar_url"
-          placeholder="https://example.com/avatar.jpg"
-          class="w-full border-2 border-black p-4 font-medium focus:shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] outline-none transition-all"
-        />
-      </div>
-
-      <!-- Divider: Password change -->
-      <div class="border-t-2 border-black pt-6">
-        <h2 class="text-lg font-black tracking-tight mb-4">修改密码</h2>
-        <div class="flex flex-col gap-4">
-          <div>
-            <label class="text-xs font-black uppercase tracking-widest text-gray-500 block mb-2">新密码</label>
-            <input
-              v-model="newPassword"
-              type="password"
-              placeholder="留空表示不修改"
-              class="w-full border-2 border-black p-4 font-medium focus:outline-none"
-            />
+      <div style="border-top:2px solid #000;padding-top:1.5rem">
+        <h2 class="a-subtitle" style="margin-bottom:1rem">修改密码</h2>
+        <div style="display:flex;flex-direction:column;gap:1rem">
+          <div class="a-field">
+            <label class="a-field-label">新密码</label>
+            <input v-model="newPassword" type="password" placeholder="留空表示不修改" class="a-input" />
           </div>
-          <div>
-            <label class="text-xs font-black uppercase tracking-widest text-gray-500 block mb-2">确认新密码</label>
-            <input
-              v-model="confirmPassword"
-              type="password"
-              placeholder="再次输入新密码"
-              class="w-full border-2 border-black p-4 font-medium focus:outline-none"
-            />
+          <div class="a-field">
+            <label class="a-field-label">确认新密码</label>
+            <input v-model="confirmPassword" type="password" placeholder="再次输入新密码" class="a-input" />
           </div>
         </div>
       </div>
 
-      <!-- Feedback -->
-      <div v-if="error" class="border-2 border-red-500 bg-red-50 p-4 text-red-700 font-bold text-sm">
-        {{ error }}
-      </div>
-      <div v-if="success" class="border-2 border-green-600 bg-green-50 p-4 text-green-700 font-bold text-sm">
-        ✓ 保存成功
-      </div>
+      <div v-if="error" class="a-error">{{ error }}</div>
+      <div v-if="success" class="a-success">✓ 保存成功</div>
 
-      <!-- Submit -->
-      <button
-        type="submit"
-        :disabled="saving"
-        class="w-full py-4 bg-black text-white font-black uppercase tracking-widest border-2 border-black hover:bg-white hover:text-black transition-all disabled:opacity-40"
-      >
-        {{ saving ? '保存中...' : '保存更改' }}
-      </button>
+      <ABtn block type="submit" :loading="saving" loadingText="保存中...">保存更改</ABtn>
     </form>
   </div>
 </template>
@@ -123,6 +64,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
+import ABtn from '@/components/ui/ABtn.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useApi } from '@/composables/useApi'
 

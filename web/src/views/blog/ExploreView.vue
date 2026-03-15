@@ -1,47 +1,32 @@
 <template>
-  <div class="max-w-6xl mx-auto px-8 py-12 pb-48">
-    <div class="mb-10">
-      <h1 class="text-5xl font-black tracking-tighter border-l-8 border-black pl-6">
-        发现广场
-      </h1>
-      <p class="mt-3 text-gray-500 font-medium pl-8">浏览所有人的公开文章</p>
-    </div>
+  <div class="a-page" style="padding-bottom:12rem">
+    <APageHeader title="发现广场" accent sub="浏览所有人的公开文章" style="margin-bottom:2.5rem" />
 
     <!-- Loading -->
-    <div v-if="loading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      <div
-        v-for="i in 6"
-        :key="i"
-        class="bg-gray-100 border-2 border-black h-64 animate-pulse"
-      />
+    <div v-if="loading" class="a-grid-3">
+      <div v-for="i in 6" :key="i" class="a-skeleton" style="height:16rem" />
     </div>
 
     <!-- Empty -->
-    <div v-else-if="!posts.length" class="text-center py-24">
-      <p class="text-4xl font-black tracking-tighter text-gray-300 mb-4">还没有文章</p>
-      <p class="text-gray-500 font-medium">成为第一个发布的人吧</p>
-      <RouterLink
-        v-if="authStore.isAuthenticated"
-        to="/blog/posts/new"
-        class="inline-block mt-6 bg-black text-white px-8 py-3 font-black uppercase tracking-widest hover:bg-white hover:text-black border-2 border-black transition-all"
-      >
-        写文章
-      </RouterLink>
+    <div v-else-if="!posts.length" style="text-align:center;padding:6rem 0">
+      <p class="a-title a-muted" style="margin-bottom:1rem">还没有文章</p>
+      <p class="a-muted" style="margin-bottom:1.5rem">成为第一个发布的人吧</p>
+      <ABtn v-if="authStore.isAuthenticated" to="/blog/posts/new">写文章</ABtn>
     </div>
 
     <!-- Post Grid -->
-    <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div v-else class="a-grid-3">
       <PostCard v-for="post in posts" :key="post.id" :post="post" />
     </div>
 
     <!-- Pagination -->
-    <div v-if="totalPages > 1" class="flex justify-center gap-2 mt-12">
+    <div v-if="totalPages > 1" style="display:flex;justify-content:center;gap:.5rem;margin-top:3rem">
       <button
         v-for="p in totalPages"
         :key="p"
         @click="loadPage(p)"
-        class="w-10 h-10 border-2 border-black font-black text-sm transition-all"
-        :class="p === currentPage ? 'bg-black text-white' : 'hover:bg-black hover:text-white'"
+        style="width:2.5rem;height:2.5rem;border:2px solid #000;font-weight:900;font-size:.875rem;cursor:pointer;transition:all .2s"
+        :style="p === currentPage ? 'background:#000;color:#fff' : 'background:#fff;color:#000'"
       >
         {{ p }}
       </button>
@@ -53,6 +38,8 @@
 import { ref, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import PostCard from '@/components/blog/PostCard.vue'
+import ABtn from '@/components/ui/ABtn.vue'
+import APageHeader from '@/components/ui/APageHeader.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useApi } from '@/composables/useApi'
 import type { Post } from '@/types'

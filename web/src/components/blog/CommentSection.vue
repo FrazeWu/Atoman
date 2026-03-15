@@ -1,75 +1,83 @@
 <template>
-  <div class="mt-12 pt-8 border-t-2 border-black">
-    <h3 class="text-2xl font-black tracking-tight mb-6">
-      评论 <span class="text-gray-400 font-medium text-lg">({{ comments.length }})</span>
+  <div class="comment-section">
+    <h3 class="section-title">
+      评论 <span class="comment-count">({{ comments.length }})</span>
     </h3>
 
     <!-- Closed comments notice -->
-    <div v-if="!allowComments" class="border-2 border-dashed border-gray-300 p-8 text-center text-gray-400 font-medium">
+    <div v-if="!allowComments" class="closed-notice">
       作者已关闭评论
     </div>
 
     <template v-else>
       <!-- Comment input (logged in) -->
-      <div v-if="authStore.isAuthenticated" class="mb-8">
+      <div v-if="authStore.isAuthenticated" class="comment-form">
         <textarea
           v-model="newComment"
           placeholder="写下你的评论..."
           rows="3"
-          class="w-full border-2 border-black p-4 font-medium focus:shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] outline-none transition-all resize-none"
+          class="comment-input"
         />
         <button
           @click="submitComment"
           :disabled="!newComment.trim() || submitting"
-          class="mt-2 bg-black text-white px-6 py-2 font-black uppercase tracking-widest text-xs border-2 border-black hover:bg-white hover:text-black transition-all disabled:opacity-40"
+          class="submit-btn"
         >
           {{ submitting ? '发送中...' : '发表评论' }}
         </button>
       </div>
-      <div v-else class="mb-8 border-2 border-dashed border-gray-300 p-6 text-center text-gray-400">
-        <RouterLink to="/login" class="font-black underline hover:opacity-70">登录</RouterLink> 后发表评论
+      <div v-else class="login-prompt">
+        <RouterLink to="/login" class="login-link">登录</RouterLink> 后发表评论
       </div>
 
       <!-- Loading -->
-      <div v-if="loading" class="space-y-4">
-        <div v-for="i in 3" :key="i" class="h-20 bg-gray-100 border border-gray-200 animate-pulse rounded" />
+      <div v-if="loading" class="loading-list">
+        <div v-for="i in 3" :key="i" class="loading-item" />
       </div>
 
       <!-- Comment list -->
-      <div v-else class="space-y-4">
-        <div
-          v-for="comment in comments"
-          :key="comment.id"
-          class="border-l-4 border-black pl-6 py-3"
-        >
-          <div class="flex items-center gap-3 mb-2">
-            <div class="w-7 h-7 rounded-full bg-black flex items-center justify-center text-white text-xs font-black">
+      <div v-else class="comment-list">
+        <div v-for="comment in comments" :key="comment.id" class="comment-item">
+          <div class="comment-header">
+            <div class="comment-avatar">
               {{ (comment.user?.display_name || comment.user?.username || '?').charAt(0).toUpperCase() }}
             </div>
-            <span class="font-black text-sm">{{ comment.user?.display_name || comment.user?.username }}</span>
-            <span class="text-xs text-gray-400 font-medium">{{ formatDate(comment.created_at) }}</span>
+            <span class="comment-author">{{ comment.user?.display_name || comment.user?.username }}</span>
+            <span class="comment-time">{{ formatDate(comment.created_at) }}</span>
             <button
               v-if="canDelete(comment)"
-              @click="deleteComment(comment.id)"
-              class="ml-auto text-xs text-red-500 hover:text-red-700 font-bold"
+              @click="requestDeleteComment(comment.id)"
+              class="delete-btn"
             >
               删除
             </button>
           </div>
-          <p class="text-gray-800 font-medium whitespace-pre-wrap">{{ comment.content }}</p>
+          <p class="comment-content">{{ comment.content }}</p>
         </div>
 
-        <div v-if="!comments.length" class="text-gray-400 font-medium text-center py-8">
+        <div v-if="!comments.length" class="empty-comments">
           还没有评论，来发表第一条吧
         </div>
       </div>
     </template>
+
+    <AConfirm
+      :show="showDeleteConfirm"
+      title="删除评论"
+      message="确定删除这条评论吗？"
+      confirm-text="删除"
+      cancel-text="取消"
+      danger
+      @confirm="confirmDeleteComment"
+      @cancel="cancelDeleteComment"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
+import AConfirm from '@/components/ui/AConfirm.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useApi } from '@/composables/useApi'
 import type { Comment } from '@/types'
@@ -87,6 +95,8 @@ const comments = ref<Comment[]>([])
 const loading = ref(true)
 const newComment = ref('')
 const submitting = ref(false)
+const showDeleteConfirm = ref(false)
+const pendingDeleteCommentId = ref<number | null>(null)
 
 const formatDate = (d: string) => new Date(d).toLocaleDateString('zh-CN')
 
@@ -142,5 +152,146 @@ const deleteComment = async (id: number) => {
   }
 }
 
+const requestDeleteComment = (id: number) => {
+  pendingDeleteCommentId.value = id
+  showDeleteConfirm.value = true
+}
+
+const cancelDeleteComment = () => {
+  showDeleteConfirm.value = false
+  pendingDeleteCommentId.value = null
+}
+
+const confirmDeleteComment = async () => {
+  const id = pendingDeleteCommentId.value
+  cancelDeleteComment()
+  if (id !== null) {
+    await deleteComment(id)
+  }
+}
+
 onMounted(fetchComments)
 </script>
+
+<style scoped>
+.comment-section {
+  margin-top: 3rem;
+  padding-top: 2rem;
+  border-top: 2px solid #000;
+}
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  margin: 0 0 1.5rem;
+}
+.comment-count { color: #9ca3af; font-weight: 500; font-size: 1.125rem; }
+.closed-notice {
+  border: 2px dashed #d1d5db;
+  padding: 2rem;
+  text-align: center;
+  color: #9ca3af;
+  font-weight: 500;
+}
+.comment-form { margin-bottom: 2rem; }
+.comment-input {
+  width: 100%;
+  border: 2px solid #000;
+  padding: 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  resize: none;
+  outline: none;
+  transition: box-shadow 0.2s;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+.comment-input:focus { box-shadow: 5px 5px 0px 0px rgba(0,0,0,1); }
+.submit-btn {
+  margin-top: 0.5rem;
+  background: #000;
+  color: #fff;
+  padding: 0.5rem 1.5rem;
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border: 2px solid #000;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.submit-btn:hover:not(:disabled) { background: #fff; color: #000; }
+.submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.login-prompt {
+  margin-bottom: 2rem;
+  border: 2px dashed #d1d5db;
+  padding: 1.5rem;
+  text-align: center;
+  color: #9ca3af;
+  font-weight: 500;
+}
+.login-link { font-weight: 900; text-decoration: underline; color: #000; }
+.login-link:hover { opacity: 0.7; }
+.loading-list { display: flex; flex-direction: column; gap: 1rem; }
+.loading-item {
+  height: 80px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.comment-list { display: flex; flex-direction: column; gap: 1rem; }
+.comment-item {
+  border-left: 4px solid #000;
+  padding: 0.75rem 0 0.75rem 1.5rem;
+}
+.comment-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+.comment-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  background: #000;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.comment-author { font-size: 0.875rem; font-weight: 900; }
+.comment-time { font-size: 0.75rem; color: #9ca3af; font-weight: 500; }
+.delete-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: #ef4444;
+  font-weight: 700;
+}
+.delete-btn:hover { color: #b91c1c; }
+.comment-content {
+  font-size: 0.875rem;
+  color: #1f2937;
+  font-weight: 500;
+  white-space: pre-wrap;
+  margin: 0;
+  line-height: 1.6;
+}
+.empty-comments {
+  text-align: center;
+  padding: 2rem;
+  color: #9ca3af;
+  font-weight: 500;
+}
+</style>
