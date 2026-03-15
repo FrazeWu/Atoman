@@ -15,9 +15,8 @@ import (
 func SetupBlogPostRoutes(router *gin.Engine, db *gorm.DB) {
 	blog := router.Group("/api/blog")
 	{
-		// Public routes
 		blog.GET("/posts", GetPosts(db))
-		blog.GET("/posts/:id", GetPost(db))
+		blog.GET("/posts/:id", middleware.OptionalAuthMiddleware(), GetPost(db))
 
 		// Protected routes
 		protected := blog.Group("")
@@ -47,6 +46,7 @@ type PostInput struct {
 	Summary       string `json:"summary"`
 	CoverURL      string `json:"cover_url"`
 	AllowComments *bool  `json:"allow_comments"`
+	Status        string `json:"status"` // "draft" or "published"
 }
 
 // CollectionActionInput represents the request body for adding a post to a collection
@@ -120,13 +120,18 @@ func CreatePost(db *gorm.DB) gin.HandlerFunc {
 			allowComments = *input.AllowComments
 		}
 
+		status := "draft"
+		if input.Status == "published" {
+			status = "published"
+		}
+
 		post := model.Post{
 			UserID:        userID,
 			Title:         input.Title,
 			Content:       input.Content,
 			Summary:       input.Summary,
 			CoverURL:      input.CoverURL,
-			Status:        "draft", // Default to draft
+			Status:        status,
 			AllowComments: allowComments,
 		}
 
@@ -168,6 +173,10 @@ func UpdatePost(db *gorm.DB) gin.HandlerFunc {
 			"content":   input.Content,
 			"summary":   input.Summary,
 			"cover_url": input.CoverURL,
+		}
+
+		if input.Status == "published" || input.Status == "draft" {
+			updates["status"] = input.Status
 		}
 
 		if input.AllowComments != nil {
