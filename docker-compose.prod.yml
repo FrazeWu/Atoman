@@ -1,3 +1,5 @@
+name: atoman-prod
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -8,11 +10,29 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -d $$POSTGRES_DB -U $$POSTGRES_USER" ]
+      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d postgres" ]
       interval: 10s
       timeout: 5s
       retries: 5
     restart: unless-stopped
+
+  db-init:
+    image: postgres:16-alpine
+    env_file:
+      - ./server/.env.prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app-network
+    entrypoint: >
+      /bin/sh -c "
+      set -e;
+      export PGPASSWORD=$$POSTGRES_PASSWORD;
+      if ! psql -h postgres -U $$POSTGRES_USER -d postgres -tAc \"SELECT 1 FROM pg_database WHERE datname='$$POSTGRES_DB'\" | grep -q 1; then
+        createdb -h postgres -U $$POSTGRES_USER -O $$POSTGRES_USER $$POSTGRES_DB;
+      fi
+      "
 
   minio:
     image: minio/minio
@@ -32,17 +52,20 @@ services:
       retries: 3
     restart: unless-stopped
 
-  server:
+  app:
     build:
-      context: ./server
+      context: .
       dockerfile: Dockerfile
-    expose:
-      - "8080"
+    ports:
+      - "80:80"
+      - "443:443"
     env_file:
       - ./server/.env.prod
     depends_on:
       postgres:
         condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
       minio:
         condition: service_healthy
     volumes:
@@ -50,25 +73,11 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/api/songs" ]
+      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/api/songs" ]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-    restart: unless-stopped
-
-  web:
-    build:
-      context: ./web
-      dockerfile: Dockerfile
-    ports:
-      - "80:80"
-      - "443:443"
-    depends_on:
-      server:
-        condition: service_healthy
-    networks:
-      - app-network
     restart: unless-stopped
 
 networks:

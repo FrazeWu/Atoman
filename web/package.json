@@ -5,34 +5,33 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc -b && vite build",
-    "preview": "vite preview",
-    "lint": "eslint src --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix"
+    "type-check": "vue-tsc --noEmit --pretty false",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@milkdown/core": "^7.19.0",
-    "@milkdown/plugin-history": "^7.19.0",
-    "@milkdown/plugin-listener": "^7.19.0",
-    "@milkdown/preset-commonmark": "^7.19.0",
-    "@milkdown/theme-nord": "^7.19.0",
-    "@milkdown/vue": "^7.19.0",
+    "@codemirror/lang-markdown": "^6.5.0",
+    "@codemirror/language-data": "^6.5.2",
+    "codemirror": "^6.0.2",
     "highlight.js": "^11.11.1",
+    "katex": "^0.16.38",
     "marked": "^17.0.4",
+    "marked-highlight": "^2.2.3",
+    "marked-katex-extension": "^5.1.7",
+    "naive-ui": "^2.39.0",
     "pinia": "2.1.7",
     "vue": "3.4.21",
     "vue-router": "4.3.0"
   },
   "devDependencies": {
-    "@rollup/rollup-darwin-x64": "^4.59.0",
-    "@tailwindcss/postcss": "^4.1.18",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-vue": "^6.0.3",
-    "autoprefixer": "^10.4.23",
-    "eslint": "^10.0.3",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.18",
     "typescript": "~5.8.2",
     "vite": "5.4.21",
     "vue-tsc": "^3.2.2"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-darwin-arm64": "4.59.0",
+    "@rollup/rollup-darwin-x64": "^4.59.0"
   }
 }
