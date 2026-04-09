@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/gin-gonic/gin"
@@ -98,44 +99,43 @@ func main() {
 	log.Println("Running database migrations...")
 	if err := db.AutoMigrate(
 		&model.User{},
-		&model.Follow{},
 		&model.UserSettings{},
+		&model.Artist{},
+		&model.Album{},
+		&model.Song{},
+		&model.SongCorrection{},
+		&model.AlbumCorrection{},
 		&model.Channel{},
 		&model.Collection{},
 		&model.Post{},
-		&model.PostCollection{},
 		&model.Comment{},
 		&model.Like{},
-		&model.BookmarkFolder{},
 		&model.Bookmark{},
 		&model.FeedSource{},
-		&model.Subscription{},
 		&model.FeedItem{},
 		&model.FeedItemRead{},
 		&model.SubscriptionGroup{},
 		&model.Notification{},
-		&model.Artist{},
-		&model.Album{},
-		&model.AlbumArtist{},
-		&model.Song{},
-		&model.SongArtist{},
-		&model.AlbumCorrection{},
-		&model.SongCorrection{},
+		&model.ForumCategory{},
+		&model.ForumTopic{},
+		&model.ForumReply{},
+		&model.ForumLike{},
+		&model.Debate{},
+		&model.Argument{},
+		&model.DebateVote{},
+		&model.VoteHistory{},
+		&model.EmailVerificationCode{},
 	); err != nil {
-		log.Printf("WARN: AutoMigrate completed with warning: %v", err)
-	}
-
-	// Legacy environments may have existing tables without deleted_at.
-	// Ensure these columns exist so GORM soft-delete filters don't fail.
-	ensureSoftDeleteColumns(db)
-	// Manually ensure deleted_at column exists for feed_sources if AutoMigrate fails
-	if dbType == "postgres" || dbType == "postgresql" {
-		db.Exec("ALTER TABLE feed_sources ADD COLUMN IF NOT EXISTS deleted_at timestamp with time zone")
-		db.Exec("CREATE INDEX IF NOT EXISTS idx_feed_sources_deleted_at ON feed_sources(deleted_at)")
+		log.Fatal("Failed to run migrations: ", err)
 	}
 	log.Println("Database migrations completed")
 
-	log.Println("Initializing storage...")
+	ensureSoftDeleteColumns(db)
+
+	// Initialize email service (without Redis)
+	emailService := service.NewEmailServiceWithoutRedis(db)
+	log.Println("Email service initialized (Redis disabled)")
+
 	var s3Client *s3.S3
 	if os.Getenv("STORAGE_TYPE") == "local" {
 		log.Println("Storage mode: local (S3 disabled)")
@@ -143,12 +143,16 @@ func main() {
 		var err error
 		s3Client, err = storage.InitS3Client()
 		if err != nil {
-			log.Fatal("Failed to create S3 client: ", err)
+			log.Println("WARN: Failed to create S3 client:", err)
+			log.Println("S3 storage disabled, falling back to local storage")
+			s3Client = nil
+		} else if err := storage.ValidateS3Connection(s3Client); err != nil {
+			log.Println("WARN: Failed to validate S3 connection:", err)
+			log.Println("S3 storage disabled, falling back to local storage")
+			s3Client = nil
+		} else {
+			log.Println("S3 storage initialized")
 		}
-		if err := storage.ValidateS3Connection(s3Client); err != nil {
-			log.Fatal("Failed to validate S3 connection: ", err)
-		}
-		log.Println("S3 storage initialized")
 	}
 
 	log.Println("Starting background RSS cron worker...")
@@ -161,11 +165,42 @@ func main() {
 
 	r := gin.Default()
 
+	// Configure allowed origins based on environment
+	allowedOrigins := []string{
+		"http://localhost:5173",
+		"http://localhost:3000",
+		"http://127.0.0.1:5173",
+		"http://127.0.0.1:3000",
+	}
+	if env := os.Getenv("ENV"); env == "production" {
+		// Add production domains from environment variable
+		if prodOrigins := os.Getenv("ALLOWED_ORIGINS"); prodOrigins != "" {
+			allowedOrigins = append(allowedOrigins, strings.Split(prodOrigins, ",")...)
+		}
+	}
+
 	r.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := c.Request.Header.Get("Origin")
+		isAllowed := false
+		for _, allowed := range allowedOrigins {
+			if origin == allowed {
+				isAllowed = true
+				break
+			}
+		}
+
+		if isAllowed {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+		} else {
+			// For development, allow all origins (but log a warning)
+			if os.Getenv("ENV") != "production" {
+				c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+			}
+		}
+
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, X-Request-ID")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
 
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
@@ -179,7 +214,11 @@ func main() {
 	r.Use(middleware.OptionalAuthMiddleware())
 	r.Use(middleware.CasbinMiddleware())
 
-	handlers.SetupAuthRoutes(r, db)
+	// Serve static files from uploads directory
+	r.Static("/uploads", "./uploads")
+	log.Println("Static files served from ./uploads directory")
+
+	handlers.SetupAuthRoutes(r, db, emailService)
 	handlers.SetupUserRoutes(r, db)
 	handlers.SetupBlogChannelRoutes(r, db)
 	handlers.SetupBlogPostRoutes(r, db)
@@ -191,9 +230,19 @@ func main() {
 	handlers.SetupAlbumRoutes(r, db, s3Client)
 	handlers.SetupArtistRoutes(r, db)
 	handlers.SetupCorrectionRoutes(r, db, s3Client)
+	handlers.SetupForumRoutes(r, db)
+	handlers.SetupDebateRoutes(r, db)
+
+	// Revision system routes (wiki-style collaboration)
+	handlers.SetupRevisionRoutes(r, db)
+
+	// Admin routes
 	handlers.SetupAdminRoutes(r, db, s3Client)
 
-	r.Static("/uploads", "./uploads")
+	// 404 handler - must be last
+	r.NoRoute(func(c *gin.Context) {
+		c.JSON(404, gin.H{"error": "Not found"})
+	})
 
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -201,5 +250,7 @@ func main() {
 	}
 
 	log.Printf("Server starting on port %s", port)
-	r.Run(":" + port)
+	if err := r.Run(":" + port); err != nil {
+		log.Fatal("Failed to start server: ", err)
+	}
 }

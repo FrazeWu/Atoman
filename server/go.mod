@@ -14,8 +14,11 @@ require (
 	github.com/joho/godotenv v1.4.0
 	golang.org/x/crypto v0.46.0
 	gorm.io/driver/postgres v1.6.0
+	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.1
 )
+
+require github.com/mattn/go-sqlite3 v1.14.22 // indirect
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
@@ -28,7 +31,7 @@ require (
 	github.com/gabriel-vasile/mimetype v1.4.9 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect
 	github.com/glebarez/go-sqlite v1.22.0 // indirect
-	github.com/glebarez/sqlite v1.11.0 // indirect
+	github.com/glebarez/sqlite v1.11.0
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.26.0 // indirect

@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"atoman/internal/middleware"
@@ -31,7 +32,8 @@ func SetupAlbumRoutes(router *gin.Engine, db *gorm.DB, s3Client *s3.S3) {
 		albums.GET("", GetAlbumsHandler(db))
 		albums.GET("/:id", GetAlbumHandler(db))
 		albums.POST("", middleware.AuthMiddleware(), middleware.AdminMiddleware(db), CreateAlbumHandler(db, s3Client))
-		albums.PUT("/:id", middleware.AuthMiddleware(), middleware.AdminMiddleware(db), UpdateAlbumHandler(db, s3Client))
+		// REMOVED AdminMiddleware - now allows all authenticated users to edit
+		albums.PUT("/:id", middleware.AuthMiddleware(), UpdateAlbumHandler(db, s3Client))
 		albums.DELETE("/:id", middleware.AuthMiddleware(), middleware.AdminMiddleware(db), DeleteAlbumHandler(db, s3Client))
 	}
 }
@@ -52,7 +54,11 @@ func GetAlbumHandler(db *gorm.DB) gin.HandlerFunc {
 		id := c.Param("id")
 		var album model.Album
 		if err := db.Preload("Artists").First(&album, "id = ?", id).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Album not found"})
+			if err == gorm.ErrRecordNotFound {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Album not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch album"})
 			return
 		}
 		c.JSON(http.StatusOK, album)
@@ -72,7 +78,11 @@ func UpdateAlbumHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 
 		var album model.Album
 		if err := db.Preload("Artists").First(&album, "id = ?", id).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Album not found"})
+			if err == gorm.ErrRecordNotFound {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Album not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch album"})
 			return
 		}
 
@@ -82,10 +92,30 @@ func UpdateAlbumHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 			return
 		}
 
-		var userRole string
+		// Get user info from context
+		userID, userExists := c.Get("user_id")
+		userRole := "anonymous"
 		if roleVal, exists := c.Get("role"); exists {
 			if role, ok := roleVal.(string); ok {
 				userRole = role
+			}
+		}
+
+		// Check ownership or admin permission
+		if userRole != "admin" {
+			if !userExists {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+				return
+			}
+			// Check if user owns this album
+			if album.UploadedBy != nil && *album.UploadedBy != userID.(uuid.UUID) {
+				c.JSON(http.StatusForbidden, gin.H{"error": "You can only edit your own albums"})
+				return
+			}
+			// If album has no UploadedBy (legacy data), only admin can edit
+			if album.UploadedBy == nil {
+				c.JSON(http.StatusForbidden, gin.H{"error": "Cannot edit legacy albums without owner information"})
+				return
 			}
 		}
 
