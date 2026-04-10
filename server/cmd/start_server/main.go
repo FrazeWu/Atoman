@@ -235,6 +235,9 @@ func main() {
 
 	// Revision system routes (wiki-style collaboration)
 	handlers.SetupRevisionRoutes(r, db)
+	handlers.SetupDiscussionRoutes(r, db)
+	handlers.SetupProtectionRoutes(r, db)
+	handlers.SetupStatusRoutes(r, db)
 
 	// Admin routes
 	handlers.SetupAdminRoutes(r, db, s3Client)
