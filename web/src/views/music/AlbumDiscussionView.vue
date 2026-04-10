@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
-import { useApi } from '@/composables/useApi'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const authStore = useAuthStore()
-const api = useApi()
+const API_URL = import.meta.env.VITE_API_URL || '/api'
 
 const albumId = computed(() => route.params.albumId as string)
 const discussions = ref<any[]>([])
@@ -26,9 +25,12 @@ const fetchDiscussions = async () => {
   loading.value = true
   error.value = ''
   try {
-    const res = await api.get(`/api/albums/${albumId.value}/discussions?limit=50`)
-    discussions.value = res.data.data || []
-    total.value = res.data.total || 0
+    const res = await fetch(`${API_URL}/albums/${albumId.value}/discussions?limit=50`, {
+      headers: authStore.token ? { Authorization: `Bearer ${authStore.token}` } : {}
+    })
+    const data = await res.json()
+    discussions.value = data.data || []
+    total.value = data.total || 0
   } catch (e: any) {
     error.value = e.message || 'Failed to fetch discussions'
   } finally {
@@ -40,8 +42,13 @@ const createDiscussion = async () => {
   if (!newContent.value.trim()) return
   submitting.value = true
   try {
-    await api.post(`/api/albums/${albumId.value}/discussions`, {
-      content: newContent.value
+    await fetch(`${API_URL}/albums/${albumId.value}/discussions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authStore.token}`
+      },
+      body: JSON.stringify({ content: newContent.value })
     })
     newContent.value = ''
     fetchDiscussions()
@@ -55,8 +62,13 @@ const createDiscussion = async () => {
 const replyTo = async (discussionId: string) => {
   if (!replyContent.value.trim()) return
   try {
-    await api.post(`/api/albums/${albumId.value}/discussions/${discussionId}/reply`, {
-      content: replyContent.value
+    await fetch(`${API_URL}/albums/${albumId.value}/discussions/${discussionId}/reply`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authStore.token}`
+      },
+      body: JSON.stringify({ content: replyContent.value })
     })
     replyContent.value = ''
     replyingTo.value = null
@@ -69,7 +81,10 @@ const replyTo = async (discussionId: string) => {
 const deleteDiscussion = async (discussionId: string) => {
   if (!confirm('确定删除这条讨论？')) return
   try {
-    await api.delete(`/api/albums/${albumId.value}/discussions/${discussionId}`)
+    await fetch(`${API_URL}/albums/${albumId.value}/discussions/${discussionId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${authStore.token}` }
+    })
     fetchDiscussions()
   } catch (e: any) {
     alert(e.message || 'Failed to delete')

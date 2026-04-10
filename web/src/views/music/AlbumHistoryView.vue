@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
-import { useApi } from '@/composables/useApi'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const authStore = useAuthStore()
-const api = useApi()
+const API_URL = import.meta.env.VITE_API_URL || '/api'
 
 const albumId = computed(() => route.params.albumId as string)
 const revisions = ref<any[]>([])
@@ -24,9 +23,12 @@ const fetchRevisions = async () => {
   loading.value = true
   error.value = ''
   try {
-    const res = await api.get(`/api/albums/${albumId.value}/revisions?limit=50`)
-    revisions.value = res.data.data || []
-    total.value = res.data.total || 0
+    const res = await fetch(`${API_URL}/albums/${albumId.value}/revisions?limit=50`, {
+      headers: authStore.token ? { Authorization: `Bearer ${authStore.token}` } : {}
+    })
+    const data = await res.json()
+    revisions.value = data.data || []
+    total.value = data.total || 0
   } catch (e: any) {
     error.value = e.message || 'Failed to fetch revisions'
   } finally {
@@ -39,8 +41,11 @@ const fetchDiff = async () => {
   try {
     const v1 = Math.min(compareFrom.value, compareTo.value)
     const v2 = Math.max(compareFrom.value, compareTo.value)
-    const res = await api.get(`/api/albums/${albumId.value}/revisions/diff?v1=${v1}&v2=${v2}`)
-    diff.value = res.data.data || {}
+    const res = await fetch(`${API_URL}/albums/${albumId.value}/revisions/diff?v1=${v1}&v2=${v2}`, {
+      headers: authStore.token ? { Authorization: `Bearer ${authStore.token}` } : {}
+    })
+    const data = await res.json()
+    diff.value = data.data || {}
     showDiff.value = true
   } catch (e) {
     console.error('Failed to fetch diff', e)
@@ -50,8 +55,13 @@ const fetchDiff = async () => {
 const revertTo = async (version: number) => {
   if (!confirm(`回退到版本 #${version}？`)) return
   try {
-    await api.post(`/api/albums/${albumId.value}/revert/${version}`, {
-      edit_summary: `回退到版本 ${version}`
+    await fetch(`${API_URL}/albums/${albumId.value}/revert/${version}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authStore.token}`
+      },
+      body: JSON.stringify({ edit_summary: `回退到版本 ${version}` })
     })
     alert('回退成功')
     fetchRevisions()
