@@ -128,6 +128,29 @@ onMounted(async () => {
               编辑专辑
             </RouterLink>
           </div>
+
+          <div class="wiki-links">
+            <RouterLink
+              :to="`/music/albums/${albumUuid}/history`"
+              class="wiki-link"
+            >
+              📖 修订历史
+            </RouterLink>
+            <RouterLink
+              :to="`/music/albums/${albumUuid}/discussion`"
+              class="wiki-link"
+            >
+              💬 讨论
+            </RouterLink>
+          </div>
+          <div v-if="protectionLabel" class="wiki-meta">
+            <span class="protection-badge" :class="[`protection-${protection?.protection_level}`]">
+              🔒 {{ protectionLabel }}
+            </span>
+            <span v-if="!canEdit" class="status-badge status-draft">
+              仅管理员可编辑
+            </span>
+          </div>
         </div>
       </div>
 
