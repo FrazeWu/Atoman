@@ -89,9 +89,31 @@ const canEdit = computed(() => {
   return true
 })
 
+// Fetch album discussion count
+const discussionCount = ref<number>(0)
+
+const fetchDiscussionCount = async () => {
+  if (!albumUuid.value) return
+  try {
+    const res = await fetch(`${API_URL}/albums/${albumUuid.value}/discussions/unread-count`, {
+      headers: authStore.token ? { Authorization: `Bearer ${authStore.token}` } : {}
+    })
+    const data = await res.json()
+    discussionCount.value = data.data?.unread_count || 0
+  } catch (e) {
+    discussionCount.value = 0
+  }
+}
+
+const markDiscussionAsRead = async () => {
+  // This is called when navigating to discussion view
+  discussionCount.value = 0
+}
+
 onMounted(async () => {
   await player.fetchSongs();
   fetchProtection();
+  fetchDiscussionCount();
 });
 </script>
 
@@ -139,8 +161,12 @@ onMounted(async () => {
             <RouterLink
               :to="`/music/albums/${albumUuid}/discussion`"
               class="wiki-link"
+              @click="markDiscussionAsRead"
             >
               💬 讨论
+              <span v-if="discussionCount > 0" class="discussion-count-badge">
+                {{ discussionCount }}
+              </span>
             </RouterLink>
           </div>
           <div v-if="protectionLabel" class="wiki-meta">
@@ -457,6 +483,20 @@ onMounted(async () => {
   font-size: 1.5rem;
   font-weight: 900;
   color: #9ca3af;
+}
+
+.discussion-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #3b82f6;
+  color: #fff;
+  font-size: 0.625rem;
+  font-weight: 700;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 9999px;
+  margin-left: 0.25rem;
 }
 
 @media (max-width: 639px) {

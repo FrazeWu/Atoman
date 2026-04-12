@@ -14,6 +14,7 @@ const selectedArtistName = ref('')
 const searchQuery = ref('')
 const showDropdown = ref(false)
 const protectionStatuses = ref<Map<string, any>>(new Map())
+const discussionCounts = ref<Map<string, number>>(new Map())
 
 const dropdownArtists = computed(() => {
   const q = searchQuery.value.toLowerCase()
@@ -72,6 +73,22 @@ function getProtectionLabel(protectionLevel: string) {
   return ''
 }
 
+async function fetchDiscussionCount(albumId: string) {
+  if (discussionCounts.value.has(albumId)) {
+    return discussionCounts.value.get(albumId)
+  }
+  try {
+    const res = await fetch(`${API_URL}/albums/${albumId}/discussions/unread-count`)
+    const data = await res.json()
+    const count = data.data?.unread_count || 0
+    discussionCounts.value.set(albumId, count)
+    return count
+  } catch (e) {
+    console.error('Failed to fetch discussion count:', e)
+    return 0
+  }
+}
+
 const stopOnce = watch(
   () => player.songs.length,
   (len) => {
@@ -124,6 +141,13 @@ const albumGroups = computed(() => {
   result.forEach((album) => {
     if (!protectionStatuses.value.has(String(album.id))) {
       fetchProtectionStatus(album.id)
+    }
+  })
+
+  // Fetch discussion counts for all albums
+  result.forEach((album) => {
+    if (!discussionCounts.value.has(String(album.id))) {
+      fetchDiscussionCount(String(album.id))
     }
   })
   
