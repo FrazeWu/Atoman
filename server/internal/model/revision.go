@@ -115,8 +115,9 @@ type Discussion struct {
 
 	Status string `json:"status" gorm:"default:'active'"` // 'active' / 'resolved' / 'deleted'
 
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	ReadAt    *time.Time `json:"read_at" gorm:"index"` // When user read this discussion (NULL = unread)
 }
 
 func (Discussion) TableName() string {

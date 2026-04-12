@@ -20,6 +20,7 @@ func SetupDiscussionRoutes(router *gin.Engine, db *gorm.DB) {
 		albums := discussions.Group("/albums/:id")
 		{
 			albums.GET("/discussions", GetAlbumDiscussionsHandler(db))
+			albums.GET("/discussions/unread-count", GetAlbumDiscussionUnreadCountHandler(db))
 			albums.POST("/discussions", middleware.AuthMiddleware(), CreateAlbumDiscussionHandler(db))
 			albums.PUT("/discussions/:discussion_id", middleware.AuthMiddleware(), UpdateAlbumDiscussionHandler(db))
 			albums.DELETE("/discussions/:discussion_id", middleware.AuthMiddleware(), DeleteAlbumDiscussionHandler(db))
@@ -30,6 +31,7 @@ func SetupDiscussionRoutes(router *gin.Engine, db *gorm.DB) {
 		songs := discussions.Group("/songs/:id")
 		{
 			songs.GET("/discussions", GetSongDiscussionsHandler(db))
+			songs.GET("/discussions/unread-count", GetSongDiscussionUnreadCountHandler(db))
 			songs.POST("/discussions", middleware.AuthMiddleware(), CreateSongDiscussionHandler(db))
 			songs.PUT("/discussions/:discussion_id", middleware.AuthMiddleware(), UpdateSongDiscussionHandler(db))
 			songs.DELETE("/discussions/:discussion_id", middleware.AuthMiddleware(), DeleteSongDiscussionHandler(db))
@@ -42,6 +44,58 @@ func SetupDiscussionRoutes(router *gin.Engine, db *gorm.DB) {
 		{
 			adminDiscussions.DELETE("/:id", AdminDeleteDiscussionHandler(db))
 		}
+	}
+}
+
+// GetAlbumDiscussionUnreadCountHandler returns the count of unread discussions for an album
+func GetAlbumDiscussionUnreadCountHandler(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		albumID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid album ID"})
+			return
+		}
+
+		var count int64
+		if err := db.Where("content_type = ? AND content_id = ? AND status != ? AND read_at IS NULL",
+			"album", albumID, "deleted").
+			Model(&model.Discussion{}).
+			Count(&count).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count unread discussions"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"data": gin.H{
+				"unread_count": count,
+			},
+		})
+	}
+}
+
+// GetSongDiscussionUnreadCountHandler returns the count of unread discussions for a song
+func GetSongDiscussionUnreadCountHandler(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		songID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid song ID"})
+			return
+		}
+
+		var count int64
+		if err := db.Where("content_type = ? AND content_id = ? AND status != ? AND read_at IS NULL",
+			"song", songID, "deleted").
+			Model(&model.Discussion{}).
+			Count(&count).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count unread discussions"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"data": gin.H{
+				"unread_count": count,
+			},
+		})
 	}
 }
 
