@@ -76,7 +76,7 @@ func initDefaultPolicies() {
 	}
 
 	// User policies (can do most things, ownership enforced by handlers)
-	if ok, _ := Enforcer.AddPolicy("user", "/api/*", "(GET|POST|PUT|DELETE)"); ok {
+	if ok, _ := Enforcer.AddPolicy("user", "/api/*", "(GET|POST|PUT|PATCH|DELETE)"); ok {
 		policyAdded = true
 	}
 	if ok, _ := Enforcer.AddPolicy("user", "/uploads/*", "(GET|HEAD)"); ok {
@@ -84,7 +84,7 @@ func initDefaultPolicies() {
 	}
 
 	// Admin policies
-	if ok, _ := Enforcer.AddPolicy("admin", "/api/*", "(GET|POST|PUT|DELETE)"); ok {
+	if ok, _ := Enforcer.AddPolicy("admin", "/api/*", "(GET|POST|PUT|PATCH|DELETE)"); ok {
 		policyAdded = true
 	}
 	if ok, _ := Enforcer.AddPolicy("admin", "/uploads/*", "(GET|HEAD)"); ok {

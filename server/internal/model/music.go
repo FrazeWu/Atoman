@@ -26,7 +26,7 @@ type Album struct {
 	ReleaseDate time.Time  `json:"release_date" gorm:"type:date"`
 	CoverURL    string     `json:"cover_url"`
 	CoverSource string     `json:"cover_source" gorm:"default:'local'"`
-	Status      string     `json:"status" gorm:"default:'pending'"`
+	Status      string     `json:"status" gorm:"default:'open'"`
 	UploadedBy  *uuid.UUID `json:"uploaded_by" gorm:"type:uuid"`
 	User        *User      `json:"user,omitempty" gorm:"foreignKey:UploadedBy;references:UUID"`
 	Artists     []Artist   `json:"artists,omitempty" gorm:"many2many:album_artists;"`
@@ -60,7 +60,7 @@ type Song struct {
 	CoverURL    string     `json:"cover_url"`
 	CoverSource string     `json:"cover_source" gorm:"default:'local'"`
 	BatchID     string     `json:"batch_id" gorm:"index"`
-	Status      string     `json:"status" gorm:"default:'pending'"`
+	Status      string     `json:"status" gorm:"default:'open'"`
 	AlbumID     *uuid.UUID `json:"album_id" gorm:"type:uuid"`
 	Album       *Album     `json:"album,omitempty"`
 	Artists     []Artist   `json:"artists,omitempty" gorm:"many2many:song_artists;"`
@@ -86,11 +86,11 @@ func (SongArtist) TableName() string {
 
 type AlbumCorrection struct {
 	Base
-	AlbumID uuid.UUID `json:"album_id" gorm:"type:uuid;not null"`
-	Album   *Album    `json:"album,omitempty" gorm:"foreignKey:AlbumID"`
+	AlbumID uuid.UUID  `json:"album_id" gorm:"type:uuid;not null"`
+	Album   *Album     `json:"album,omitempty" gorm:"foreignKey:AlbumID"`
 	UserID  *uuid.UUID `json:"user_id" gorm:"type:uuid"`
-	User    *User     `json:"user,omitempty" gorm:"foreignKey:UserID;references:UUID"`
-	Status  string    `json:"status" gorm:"default:'pending'"`
+	User    *User      `json:"user,omitempty" gorm:"foreignKey:UserID;references:UUID"`
+	Status  string     `json:"status" gorm:"default:'pending'"`
 
 	OriginalTitle       string     `json:"original_title"`
 	OriginalCoverURL    string     `json:"original_cover_url" gorm:"type:text"`
@@ -118,11 +118,11 @@ func (AlbumCorrection) TableName() string {
 
 type SongCorrection struct {
 	Base
-	SongID uuid.UUID `json:"song_id" gorm:"type:uuid;not null"`
-	Song   *Song     `json:"song,omitempty" gorm:"foreignKey:SongID"`
+	SongID uuid.UUID  `json:"song_id" gorm:"type:uuid;not null"`
+	Song   *Song      `json:"song,omitempty" gorm:"foreignKey:SongID"`
 	UserID *uuid.UUID `json:"user_id" gorm:"type:uuid"`
-	User   *User     `json:"user,omitempty" gorm:"foreignKey:UserID;references:UUID"`
-	Status string    `json:"status" gorm:"default:'pending'"`
+	User   *User      `json:"user,omitempty" gorm:"foreignKey:UserID;references:UUID"`
+	Status string     `json:"status" gorm:"default:'pending'"`
 
 	FieldName      string `json:"field_name" gorm:"not null"`
 	CurrentValue   string `json:"current_value" gorm:"type:text"`

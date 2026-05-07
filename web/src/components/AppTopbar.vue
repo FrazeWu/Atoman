@@ -9,11 +9,13 @@
         <RouterLink to="/feed" class="nav-link" :class="{ active: $route.path === '/' || $route.path.startsWith('/feed') }">订阅</RouterLink>
         <RouterLink to="/music" class="nav-link" :class="{ active: $route.path.startsWith('/music') || $route.path.startsWith('/artist=') }">音乐</RouterLink>
         <RouterLink to="/blog" class="nav-link" :class="{ active: $route.path.startsWith('/blog') }">博客</RouterLink>
+        <RouterLink to="/debate" class="nav-link" :class="{ active: $route.path.startsWith('/debate') }">辩论</RouterLink>
+        <RouterLink to="/timeline" class="nav-link" :class="{ active: $route.path.startsWith('/timeline') }">时间线</RouterLink>
 
         <!-- Blog sub-links when in blog context -->
         <template v-if="$route.path.startsWith('/blog')">
           <span class="nav-sep">|</span>
-          <RouterLink v-if="authStore.isAuthenticated" to="/blog/posts/new" class="nav-link-sm">写文章</RouterLink>
+          <RouterLink v-if="authStore.isAuthenticated" to="/post/new" class="nav-link-sm">写文章</RouterLink>
           <RouterLink to="/blog/explore" class="nav-link-sm">探索</RouterLink>
         </template>
       </nav>
@@ -52,7 +54,7 @@
             <span class="chevron" :style="activeDropdown === 'user' ? 'transform:rotate(180deg)' : ''">▾</span>
           </button>
           <div v-if="activeDropdown === 'user'" class="dropdown user-dropdown">
-            <RouterLink :to="`/blog/@${authStore.user?.username}`" class="dropdown-item" @click="closeDropdown">我的主页</RouterLink>
+            <RouterLink :to="`/user/${authStore.user?.username}`" class="dropdown-item" @click="closeDropdown">我的主页</RouterLink>
             <RouterLink to="/blog/bookmarks" class="dropdown-item" @click="closeDropdown">我的收藏</RouterLink>
             <RouterLink to="/blog/settings" class="dropdown-item" @click="closeDropdown">编辑资料</RouterLink>
             <div class="dropdown-divider" />
@@ -133,7 +135,7 @@ const openNotification = (n: Notification) => {
     if (idx !== -1) notifications.value[idx] = { ...notifications.value[idx], read_at: new Date().toISOString() }
   }
   if (n.target_type === 'post' && n.target_id) {
-    router.push(`/blog/posts/${n.target_id}`)
+    router.push(`/post/${n.target_id}`)
   } else {
     router.push('/blog/notifications')
   }

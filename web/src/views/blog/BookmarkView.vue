@@ -10,19 +10,21 @@
       <div style="width:14rem;flex-shrink:0;border-right:2px solid #000">
         <button
           @click="activeFolder = null"
+          class="sidebar-item"
+          :class="{ 'sidebar-item-active': activeFolder === null }"
           style="width:100%;text-align:left;padding:1rem 1.25rem;font-weight:900;font-size:.875rem;border-bottom:2px solid #000;cursor:pointer;transition:all .2s;border-right:none;border-left:none;border-top:none"
-          :style="activeFolder === null ? 'background:#000;color:#fff' : 'background:#fff;color:#000'"
         >
-          全部收藏
+          <span class="sidebar-item-label">全部收藏</span>
         </button>
         <button
           v-for="folder in folders"
           :key="folder.id"
           @click="activeFolder = folder.id"
+          class="sidebar-item"
+          :class="{ 'sidebar-item-active': activeFolder === folder.id }"
           style="width:100%;text-align:left;padding:1rem 1.25rem;font-size:.875rem;border-bottom:1px solid #f3f4f6;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:space-between;border-right:none;border-left:none;border-top:none;font-weight:500"
-          :style="activeFolder === folder.id ? 'background:#000;color:#fff' : 'background:#fff;color:#000'"
         >
-          <span>{{ folder.name }}</span>
+          <span class="sidebar-item-label">{{ folder.name }}</span>
           <span
             @click.stop="requestDeleteFolder(folder.id)"
             style="font-size:.75rem;font-weight:900;background:none;border:none;cursor:pointer;opacity:0.4;transition:opacity .2s"
@@ -88,12 +90,12 @@ const api = useApi()
 
 const folders = ref<BookmarkFolder[]>([])
 const bookmarks = ref<Bookmark[]>([])
-const activeFolder = ref<number | null>(null)
+const activeFolder = ref<string | null>(null)
 const loadingPosts = ref(true)
 const showNewFolder = ref(false)
 const newFolderName = ref('')
 const showDeleteConfirm = ref(false)
-const pendingDeleteFolderId = ref<number | null>(null)
+const pendingDeleteFolderId = ref<string | null>(null)
 
 const filteredBookmarks = computed(() => {
   if (activeFolder.value === null) return bookmarks.value.filter(b => b.post)
@@ -136,7 +138,7 @@ const createFolder = async () => {
   }
 }
 
-const deleteFolder = async (id: number) => {
+const deleteFolder = async (id: string) => {
   try {
     await fetch(api.blog.bookmarkFolder(id), { method: 'DELETE', headers: authHeader.value })
     if (activeFolder.value === id) activeFolder.value = null
@@ -146,7 +148,7 @@ const deleteFolder = async (id: number) => {
   }
 }
 
-const requestDeleteFolder = (id: number) => {
+const requestDeleteFolder = (id: string) => {
   pendingDeleteFolderId.value = id
   showDeleteConfirm.value = true
 }

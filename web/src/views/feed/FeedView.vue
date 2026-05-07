@@ -227,7 +227,7 @@
               <!-- Internal Post -->
               <RouterLink
                 v-if="item.type === 'post' && item.post"
-                :to="`/blog/posts/${item.post.id}`"
+                :to="`/post/${item.post.id}`"
                 class="a-card a-card-hover"
                 style="display:block;text-decoration:none;color:#000;transition:all .3s;position:relative"
                 @click="onItemClick(item)"

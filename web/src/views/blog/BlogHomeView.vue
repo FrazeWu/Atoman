@@ -17,7 +17,7 @@
     <template v-else>
       <APageHeader title="我的博客" accent>
         <template #action>
-          <ABtn to="/blog/posts/new">+ 写文章</ABtn>
+          <ABtn to="/post/new">+ 写文章</ABtn>
         </template>
       </APageHeader>
 

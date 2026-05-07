@@ -1,5 +1,5 @@
 <template>
-  <RouterLink :to="`/blog/posts/${post.id}`" class="post-card-link">
+  <RouterLink :to="`/post/${post.id}`" class="post-card-link">
     <div class="post-card">
       <!-- Cover Image -->
       <div v-if="post.cover_url" class="post-cover">

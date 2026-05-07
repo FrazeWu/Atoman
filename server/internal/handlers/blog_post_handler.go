@@ -41,12 +41,14 @@ func SetupBlogPostRoutes(router *gin.Engine, db *gorm.DB) {
 
 // PostInput represents the request body for creating/updating a post
 type PostInput struct {
-	Title         string `json:"title" binding:"required"`
-	Content       string `json:"content" binding:"required"`
-	Summary       string `json:"summary"`
-	CoverURL      string `json:"cover_url"`
-	AllowComments *bool  `json:"allow_comments"`
-	Status        string `json:"status"` // "draft" or "published"
+	Title         string   `json:"title" binding:"required"`
+	Content       string   `json:"content" binding:"required"`
+	Summary       string   `json:"summary"`
+	CoverURL      string   `json:"cover_url"`
+	AllowComments *bool    `json:"allow_comments"`
+	Status        string   `json:"status"` // "draft" or "published"
+	ChannelID     string   `json:"channel_id"`
+	CollectionIDs []string `json:"collection_ids"`
 }
 
 // CollectionActionInput represents the request body for adding a post to a collection
@@ -115,6 +117,55 @@ func CreatePost(db *gorm.DB) gin.HandlerFunc {
 		userIDVal, _ := c.Get("user_id")
 		userID := userIDVal.(uuid.UUID)
 
+		var channelID *uuid.UUID
+		var selectedCollections []model.Collection
+		if input.ChannelID != "" {
+			parsedChannelID, err := uuid.Parse(input.ChannelID)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid channel UUID"})
+				return
+			}
+
+			var channel model.Channel
+			if err := db.First(&channel, "id = ?", parsedChannelID).Error; err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Channel not found"})
+				return
+			}
+
+			if channel.UserID != userID {
+				c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to create post in this channel"})
+				return
+			}
+
+			channelID = &parsedChannelID
+
+			for _, collectionIDStr := range input.CollectionIDs {
+				collectionID, err := uuid.Parse(collectionIDStr)
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid collection UUID"})
+					return
+				}
+
+				var collection model.Collection
+				if err := db.Preload("Channel").First(&collection, "id = ?", collectionID).Error; err != nil {
+					c.JSON(http.StatusNotFound, gin.H{"error": "Collection not found"})
+					return
+				}
+
+				if collection.Channel.UserID != userID {
+					c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to assign this collection"})
+					return
+				}
+
+				if collection.ChannelID != parsedChannelID {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "Collection does not belong to selected channel"})
+					return
+				}
+
+				selectedCollections = append(selectedCollections, collection)
+			}
+		}
+
 		allowComments := true
 		if input.AllowComments != nil {
 			allowComments = *input.AllowComments
@@ -137,6 +188,35 @@ func CreatePost(db *gorm.DB) gin.HandlerFunc {
 
 		if err := db.Create(&post).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create post"})
+			return
+		}
+
+		if channelID != nil {
+			defaultCollection, err := ensureDefaultCollection(db, *channelID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to ensure default collection"})
+				return
+			}
+
+			if err := db.Model(&post).Association("Collections").Append(defaultCollection); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to attach default collection"})
+				return
+			}
+
+			for _, collection := range selectedCollections {
+				if collection.ID == defaultCollection.ID {
+					continue
+				}
+
+				if err := db.Model(&post).Association("Collections").Append(&collection); err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to assign collection"})
+					return
+				}
+			}
+		}
+
+		if err := db.Preload("Collections").First(&post, "id = ?", post.ID).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch created post"})
 			return
 		}
 

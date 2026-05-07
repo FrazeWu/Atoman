@@ -3,6 +3,7 @@
     <div class="a-modal-backdrop" @click.self="$emit('close')">
       <div class="a-modal" :class="`a-modal-${size}`">
         <slot />
+        <slot name="footer" />
       </div>
     </div>
   </Teleport>

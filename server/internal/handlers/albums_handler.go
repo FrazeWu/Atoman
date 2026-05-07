@@ -41,9 +41,12 @@ func SetupAlbumRoutes(router *gin.Engine, db *gorm.DB, s3Client *s3.S3) {
 func GetAlbumsHandler(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var albums []model.Album
-		if err := db.Where("status = ?", "approved").Preload("Artists").Order("release_date ASC, title ASC").Find(&albums).Error; err != nil {
+		if err := db.Where("status NOT IN ?", []string{"closed", "rejected", "draft"}).Preload("Artists").Order("release_date ASC, title ASC").Find(&albums).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch albums"})
 			return
+		}
+		for i := range albums {
+			albums[i].Status = normalizeMusicStatus(albums[i].Status)
 		}
 		c.JSON(http.StatusOK, albums)
 	}
@@ -61,15 +64,152 @@ func GetAlbumHandler(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch album"})
 			return
 		}
+		album.Status = normalizeMusicStatus(album.Status)
 		c.JSON(http.StatusOK, album)
 	}
 }
 
-// Placeholder handlers
 func CreateAlbumHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.JSON(http.StatusNotImplemented, gin.H{"error": "Album creation not yet implemented via direct API, use song upload or admin tools"})
+		var input AlbumInput
+		if err := c.ShouldBind(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		input.Title = strings.TrimSpace(input.Title)
+		artistNames := splitArtistNames(input.Artist)
+		if input.Title == "" || len(artistNames) == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "title and artist are required"})
+			return
+		}
+
+		releaseDate := time.Now()
+		if input.ReleaseDate != "" {
+			parsedDate, err := time.Parse("2006-01-02", input.ReleaseDate)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "release_date must be YYYY-MM-DD"})
+				return
+			}
+			releaseDate = parsedDate
+		} else if input.Year > 0 {
+			releaseDate = time.Date(input.Year, 1, 1, 0, 0, 0, 0, time.UTC)
+		}
+
+		year := input.Year
+		if year == 0 {
+			year = releaseDate.Year()
+		}
+
+		var userID *uuid.UUID
+		if idVal, exists := c.Get("user_id"); exists {
+			if uid, ok := idVal.(uuid.UUID); ok {
+				userID = &uid
+			}
+		}
+
+		coverURL := strings.TrimSpace(input.CoverURL)
+		coverSource := ""
+		if coverURL != "" {
+			if strings.HasPrefix(coverURL, "/uploads/") {
+				coverSource = "local"
+			} else {
+				coverSource = "s3"
+			}
+		}
+
+		coverFile, coverHeader, err := c.Request.FormFile("cover")
+		if err == nil {
+			defer coverFile.Close()
+
+			safeArtist := storage.SanitizeName(artistNames[0])
+			safeAlbum := storage.SanitizeName(input.Title)
+			coverKey := "music/" + safeArtist + "/" + safeAlbum + "/cover_" + coverHeader.Filename
+
+			_, err = s3Client.PutObject(&s3.PutObjectInput{
+				Bucket: aws.String(os.Getenv("S3_BUCKET")),
+				Key:    aws.String(coverKey),
+				Body:   coverFile,
+				ACL:    aws.String("public-read"),
+			})
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload cover to S3"})
+				return
+			}
+
+			coverURL = os.Getenv("S3_URL_PREFIX") + "/" + coverKey
+			coverSource = "s3"
+		}
+
+		tx := db.Begin()
+
+		var existing model.Album
+		if err := tx.Where("title = ? AND year = ?", input.Title, year).First(&existing).Error; err == nil {
+			tx.Rollback()
+			c.JSON(http.StatusConflict, gin.H{"error": "Album already exists", "id": existing.ID})
+			return
+		} else if err != gorm.ErrRecordNotFound {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to check album"})
+			return
+		}
+
+		album := model.Album{
+			Title:       input.Title,
+			Year:        year,
+			ReleaseDate: releaseDate,
+			CoverURL:    coverURL,
+			CoverSource: coverSource,
+			Status:      "open",
+			UploadedBy:  userID,
+		}
+		if album.CoverSource == "" {
+			album.CoverSource = "local"
+		}
+
+		if err := tx.Create(&album).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create album"})
+			return
+		}
+
+		for _, name := range artistNames {
+			var artist model.Artist
+			if err := tx.FirstOrCreate(&artist, model.Artist{Name: name}).Error; err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process artist"})
+				return
+			}
+			if err := tx.Model(&album).Association("Artists").Append(&artist); err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to link album to artist"})
+				return
+			}
+		}
+
+		if err := tx.Commit().Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create album"})
+			return
+		}
+
+		db.Preload("Artists").First(&album, "id = ?", album.ID)
+		c.JSON(http.StatusCreated, album)
 	}
+}
+
+func splitArtistNames(value string) []string {
+	parts := strings.Split(value, ",")
+	names := make([]string, 0, len(parts))
+	seen := make(map[string]bool, len(parts))
+	for _, part := range parts {
+		name := strings.TrimSpace(part)
+		key := strings.ToLower(name)
+		if name != "" && !seen[key] {
+			seen[key] = true
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 func UpdateAlbumHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {

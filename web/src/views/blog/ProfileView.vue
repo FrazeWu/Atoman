@@ -1,5 +1,6 @@
 <template>
   <div class="a-page" style="padding-bottom:12rem">
+    <AToast v-model="toastVisible" :message="toastMessage" />
     <!-- Loading -->
     <div v-if="loading" style="display:flex;flex-direction:column;gap:1.5rem">
       <div class="a-skeleton" style="height:8rem" />
@@ -30,10 +31,25 @@
               <button
                 v-if="authStore.isAuthenticated && !isSelf"
                 @click="toggleFollow"
-                style="font-weight:900;text-transform:uppercase;letter-spacing:.1em;font-size:.875rem;border:2px solid #000;padding:.5rem 1.25rem;cursor:pointer;transition:all .2s"
-                :style="following ? 'background:#000;color:#fff' : 'background:#fff;color:#000'"
+                class="a-toggle-btn"
+                :class="{ 'a-toggle-btn-active': following }"
               >
                 {{ following ? '已订阅' : '订阅' }}
+              </button>
+              <!-- 仅外部RSS复制入口 -->
+              <button
+                v-if="rssUrl"
+                @click="copyRssLink"
+                class="a-btn-outline-sm"
+              >复制RSS链接</button>
+              <button
+                v-if="authStore.isAuthenticated && !isSelf && userChannelId"
+                @click="toggleChannelSubscribe"
+                class="a-toggle-btn"
+                :class="{ 'a-toggle-btn-active': channelSubscribed }"
+                :disabled="channelSubscribeLoading"
+              >
+                {{ channelSubscribeLoading ? '加载中...' : (channelSubscribed ? '已订阅频道' : '订阅频道') }}
               </button>
               <RouterLink v-if="isSelf" to="/blog/settings" class="a-btn-outline-sm">编辑资料</RouterLink>
             </div>
@@ -48,6 +64,17 @@
 
           <p v-if="profile.bio" class="a-muted">{{ profile.bio }}</p>
           <a v-if="profile.website" :href="profile.website" target="_blank" class="a-link" style="font-size:.875rem">{{ profile.website }}</a>
+        </div>
+      </div>
+
+      <!-- Channel info -->
+      <div v-if="userChannel" class="a-card" style="margin-bottom:2rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+          <div>
+            <h3 style="font-weight:900;font-size:1.25rem;margin-bottom:.25rem">{{ userChannel.name }}</h3>
+            <p v-if="userChannel.description" class="a-muted" style="font-size:.875rem">{{ userChannel.description }}</p>
+          </div>
+          <RouterLink :to="`/blog/channel/${userChannel.id}`" class="a-btn-outline-sm">查看频道</RouterLink>
         </div>
       </div>
 
@@ -72,11 +99,14 @@ import { RouterLink, useRoute } from 'vue-router'
 import PostCard from '@/components/blog/PostCard.vue'
 import AEmpty from '@/components/ui/AEmpty.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useFeedStore } from '@/stores/feed'
+import AToast from '@/components/ui/AToast.vue'
 import { useApi } from '@/composables/useApi'
-import type { UserProfile, Post } from '@/types'
+import type { UserProfile, Post, Channel } from '@/types'
 
 const route = useRoute()
 const authStore = useAuthStore()
+const feedStore = useFeedStore()
 const api = useApi()
 
 const profile = ref<UserProfile | null>(null)
@@ -85,8 +115,21 @@ const loading = ref(true)
 const loadingPosts = ref(true)
 const following = ref(false)
 
+// Channel subscription state
+const userChannel = ref<Channel | null>(null)
+const channelSubscribed = ref(false)
+const channelSubscribeLoading = ref(false)
+// 移除RSS订阅状态
+const toastVisible = ref(false)
+const toastMessage = ref('')
+
 const username = computed(() => route.params.username as string)
 const isSelf = computed(() => authStore.user?.username === username.value)
+const userChannelId = computed(() => userChannel.value?.id || '')
+const rssUrl = computed(() => {
+  if (!profile.value?.username) return ''
+  return api.feed.rss(profile.value.username)
+})
 
 const fetchProfile = async () => {
   loading.value = true
@@ -119,11 +162,46 @@ const fetchPosts = async () => {
   }
 }
 
+const fetchFollowingState = async () => {
+  if (!profile.value || !authStore.isAuthenticated || isSelf.value) return
+  try {
+    const res = await fetch(api.users.following(authStore.user?.uuid || ''), {
+      headers: { Authorization: `Bearer ${authStore.token}` },
+    })
+    if (res.ok) {
+      const d = await res.json()
+      const followingUsers = d.data || []
+      following.value = followingUsers.some((user: { uuid?: string }) => user.uuid === profile.value?.uuid)
+    }
+  } catch (e) {
+    console.error('Failed to fetch following state:', e)
+  }
+}
+
+const fetchUserChannel = async () => {
+  if (!profile.value) return
+  try {
+    const res = await fetch(`${api.blog.channels}?user_id=${profile.value.uuid}`)
+    if (res.ok) {
+      const d = await res.json()
+      const channels = d.data || []
+      if (channels.length > 0) {
+        userChannel.value = channels[0]
+        if (authStore.isAuthenticated && userChannel.value) {
+          channelSubscribed.value = await feedStore.isSubscribedToChannel(userChannel.value.id)
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Failed to fetch user channel:', e)
+  }
+}
+
 const toggleFollow = async () => {
   if (!profile.value) return
   const method = following.value ? 'DELETE' : 'POST'
   try {
-    const res = await fetch(api.users.follow(profile.value.id), {
+    const res = await fetch(api.users.follow(profile.value.uuid), {
       method,
       headers: { Authorization: `Bearer ${authStore.token}` }
     })
@@ -133,8 +211,43 @@ const toggleFollow = async () => {
   }
 }
 
+const toggleChannelSubscribe = async () => {
+  if (!userChannel.value) return
+  channelSubscribeLoading.value = true
+  try {
+    let success = false
+    if (channelSubscribed.value) {
+      success = await feedStore.unsubscribeFromChannel(userChannel.value.id)
+    } else {
+      success = await feedStore.subscribeToChannel(userChannel.value.id)
+    }
+    if (success) {
+      channelSubscribed.value = !channelSubscribed.value
+    }
+  } catch (e) {
+    console.error('Failed to toggle channel subscription:', e)
+  } finally {
+    channelSubscribeLoading.value = false
+  }
+}
+
+
+
+const copyRssLink = async () => {
+  if (!rssUrl.value) return
+  try {
+    await navigator.clipboard.writeText(rssUrl.value)
+    toastMessage.value = '已复制 RSS 链接'
+    toastVisible.value = true
+  } catch (e) {
+    console.error('Failed to copy RSS link:', e)
+  }
+}
+
 onMounted(async () => {
   await fetchProfile()
+  await fetchFollowingState()
+  await fetchUserChannel()
   await fetchPosts()
 })
 </script>

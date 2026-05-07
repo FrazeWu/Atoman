@@ -2,7 +2,7 @@
   <div class="a-page-sm" style="padding-bottom:12rem">
     <div class="a-section-header" style="margin-bottom:2.5rem">
       <h1 class="a-title a-accent-l">编辑资料</h1>
-      <RouterLink :to="`/blog/@${authStore.user?.username}`" class="a-link">← 我的主页</RouterLink>
+      <RouterLink :to="`/user/${authStore.user?.username}`" class="a-link">← 我的主页</RouterLink>
     </div>
 
     <!-- Avatar preview -->

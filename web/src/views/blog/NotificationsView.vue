@@ -28,64 +28,39 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
+import { useFeedStore } from '@/stores/feed'
 import type { Notification } from '@/types'
 
-const authStore = useAuthStore()
+const feedStore = useFeedStore()
 const router = useRouter()
 
-const notifications = ref<Notification[]>([])
 const loading = ref(true)
 
-const unread = computed(() => notifications.value.filter((n) => !n.read_at).length)
+const notifications = computed(() => feedStore.notifications)
+const unread = computed(() => feedStore.unreadCount)
 
 onMounted(async () => {
-  await fetchNotifications()
-})
-
-async function fetchNotifications() {
   loading.value = true
   try {
-    const res = await fetch('/api/notifications', {
-      headers: { Authorization: `Bearer ${authStore.token}` },
-    })
-    if (res.ok) {
-      const d = await res.json()
-      notifications.value = d.data || []
+    await feedStore.fetchNotifications()
+    if (feedStore.notifications.some((n) => !n.read_at)) {
+      await feedStore.markAllRead()
     }
-  } catch (e) {
-    console.error(e)
   } finally {
     loading.value = false
   }
-}
+})
 
 async function markAllRead() {
-  try {
-    await fetch('/api/notifications/read-all', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${authStore.token}` },
-    })
-    notifications.value = notifications.value.map((n) => ({
-      ...n,
-      read_at: n.read_at ?? new Date().toISOString(),
-    }))
-  } catch (e) {
-    console.error(e)
-  }
+  await feedStore.markAllRead()
 }
 
 function handleClick(n: Notification) {
   if (!n.read_at) {
-    fetch(`/api/notifications/${n.id}/read`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${authStore.token}` },
-    }).catch(() => {})
-    const idx = notifications.value.findIndex((x) => x.id === n.id)
-    if (idx !== -1) notifications.value[idx] = { ...notifications.value[idx], read_at: new Date().toISOString() }
+    feedStore.markRead(n.id).catch(() => {})
   }
   if (n.target_type === 'post' && n.target_id) {
-    router.push(`/blog/posts/${n.target_id}`)
+    router.push(`/post/${n.target_id}`)
   }
 }
 

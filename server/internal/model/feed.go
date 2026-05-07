@@ -10,20 +10,22 @@ type Channel struct {
 	Base
 	UserID      uuid.UUID `json:"user_id" gorm:"type:uuid;not null;index"`
 	User        *User     `json:"user,omitempty" gorm:"foreignKey:UserID;references:UUID"`
-	Name        string    `json:"name" gorm:"not null"`
+	Name        string    `json:"name" gorm:"not null;uniqueIndex:idx_channels_name"`
 	Description string    `json:"description" gorm:"type:text"`
 	CoverURL    string    `json:"cover_url" gorm:"type:text"`
+	IsDefault   bool      `json:"is_default" gorm:"default:false;index"`
 }
 
 func (Channel) TableName() string { return "channels" }
 
 type Collection struct {
 	Base
-	ChannelID   uuid.UUID `json:"channel_id" gorm:"type:uuid;not null;index"`
+	ChannelID   uuid.UUID `json:"channel_id" gorm:"type:uuid;not null;index;uniqueIndex:idx_collection_channel_name,priority:1"`
 	Channel     *Channel  `json:"channel,omitempty" gorm:"foreignKey:ChannelID"`
-	Name        string    `json:"name" gorm:"not null"`
+	Name        string    `json:"name" gorm:"not null;uniqueIndex:idx_collection_channel_name,priority:2"`
 	Description string    `json:"description" gorm:"type:text"`
 	CoverURL    string    `json:"cover_url" gorm:"type:text"`
+	IsDefault   bool      `json:"is_default" gorm:"default:false;index"`
 }
 
 func (Collection) TableName() string { return "collections" }
@@ -92,8 +94,6 @@ type Bookmark struct {
 	BookmarkFolder   *BookmarkFolder `json:"bookmark_folder,omitempty" gorm:"foreignKey:BookmarkFolderID"`
 }
 
-func (Bookmark) TableName() string { return "bookmarks" }
-
 // FeedSource 存储全局唯一的订阅源元数据
 type FeedSource struct {
 	Base
@@ -117,25 +117,32 @@ type Subscription struct {
 	Title               string             `json:"title"`
 	SubscriptionGroupID *uuid.UUID         `json:"subscription_group_id" gorm:"type:uuid;index"`
 	SubscriptionGroup   *SubscriptionGroup `json:"subscription,omitempty" gorm:"foreignKey:SubscriptionGroupID"`
+	HealthStatus        string             `json:"health_status" gorm:"default:'healthy'"` // healthy | warning | error
+	ErrorMessage        string             `json:"error_message" gorm:"type:text"`
+	LastChecked         *time.Time         `json:"last_checked"`
 }
 
 func (Subscription) TableName() string { return "subscriptions" }
 
 type FeedItem struct {
 	Base
-	FeedSourceID  uuid.UUID   `json:"feed_source_id" gorm:"type:uuid;not null;index"`
-	FeedSource    *FeedSource `json:"feed_source,omitempty" gorm:"foreignKey:FeedSourceID"`
-	GUID          string      `json:"guid" gorm:"not null"`
-	Title         string      `json:"title"`
-	Link          string      `json:"link" gorm:"type:text"`
-	Summary       string      `json:"summary" gorm:"type:text"`
-	Author        string      `json:"author"`
-	PublishedAt   time.Time   `json:"published_at"`
-	FetchedAt     time.Time   `json:"fetched_at"`
-	EnclosureURL  string      `json:"enclosure_url" gorm:"type:text"`
-	EnclosureType string      `json:"enclosure_type"`
-	Duration      string      `json:"duration"`
-	ImageURL      string      `json:"image_url" gorm:"type:text"`
+	FeedSourceID     uuid.UUID   `json:"feed_source_id" gorm:"type:uuid;not null;index"`
+	FeedSource       *FeedSource `json:"feed_source,omitempty" gorm:"foreignKey:FeedSourceID"`
+	GUID             string      `json:"guid" gorm:"not null"`
+	Title            string      `json:"title"`
+	Link             string      `json:"link" gorm:"type:text"`
+	Summary          string      `json:"summary" gorm:"type:text"`
+	Author           string      `json:"author"`
+	PublishedAt      time.Time   `json:"published_at"`
+	FetchedAt        time.Time   `json:"fetched_at"`
+	EnclosureURL     string      `json:"enclosure_url" gorm:"type:text"`
+	EnclosureType    string      `json:"enclosure_type"`
+	Duration         string      `json:"duration"`
+	ImageURL         string      `json:"image_url" gorm:"type:text"`
+	IsDuplicate      bool        `json:"is_duplicate" gorm:"-"`
+	DuplicateCount   int         `json:"duplicate_count" gorm:"-"`
+	DuplicateOfID    *uuid.UUID  `json:"duplicate_of_id,omitempty" gorm:"-"`
+	DuplicateSources []string    `json:"duplicate_sources,omitempty" gorm:"-"`
 }
 
 func (FeedItem) TableName() string { return "feed_items" }
@@ -147,6 +154,23 @@ type FeedItemRead struct {
 }
 
 func (FeedItemRead) TableName() string { return "feed_item_reads" }
+
+type FeedItemStar struct {
+	UserID     uuid.UUID `json:"user_id" gorm:"type:uuid;not null;primaryKey;index"`
+	FeedItemID uuid.UUID `json:"feed_item_id" gorm:"type:uuid;not null;primaryKey;index"`
+	StarredAt  time.Time `json:"starred_at"`
+}
+
+func (FeedItemStar) TableName() string { return "feed_item_stars" }
+
+type ReadingListItem struct {
+	UserID     uuid.UUID `json:"user_id" gorm:"type:uuid;not null;primaryKey;index"`
+	FeedItemID uuid.UUID `json:"feed_item_id" gorm:"type:uuid;not null;primaryKey;index"`
+	FeedItem   *FeedItem `json:"feed_item,omitempty" gorm:"foreignKey:FeedItemID"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+func (ReadingListItem) TableName() string { return "reading_list_items" }
 
 type SubscriptionGroup struct {
 	Base

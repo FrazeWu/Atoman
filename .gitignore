@@ -25,3 +25,8 @@ web/bun.lock
 web/tsconfig.tsbuildinfo
 web/.env.dev
 web/.env.prod
+
+# Playwright E2E tests
+web/playwright-report/
+web/test-results/
+web/tests/e2e/.auth/

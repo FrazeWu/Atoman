@@ -13,10 +13,11 @@ export function useApi() {
     
     blog: {
       channels: `${apiUrl}/blog/channels`,
-      channel: (id: number) => `${apiUrl}/blog/channels/${id}`,
-      channelCollections: (id: number) => `${apiUrl}/blog/channels/${id}/collections`,
+      channel: (id: number | string) => `${apiUrl}/blog/channels/${id}`,
+      channelEnsureDefault: `${apiUrl}/blog/channels/ensure-default`,
+      channelCollections: (id: number | string) => `${apiUrl}/blog/channels/${id}/collections`,
       collections: `${apiUrl}/blog/collections`,
-      collection: (id: number) => `${apiUrl}/blog/collections/${id}`,
+      collection: (id: number | string) => `${apiUrl}/blog/collections/${id}`,
       
       posts: `${apiUrl}/blog/posts`,
       post: (id: number | string) => `${apiUrl}/blog/posts/${id}`,
@@ -35,22 +36,27 @@ export function useApi() {
       likes: `${apiUrl}/blog/likes`,
       postLikesCount: (id: number | string) => `${apiUrl}/blog/posts/${id}/likes/count`,
       
-      bookmarks: `${apiUrl}/blog/bookmarks`,
-      bookmark: (id: number) => `${apiUrl}/blog/bookmarks/${id}`,
-      bookmarkFolders: `${apiUrl}/blog/bookmark-folders`,
-      bookmarkFolder: (id: number) => `${apiUrl}/blog/bookmark-folders/${id}`,
-      
       explore: `${apiUrl}/blog/explore`,
+      bookmarkFolders: `${apiUrl}/blog/bookmark-folders`,
+      bookmarkFolder: (id: number | string) => `${apiUrl}/blog/bookmark-folders/${id}`,
+      bookmarks: `${apiUrl}/blog/bookmarks`,
+    },
+    
+    auth: {
+      register: `${apiUrl}/auth/register`,
+      login: `${apiUrl}/auth/login`,
+      sendVerification: `${apiUrl}/auth/send-verification`,
+      verifyEmail: `${apiUrl}/auth/verify-email`,
     },
     
     users: {
       me: `${apiUrl}/users/me`,
       settings: `${apiUrl}/users/me`,          // profile update (display_name, bio, etc)
       meSettings: `${apiUrl}/users/me/settings`, // app settings (notifications, privacy)
-      profile: (username: number | string) => `${apiUrl}/users/by-username/${username}`,
-      follow: (id: number | string) => `${apiUrl}/users/${id}/follow`,
-      followers: (id: number | string) => `${apiUrl}/users/${id}/followers`,
-      following: (id: number | string) => `${apiUrl}/users/${id}/following`,
+      profile: (username: string) => `${apiUrl}/users/by-username/${username}`,
+      follow: (userUuid: string) => `${apiUrl}/users/${userUuid}/follow`,
+      followers: (userUuid: string) => `${apiUrl}/users/${userUuid}/followers`,
+      following: (userUuid: string) => `${apiUrl}/users/${userUuid}/following`,
     },
     
     feed: {

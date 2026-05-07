@@ -19,7 +19,7 @@
     <div v-else-if="errorStatus === 403" class="a-page-md" style="padding-top:6rem;text-align:center">
       <p style="font-size:3rem;font-weight:900;color:#e5e7eb;margin-bottom:1rem">草稿</p>
       <p class="a-muted" style="margin-bottom:1.5rem">该文章尚未发布，请登录后查看或编辑</p>
-      <RouterLink :to="`/blog/posts/${route.params.id}/edit`" class="a-link">去编辑 →</RouterLink>
+      <RouterLink :to="`/post/${route.params.id}/edit`" class="a-link">去编辑 →</RouterLink>
     </div>
 
     <!-- Post content -->
@@ -38,14 +38,14 @@
 
         <!-- Meta -->
         <div style="display:flex;flex-wrap:wrap;align-items:center;gap:1rem;padding-bottom:1.5rem;border-bottom:2px solid #000;margin-bottom:2.5rem">
-          <RouterLink :to="`/blog/@${post.user?.username}`" style="display:flex;align-items:center;gap:.5rem;text-decoration:none">
+          <RouterLink :to="`/user/${post.user?.username}`" style="display:flex;align-items:center;gap:.5rem;text-decoration:none">
             <div style="width:2rem;height:2rem;border-radius:9999px;background:#000;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:.75rem">
               {{ (post.user?.display_name || post.user?.username || '?').charAt(0).toUpperCase() }}
             </div>
             <span style="font-weight:900;font-size:.875rem">{{ post.user?.display_name || post.user?.username }}</span>
           </RouterLink>
           <span class="a-label a-muted">{{ formatDate(post.created_at) }}</span>
-          <RouterLink v-if="isOwner" :to="`/blog/posts/${post.id}/edit`" class="a-btn-outline-sm" style="margin-left:auto">编辑</RouterLink>
+          <RouterLink v-if="isOwner" :to="`/post/${post.id}/edit`" class="a-btn-outline-sm" style="margin-left:auto">编辑</RouterLink>
         </div>
 
         <!-- Markdown content -->
@@ -55,18 +55,10 @@
         <div style="display:flex;align-items:center;gap:1rem;padding:1.5rem 0;border-top:2px solid #000;border-bottom:2px solid #000;margin-bottom:3rem">
           <button
             @click="toggleLike"
-            style="display:flex;align-items:center;gap:.5rem;font-weight:900;font-size:.875rem;border:2px solid #000;padding:.5rem 1rem;cursor:pointer;transition:all .2s"
-            :style="liked ? 'background:#000;color:#fff' : 'background:#fff;color:#000'"
+            class="a-toggle-btn"
+            :class="{ 'a-toggle-btn-active': liked }"
           >
             ♥ {{ likesCount }}
-          </button>
-          <button
-            v-if="authStore.isAuthenticated"
-            @click="toggleBookmark"
-            style="display:flex;align-items:center;gap:.5rem;font-weight:900;font-size:.875rem;border:2px solid #000;padding:.5rem 1rem;cursor:pointer;transition:all .2s"
-            :style="bookmarked ? 'background:#000;color:#fff' : 'background:#fff;color:#000'"
-          >
-            {{ bookmarked ? '★ 已收藏' : '☆ 收藏' }}
           </button>
           <a
             v-if="post.user?.username"
@@ -87,17 +79,6 @@
         />
       </div>
     </article>
-
-    <AConfirm
-      :show="showUnbookmarkConfirm"
-      title="取消收藏"
-      message="确定将这篇文章移出收藏吗？"
-      confirm-text="删除"
-      cancel-text="取消"
-      danger
-      @confirm="confirmToggleBookmark"
-      @cancel="showUnbookmarkConfirm = false"
-    />
   </div>
 </template>
 
@@ -124,11 +105,37 @@ const likesCount = ref(0)
 const bookmarked = ref(false)
 const showUnbookmarkConfirm = ref(false)
 
-const isOwner = computed(() => authStore.user?.id === post.value?.user_id)
+const isOwner = computed(() => authStore.user?.uuid === post.value?.user_id)
 
 const formatDate = (d: string) => new Date(d).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
 
-const renderedContent = computed(() => renderMarkdown(post.value?.content ?? ''))
+const normalizeTitleText = (text: string) => text.trim().replace(/\s+/g, ' ')
+
+const stripLeadingDuplicateHeading = (content: string, title: string) => {
+  const lines = content.split('\n')
+  if (!lines.length) return content
+
+  const firstLine = lines[0]?.trim() || ''
+  const match = firstLine.match(/^#{1,6}\s+(.+)$/)
+  if (!match) return content
+
+  const headingText = normalizeTitleText(match[1])
+  const postTitle = normalizeTitleText(title)
+  if (!headingText || !postTitle || headingText !== postTitle) return content
+
+  let startIndex = 1
+  while (startIndex < lines.length && lines[startIndex].trim() === '') {
+    startIndex++
+  }
+
+  return lines.slice(startIndex).join('\n')
+}
+
+const renderedContent = computed(() => {
+  const content = post.value?.content ?? ''
+  const title = post.value?.title ?? ''
+  return renderMarkdown(stripLeadingDuplicateHeading(content, title))
+})
 
 const fetchPost = async () => {
   loading.value = true
@@ -169,47 +176,6 @@ const toggleLike = async () => {
     if (res.ok) {
       liked.value = !liked.value
       likesCount.value += liked.value ? 1 : -1
-    }
-  } catch (e) {
-    console.error(e)
-  }
-}
-
-const toggleBookmark = async () => {
-  if (!authStore.isAuthenticated || !post.value) return
-  if (bookmarked.value) {
-    showUnbookmarkConfirm.value = true
-    return
-  }
-  await runToggleBookmark()
-}
-
-const confirmToggleBookmark = async () => {
-  showUnbookmarkConfirm.value = false
-  await runToggleBookmark()
-}
-
-const runToggleBookmark = async () => {
-  if (!authStore.isAuthenticated || !post.value) return
-  try {
-    if (bookmarked.value) {
-      // fetch bookmarks to find the id
-      const bRes = await fetch(api.blog.bookmarks, { headers: { Authorization: `Bearer ${authStore.token}` } })
-      if (bRes.ok) {
-        const d = await bRes.json()
-        const bm = (d.data || []).find((b: any) => b.post_id === post.value?.id)
-        if (bm) {
-          await fetch(api.blog.bookmark(bm.id), { method: 'DELETE', headers: { Authorization: `Bearer ${authStore.token}` } })
-          bookmarked.value = false
-        }
-      }
-    } else {
-      const res = await fetch(api.blog.bookmarks, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authStore.token}` },
-        body: JSON.stringify({ post_id: post.value.id })
-      })
-      if (res.ok) bookmarked.value = true
     }
   } catch (e) {
     console.error(e)
@@ -285,4 +251,9 @@ onMounted(fetchPost)
 .prose-blog :deep(.hljs-title) { color: #50fa7b; }
 .prose-blog :deep(.hljs-variable),
 .prose-blog :deep(.hljs-attr) { color: #8be9fd; }
+
+@media (max-width: 639px) {
+  .prose-blog :deep(pre) { padding: 1rem; font-size: 0.8rem; }
+  .prose-blog :deep(h2) { font-size: 1.25rem; }
+}
 </style>

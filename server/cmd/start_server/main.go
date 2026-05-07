@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/joho/godotenv"
+	_ "github.com/lib/pq" // PostgreSQL array type support
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
@@ -68,6 +69,10 @@ func main() {
 		log.Println("Running in development mode")
 	}
 
+	if os.Getenv("JWT_SECRET") == "" {
+		log.Fatal("JWT_SECRET environment variable is required")
+	}
+
 	dbType := os.Getenv("DATABASE_TYPE")
 	if dbType == "" {
 		log.Fatal("DATABASE_TYPE environment variable is required (postgres or sqlite)")
@@ -112,25 +117,45 @@ func main() {
 		&model.Like{},
 		&model.Bookmark{},
 		&model.FeedSource{},
+		&model.Subscription{},
 		&model.FeedItem{},
 		&model.FeedItemRead{},
+		&model.FeedItemStar{},
+		&model.ReadingListItem{},
 		&model.SubscriptionGroup{},
 		&model.Notification{},
 		&model.ForumCategory{},
 		&model.ForumTopic{},
 		&model.ForumReply{},
 		&model.ForumLike{},
+		&model.ForumBookmark{},
+		&model.ForumDraft{},
+		&model.ActivityLog{},
 		&model.Debate{},
 		&model.Argument{},
 		&model.DebateVote{},
 		&model.VoteHistory{},
+		&model.DebateConcludeVote{},
 		&model.EmailVerificationCode{},
+		&model.TimelineEvent{},
+		&model.TimelinePerson{},
+		&model.PersonLocation{},
+		// Revision / wiki system
+		&model.Revision{},
+		&model.EditConflict{},
+		&model.ContentProtection{},
+		&model.Discussion{},
 	); err != nil {
 		log.Fatal("Failed to run migrations: ", err)
 	}
 	log.Println("Database migrations completed")
 
 	ensureSoftDeleteColumns(db)
+
+	// Run forum-specific migrations (ltree extension, new columns, backfill)
+	if err := service.RunForumMigrations(db); err != nil {
+		log.Printf("WARN: forum migrations had errors: %v", err)
+	}
 
 	// Initialize email service (without Redis)
 	emailService := service.NewEmailServiceWithoutRedis(db)
@@ -232,6 +257,7 @@ func main() {
 	handlers.SetupCorrectionRoutes(r, db, s3Client)
 	handlers.SetupForumRoutes(r, db)
 	handlers.SetupDebateRoutes(r, db)
+	handlers.SetupTimelineRoutes(r, db)
 
 	// Revision system routes (wiki-style collaboration)
 	handlers.SetupRevisionRoutes(r, db)

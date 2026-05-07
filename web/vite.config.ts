@@ -1,6 +1,7 @@
 import path from 'path'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   server: {
@@ -8,6 +9,10 @@ export default defineConfig({
     host: '0.0.0.0',
     proxy: {
       '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
+      '/uploads': {
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
@@ -28,7 +33,7 @@ export default defineConfig({
       },
     },
   },
-  plugins: [vue()],
+  plugins: [tailwindcss(), vue()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

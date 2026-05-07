@@ -11,7 +11,7 @@
     <div v-else-if="!posts.length" style="text-align:center;padding:6rem 0">
       <p class="a-title a-muted" style="margin-bottom:1rem">还没有文章</p>
       <p class="a-muted" style="margin-bottom:1.5rem">成为第一个发布的人吧</p>
-      <ABtn v-if="authStore.isAuthenticated" to="/blog/posts/new">写文章</ABtn>
+      <ABtn v-if="authStore.isAuthenticated" to="/blog">去选合集写文章</ABtn>
     </div>
 
     <!-- Post Grid -->
@@ -25,8 +25,9 @@
         v-for="p in totalPages"
         :key="p"
         @click="loadPage(p)"
-        style="width:2.5rem;height:2.5rem;border:2px solid #000;font-weight:900;font-size:.875rem;cursor:pointer;transition:all .2s"
-        :style="p === currentPage ? 'background:#000;color:#fff' : 'background:#fff;color:#000'"
+        class="a-tab-btn"
+        :class="{ 'a-tab-btn-active': p === currentPage }"
+        style="width:2.5rem;height:2.5rem;border:2px solid #000"
       >
         {{ p }}
       </button>

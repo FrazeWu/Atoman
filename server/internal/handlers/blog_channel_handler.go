@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
 	"atoman/internal/middleware"
@@ -16,14 +18,17 @@ func SetupBlogChannelRoutes(router *gin.Engine, db *gorm.DB) {
 	blog := router.Group("/api/blog")
 	{
 		// Public routes
-		blog.GET("/channels", GetChannels(db))
-		blog.GET("/channels/:id", GetChannel(db))
-		blog.GET("/channels/:id/collections", GetChannelCollections(db))
+		blog.GET("/channels", middleware.OptionalAuthMiddleware(), GetChannels(db))
+		blog.GET("/channels/:id", middleware.OptionalAuthMiddleware(), GetChannel(db))
+		blog.GET("/channels/:id/collections", middleware.OptionalAuthMiddleware(), GetChannelCollections(db))
+		blog.GET("/collections", middleware.OptionalAuthMiddleware(), GetUserCollections(db))
+		blog.GET("/collections/:id", middleware.OptionalAuthMiddleware(), GetCollection(db))
 
 		// Protected routes
 		protected := blog.Group("")
 		protected.Use(middleware.AuthMiddleware())
 		{
+			protected.POST("/channels/ensure-default", EnsureDefaultChannel(db))
 			protected.POST("/channels", CreateChannel(db))
 			protected.PUT("/channels/:id", UpdateChannel(db))
 			protected.DELETE("/channels/:id", DeleteChannel(db))
@@ -47,6 +52,34 @@ type CollectionInput struct {
 	Name        string `json:"name" binding:"required"`
 	Description string `json:"description"`
 	CoverURL    string `json:"cover_url"`
+}
+
+type DeleteChannelInput struct {
+	Password        string `json:"password" binding:"required"`
+	MoveContent     bool   `json:"move_content"`
+	TargetChannelID string `json:"target_channel_id"`
+}
+
+// EnsureDefaultChannel creates a default channel for the authenticated user if they don't have one
+func EnsureDefaultChannel(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		var user model.User
+		if err := db.First(&user, "uuid = ?", userID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+			return
+		}
+
+		channel, err := EnsureDefaultChannelForUser(db, userID, user.Username)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to ensure default channel: " + err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"data": channel, "message": "ok"})
+	}
 }
 
 // GetChannels returns a list of channels, optionally filtered by user_id
@@ -92,6 +125,23 @@ func CreateChannel(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		input.Name = normalizeName(input.Name)
+		input.Description = strings.TrimSpace(input.Description)
+		if input.Name == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Channel name is required"})
+			return
+		}
+
+		exists, err := channelNameExists(db, input.Name, nil)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate channel name"})
+			return
+		}
+		if exists {
+			c.JSON(http.StatusConflict, gin.H{"error": "Channel name already exists"})
+			return
+		}
+
 		userIDVal, _ := c.Get("user_id")
 		userID := userIDVal.(uuid.UUID)
 
@@ -104,6 +154,11 @@ func CreateChannel(db *gorm.DB) gin.HandlerFunc {
 
 		if err := db.Create(&channel).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create channel"})
+			return
+		}
+
+		if _, err := ensureDefaultCollection(db, channel.ID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create default collection"})
 			return
 		}
 
@@ -121,6 +176,13 @@ func UpdateChannel(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		input.Name = normalizeName(input.Name)
+		input.Description = strings.TrimSpace(input.Description)
+		if input.Name == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Channel name is required"})
+			return
+		}
+
 		var channel model.Channel
 		if err := db.First(&channel, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Channel not found"})
@@ -132,6 +194,17 @@ func UpdateChannel(db *gorm.DB) gin.HandlerFunc {
 
 		if channel.UserID != userID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to update this channel"})
+			return
+		}
+
+		excludeID := channel.ID
+		exists, err := channelNameExists(db, input.Name, &excludeID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate channel name"})
+			return
+		}
+		if exists {
+			c.JSON(http.StatusConflict, gin.H{"error": "Channel name already exists"})
 			return
 		}
 
@@ -159,6 +232,17 @@ func DeleteChannel(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		if channel.IsDefault {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Cannot delete default channel"})
+			return
+		}
+
+		var input DeleteChannelInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
 		userIDVal, _ := c.Get("user_id")
 		userID := userIDVal.(uuid.UUID)
 
@@ -167,12 +251,132 @@ func DeleteChannel(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		if err := db.Delete(&channel).Error; err != nil {
+		var user model.User
+		if err := db.First(&user, "uuid = ?", userID).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify user"})
+			return
+		}
+
+		if input.Password == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Password is required"})
+			return
+		}
+
+		if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)); err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Password is incorrect"})
+			return
+		}
+
+		var targetChannel *model.Channel
+		if input.MoveContent {
+			if strings.TrimSpace(input.TargetChannelID) == "" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "target_channel_id is required when move_content is true"})
+				return
+			}
+
+			targetID, err := uuid.Parse(strings.TrimSpace(input.TargetChannelID))
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid target channel UUID"})
+				return
+			}
+
+			if targetID == channel.ID {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Target channel must be different from source channel"})
+				return
+			}
+
+			var target model.Channel
+			if err := db.First(&target, "id = ?", targetID).Error; err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Target channel not found"})
+				return
+			}
+
+			if target.UserID != userID {
+				c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to move content to this channel"})
+				return
+			}
+
+			targetChannel = &target
+		}
+
+		err := db.Transaction(func(tx *gorm.DB) error {
+			var sourceCollections []model.Collection
+			if err := tx.Where("channel_id = ?", channel.ID).Find(&sourceCollections).Error; err != nil {
+				return err
+			}
+
+			sourceCollectionIDs := make([]uuid.UUID, 0, len(sourceCollections))
+			for _, collection := range sourceCollections {
+				sourceCollectionIDs = append(sourceCollectionIDs, collection.ID)
+			}
+
+			if input.MoveContent && targetChannel != nil && len(sourceCollectionIDs) > 0 {
+				defaultCollection, err := ensureDefaultCollection(tx, targetChannel.ID)
+				if err != nil {
+					return err
+				}
+
+				var postCollections []model.PostCollection
+				if err := tx.Where("collection_id IN ?", sourceCollectionIDs).Find(&postCollections).Error; err != nil {
+					return err
+				}
+
+				seenPosts := make(map[uuid.UUID]bool)
+				for _, relation := range postCollections {
+					if seenPosts[relation.PostID] {
+						continue
+					}
+					seenPosts[relation.PostID] = true
+
+					postCollection := model.PostCollection{
+						PostID:       relation.PostID,
+						CollectionID: defaultCollection.ID,
+					}
+
+					if err := tx.Where("post_id = ? AND collection_id = ?", relation.PostID, defaultCollection.ID).
+						FirstOrCreate(&postCollection).Error; err != nil {
+						return err
+					}
+				}
+			}
+
+			if len(sourceCollectionIDs) > 0 {
+				if err := tx.Where("collection_id IN ?", sourceCollectionIDs).Delete(&model.PostCollection{}).Error; err != nil {
+					return err
+				}
+			}
+
+			if err := tx.Where("channel_id = ?", channel.ID).Delete(&model.Collection{}).Error; err != nil {
+				return err
+			}
+
+			if err := tx.Delete(&channel).Error; err != nil {
+				return err
+			}
+
+			return nil
+		})
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete channel"})
 			return
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	}
+}
+
+// GetCollection returns a single collection by ID
+func GetCollection(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+		var collection model.Collection
+
+		if err := db.Preload("Channel").First(&collection, "id = ?", id).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Collection not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"data": collection, "message": "ok"})
 	}
 }
 
@@ -188,6 +392,57 @@ func GetChannelCollections(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"data": collections, "message": "ok"})
+	}
+}
+
+// GetUserCollections returns all collections for the authenticated user with channel names
+func GetUserCollections(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDVal, exists := c.Get("user_id")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+		userID := userIDVal.(uuid.UUID)
+
+		// Get all channels for this user
+		var userChannels []model.Channel
+		if err := db.Where("user_id = ?", userID).Find(&userChannels).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch channels"})
+			return
+		}
+
+		channelIDs := make([]uuid.UUID, len(userChannels))
+		channelMap := make(map[uuid.UUID]string)
+		for i, ch := range userChannels {
+			channelIDs[i] = ch.ID
+			channelMap[ch.ID] = ch.Name
+		}
+
+		// Get all collections for these channels
+		var collections []model.Collection
+		if len(channelIDs) > 0 {
+			if err := db.Where("channel_id IN ?", channelIDs).Order("created_at DESC").Find(&collections).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch collections"})
+				return
+			}
+		}
+
+		// Add channel_name to each collection
+		type CollectionWithChannel struct {
+			model.Collection
+			ChannelName string `json:"channel_name"`
+		}
+
+		result := make([]CollectionWithChannel, len(collections))
+		for i, col := range collections {
+			result[i] = CollectionWithChannel{
+				Collection:  col,
+				ChannelName: channelMap[col.ChannelID],
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"data": result, "message": "ok"})
 	}
 }
 
@@ -207,6 +462,13 @@ func CreateCollection(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		input.Name = normalizeName(input.Name)
+		input.Description = strings.TrimSpace(input.Description)
+		if input.Name == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Collection name is required"})
+			return
+		}
+
 		// Verify channel exists and belongs to user
 		var channel model.Channel
 		if err := db.First(&channel, "id = ?", channelID).Error; err != nil {
@@ -219,6 +481,16 @@ func CreateCollection(db *gorm.DB) gin.HandlerFunc {
 
 		if channel.UserID != userID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to add collections to this channel"})
+			return
+		}
+
+		exists, err := collectionNameExists(db, channelID, input.Name, nil)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate collection name"})
+			return
+		}
+		if exists {
+			c.JSON(http.StatusConflict, gin.H{"error": "Collection name already exists in this channel"})
 			return
 		}
 
@@ -248,6 +520,13 @@ func UpdateCollection(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		input.Name = normalizeName(input.Name)
+		input.Description = strings.TrimSpace(input.Description)
+		if input.Name == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Collection name is required"})
+			return
+		}
+
 		var collection model.Collection
 		if err := db.Preload("Channel").First(&collection, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Collection not found"})
@@ -259,6 +538,23 @@ func UpdateCollection(db *gorm.DB) gin.HandlerFunc {
 
 		if collection.Channel.UserID != userID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to update this collection"})
+			return
+		}
+
+		// Prevent renaming default collection
+		if collection.IsDefault && input.Name != collection.Name {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot rename default collection"})
+			return
+		}
+
+		excludeID := collection.ID
+		exists, err := collectionNameExists(db, collection.ChannelID, input.Name, &excludeID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate collection name"})
+			return
+		}
+		if exists {
+			c.JSON(http.StatusConflict, gin.H{"error": "Collection name already exists in this channel"})
 			return
 		}
 

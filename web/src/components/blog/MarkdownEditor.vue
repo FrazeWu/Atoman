@@ -1,614 +1,786 @@
 <template>
-  <div class="markdown-editor">
-    <!-- Toolbar -->
-    <div class="toolbar">
+<div class="markdown-editor-wrapper" :class="{ 'fullscreen': isFullscreen }">
+<div class="markdown-editor">
+
+  <div class="editor-title-bar" v-if="!hideTitle">
+    <input
+      type="text"
+      :value="localTitle"
+      @input="onTitleInput"
+      :placeholder="titlePlaceholder"
+      class="title-input"
+    />
+  </div>
+
+  <div class="editor-toolbar">
+    <div class="toolbar-group">
       <button
-        v-for="btn in toolbarButtons"
-        :key="btn.label"
+        v-for="(btn, idx) in basicButtons"
+        :key="idx"
         type="button"
         @click="btn.action"
-        :title="btn.title"
         class="toolbar-btn"
-        :class="btn.monospace ? 'mono' : ''"
-      >
-        {{ btn.label }}
-      </button>
+        :title="btn.title"
+      >{{ btn.label }}</button>
     </div>
-
-    <!-- Typora body -->
-    <div class="md-body" ref="bodyRef" @mousedown="onBodyMousedown">
-      <div class="md-title-wrap">
-        <input
-          class="md-title-input"
-          :value="titleText"
-          :placeholder="titlePlaceholder"
-          @input="onTitleInput"
-          spellcheck="false"
-        />
-      </div>
-
-      <div class="md-title-notch" aria-hidden="true"></div>
-
-      <div
-        v-for="(block, i) in contentBlocks"
-        :key="i"
-        class="md-block md-content-block"
-        :class="{ focused: focusedIndex === i + 1 }"
-      >
-        <div class="md-line-nos" aria-hidden="true">
-          <span v-for="n in blockLineCount(block)" :key="n">
-            {{ blockStartLine(i + 1) + n - 1 }}
-          </span>
-        </div>
-
-        <!-- Raw editing textarea: only shown when focused -->
-        <textarea
-          v-if="focusedIndex === i + 1"
-          :ref="(el) => setBlockRef(el as HTMLTextAreaElement | null, i + 1)"
-          class="md-raw"
-          :value="block"
-          @input="onBlockInput(i + 1, $event)"
-          @blur="onBlockBlur(i + 1)"
-          @keydown="onBlockKeydown(i + 1, $event)"
-          spellcheck="false"
-          rows="1"
-        />
-        <!-- Rendered preview: shown when not focused -->
-        <div
-          v-else
-          class="md-rendered prose-output"
-          :class="{ empty: !block.trim() }"
-          v-html="renderBlock(block)"
-          @mousedown="onRenderedMousedown(i + 1, $event)"
-        />
-      </div>
+    <div class="toolbar-divider"></div>
+    <div class="toolbar-group">
+      <button
+        v-for="(btn, idx) in headingButtons"
+        :key="idx"
+        type="button"
+        @click="btn.action"
+        class="toolbar-btn toolbar-btn-heading"
+        :title="btn.title"
+      >{{ btn.label }}</button>
+    </div>
+    <div class="toolbar-divider"></div>
+    <div class="toolbar-group">
+      <button
+        v-for="(btn, idx) in codeButtons"
+        :key="idx"
+        type="button"
+        @click="btn.action"
+        class="toolbar-btn toolbar-btn-code"
+        :title="btn.title"
+      >{{ btn.label }}</button>
+    </div>
+    <div class="toolbar-divider"></div>
+    <div class="toolbar-group">
+      <button
+        type="button"
+        @click="triggerImageUpload"
+        class="toolbar-btn toolbar-btn-code"
+        :disabled="imageUploader.isUploading.value"
+        title="插入图片"
+      >图片</button>
+    </div>
+    <div class="toolbar-spacer"></div>
+    <div class="toolbar-group mode-switch">
+      <button
+        type="button"
+        @click="setMode('source')"
+        class="toolbar-btn toolbar-btn-mode"
+        :class="{ active: mode === 'source' }"
+        title="源码分屏模式"
+      >源码</button>
+      <button
+        type="button"
+        @click="setMode('render')"
+        class="toolbar-btn toolbar-btn-mode"
+        :class="{ active: mode === 'render' }"
+        title="单栏所见所得模式"
+      >所见</button>
+    </div>
+    <div class="toolbar-group">
+      <button
+        type="button"
+        @click="toggleFullscreen"
+        class="toolbar-btn toolbar-btn-icon"
+        :title="isFullscreen ? '退出全屏' : '全屏模式'"
+      >⛶</button>
     </div>
   </div>
+
+  <div
+    class="editor-content-wrapper"
+    @dragover.prevent
+    @drop="onDrop"
+  >
+    <div v-show="mode === 'source'" class="editor-panel">
+      <div ref="editorContainerRef" class="codemirror-container"></div>
+    </div>
+    <div v-show="mode === 'source'" class="source-split-divider"></div>
+    <div v-show="mode === 'source'" class="source-preview-panel" ref="sourcePreviewPanelRef">
+      <MarkdownRender
+        v-if="localContent.trim()"
+        :content="localContent"
+        custom-id="source-preview"
+        class="markstream-preview"
+      />
+      <p v-else style="color:#9ca3af;padding:1rem">预览将显示在此处...</p>
+    </div>
+
+    <MarkdownEditorWysiwyg
+      v-show="mode === 'render'"
+      ref="wysiwygEditorRef"
+      :model-value="localContent"
+      :placeholder="placeholder"
+      @update:model-value="onRenderContentUpdate"
+    />
+  </div>
+
+  <div v-if="imageUploader.isUploading.value" class="upload-progress-bar">
+    <div class="upload-progress-fill" :style="{ width: imageUploader.uploadProgress.value + '%' }"></div>
+    <span class="upload-progress-text">上传中 {{ imageUploader.uploadProgress.value }}%</span>
+  </div>
+
+  <div class="editor-status-bar">
+    <div class="status-left">
+      <span class="status-item">字数：{{ wordCount }}</span>
+      <span class="status-divider">|</span>
+      <span class="status-item">阅读时间：{{ readingTime }}</span>
+    </div>
+    <div class="status-right">
+      <span v-if="imageUploader.uploadError.value" class="status-item error">
+        {{ imageUploader.uploadError.value }}
+      </span>
+      <span class="status-item saved">{{ autoSaved ? '已保存 ✓' : '未保存' }}</span>
+    </div>
+  </div>
+
+  <input
+    ref="imageFileInputRef"
+    type="file"
+    accept="image/jpeg,image/png,image/gif,image/webp"
+    class="hidden"
+    @change="imageUploader.handleFileInput"
+  />
+
+</div>
+</div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, nextTick, onMounted } from 'vue'
-import { useMarkdownRenderer } from '@/composables/useMarkdownRenderer'
+import { ref, watch, onMounted, onBeforeUnmount, computed, nextTick, shallowRef } from 'vue'
+import {
+  EditorView,
+  lineNumbers,
+  keymap,
+  highlightActiveLine,
+} from '@codemirror/view'
+import { EditorState } from '@codemirror/state'
+import { defaultKeymap, historyKeymap, history, indentWithTab } from '@codemirror/commands'
+import { markdown } from '@codemirror/lang-markdown'
+import { languages } from '@codemirror/language-data'
+import 'highlight.js/styles/github-dark.css'
+import MarkdownRender from 'markstream-vue'
+import 'markstream-vue/index.css'
+import MarkdownEditorWysiwyg from './MarkdownEditorWysiwyg.vue'
+import { useAutoSave } from './composables/useAutoSave'
+import { useImageUpload } from './composables/useImageUpload'
 
-const props = defineProps<{
-  modelValue: string
+interface Props {
+  modelValue?: string
+  hideTitle?: boolean
+  titleText?: string
+  titlePlaceholder?: string
+  postId?: string
   placeholder?: string
-}>()
+}
+
+interface MarkdownEditorWysiwygExposed {
+  focusEnd: () => void
+  getMarkdown: () => string
+  setContent: (markdown: string) => void
+  insertMarkdownAtCursor: (before: string, after: string, placeholder: string) => void
+  insertLinePrefixAtCursor: (prefix: string) => void
+  replaceInMarkdown: (search: string, replacement: string) => void
+  mount: () => void
+  unmount: () => void
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  modelValue: '',
+  hideTitle: false,
+  titleText: '',
+  titlePlaceholder: '请输入标题',
+  postId: '',
+  placeholder: '',
+})
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
+  'update:titleText': [value: string]
 }>()
 
-const { renderMarkdown } = useMarkdownRenderer()
+const editorContainerRef = ref<HTMLDivElement | null>(null)
+const sourcePreviewPanelRef = ref<HTMLElement | null>(null)
+const imageFileInputRef = ref<HTMLInputElement | null>(null)
+const wysiwygEditorRef = ref<MarkdownEditorWysiwygExposed | null>(null)
+const editorView = shallowRef<EditorView | null>(null)
+const localContent = ref(props.modelValue)
+const localTitle = ref(props.titleText)
+const isFullscreen = ref(false)
+const mode = ref<'source' | 'render'>('source')
 
-function splitBlocks(raw: string): string[] {
-  const parts = raw.split(/\n\n+/)
-  return parts.length ? parts : ['']
+function emitContent(value: string) {
+  localContent.value = value
+  emit('update:modelValue', value)
 }
 
-function normalizeBlocks(raw: string): string[] {
-  const parts = splitBlocks(raw || '')
-  if (!parts.length) return ['# ', '']
-
-  const first = parts[0]?.trim() || ''
-  if (/^#{1,6}\s+/.test(first)) {
-    parts[0] = first
-  } else {
-    parts[0] = first ? `# ${first}` : '# '
-  }
-
-  if (parts.length === 1) {
-    parts.push('')
-  }
-
-  return parts
+function withWysiwygEditor(callback: (editor: MarkdownEditorWysiwygExposed) => void) {
+  const editor = wysiwygEditorRef.value
+  if (editor) callback(editor)
 }
 
-function titleFromBlock(block: string): string {
-  return (block || '').replace(/^#{1,6}\s*/, '').trim()
+function onRenderContentUpdate(value: string) {
+  emitContent(value)
 }
 
-const localBlocks = ref<string[]>(normalizeBlocks(props.modelValue || ''))
-const focusedIndex = ref<number | null>(null)
-const bodyRef = ref<HTMLDivElement | null>(null)
-let blurTimer: ReturnType<typeof setTimeout> | null = null
-
-const titlePlaceholder = props.placeholder || '文章标题...'
-
-const contentBlocks = computed(() => localBlocks.value.slice(1))
-const titleText = computed(() => titleFromBlock(localBlocks.value[0] || ''))
-
-// Store click coordinates to restore cursor position after textarea mounts
-const pendingClickPos = ref<{ x: number; y: number } | null>(null)
-
-const blockRefs: (HTMLTextAreaElement | null)[] = []
-function setBlockRef(el: HTMLTextAreaElement | null, i: number) {
-  blockRefs[i] = el
-  // If we have a pending click position, use it to place the cursor
-  if (el && pendingClickPos.value) {
-    const { x, y } = pendingClickPos.value
-    pendingClickPos.value = null
-    nextTick(() => {
-      autoResize(el)
-      el.focus()
-      const offset = getCaretOffsetFromPoint(el, x, y)
-      if (offset !== null) {
-        el.selectionStart = el.selectionEnd = offset
-      }
-    })
-  }
-}
-
-watch(
-  () => props.modelValue,
-  (val) => {
-    const current = localBlocks.value.join('\n\n')
-    if (val !== current) {
-      localBlocks.value = normalizeBlocks(val || '')
-      focusedIndex.value = null
-    }
-  }
+const { autoSaved, triggerAutoSave, checkForDraft, clearDraft } = useAutoSave(
+  () => localContent.value,
+  () => localTitle.value,
+  () => props.postId,
+  (content, title) => {
+    localContent.value = content
+    localTitle.value = title
+    emit('update:modelValue', content)
+    emit('update:titleText', title)
+    syncToActiveEditor()
+  },
 )
 
-function onTitleInput(e: Event) {
-  const raw = (e.target as HTMLInputElement).value || ''
-  localBlocks.value[0] = raw.trim() ? `# ${raw.trim()}` : '# '
-  syncToModel()
-}
+watch(localContent, triggerAutoSave)
+watch(localTitle, triggerAutoSave)
 
-function syncToModel() {
-  emit('update:modelValue', localBlocks.value.join('\n\n'))
-}
-
-function renderBlock(md: string): string {
-  if (!md.trim()) return ''
-  return renderMarkdown(md)
-}
-
-function autoResize(el: HTMLTextAreaElement) {
-  el.style.height = 'auto'
-  el.style.height = el.scrollHeight + 'px'
-}
-
-// Convert a pixel point to a textarea character offset using a hidden mirror div
-function getCaretOffsetFromPoint(ta: HTMLTextAreaElement, x: number, y: number): number | null {
-  // Use caretPositionFromPoint / caretRangeFromPoint on the textarea itself
-  // Textarea text nodes are not in the DOM tree directly, so we use a mirror approach.
-  // Simpler: use document.elementFromPoint after the textarea is positioned, then
-  // fall back to the native caret APIs which work on rendered text nodes.
-  try {
-    // Standard (Firefox)
-    if ('caretPositionFromPoint' in document) {
-      const pos = (document as any).caretPositionFromPoint(x, y)
-      if (pos) return Math.min(pos.offset, ta.value.length)
+const imageUploader = useImageUpload(
+  (text: string) => {
+    if (mode.value === 'source') {
+      const view = editorView.value
+      if (!view) return
+      const { from, to } = view.state.selection.main
+      view.dispatch({
+        changes: { from, to, insert: text },
+        selection: { anchor: from + text.length },
+      })
+      view.focus()
+      emitContent(view.state.doc.toString())
+    } else {
+      withWysiwygEditor((editor) => {
+        editor.insertMarkdownAtCursor('', '', text)
+      })
     }
-    // WebKit/Blink
-    if ('caretRangeFromPoint' in document) {
-      const range = (document as any).caretRangeFromPoint(x, y)
-      if (range) return Math.min(range.startOffset, ta.value.length)
+  },
+  (search: string, replacement: string) => {
+    if (mode.value === 'source') {
+      const view = editorView.value
+      if (!view) return
+      const doc = view.state.doc.toString()
+      const idx = doc.indexOf(search)
+      if (idx >= 0) {
+        view.dispatch({
+          changes: { from: idx, to: idx + search.length, insert: replacement },
+        })
+        emitContent(view.state.doc.toString())
+      }
+    } else {
+      withWysiwygEditor((editor) => {
+        editor.replaceInMarkdown(search, replacement)
+      })
     }
-  } catch (_) {}
+  },
+)
 
-  // Fallback: place at end
-  return ta.value.length
-}
-
-// Called when user clicks on md-body padding area (not on a block)
-function onBodyMousedown(e: MouseEvent) {
-  // If click target is the body itself (not a child block), focus last block
-  if (e.target === bodyRef.value) {
-    e.preventDefault()
-    focusBlock(localBlocks.value.length - 1)
+function triggerImageUpload() {
+  if (imageFileInputRef.value) {
+    imageUploader.openFilePicker(imageFileInputRef.value)
   }
 }
 
-// Called on mousedown so we capture coords before the rendered div is replaced by textarea
-function onRenderedMousedown(i: number, e: MouseEvent) {
-  if (blurTimer) {
-    clearTimeout(blurTimer)
-    blurTimer = null
-  }
-  e.preventDefault()
-  pendingClickPos.value = { x: e.clientX, y: e.clientY }
-  focusedIndex.value = i
-
-  // Ensure we always re-enter edit mode, even if caret-from-point APIs fail.
-  nextTick(() => {
-    const el = blockRefs[i]
-    if (!el) return
-    autoResize(el)
-    el.focus()
-  })
+function onDrop(e: DragEvent) {
+  imageUploader.handleDrop(e)
 }
 
-function focusBlock(i: number) {
-  if (blurTimer) {
-    clearTimeout(blurTimer)
-    blurTimer = null
-  }
-  pendingClickPos.value = null
-  focusedIndex.value = i
-  nextTick(() => {
-    const el = blockRefs[i]
-    if (el) {
-      autoResize(el)
-      el.focus()
-      el.selectionStart = el.selectionEnd = el.value.length
+function onEditorPaste(e: ClipboardEvent) {
+  imageUploader.handlePaste(e)
+}
+
+function mountRenderEditor() {
+  withWysiwygEditor((editor) => {
+    editor.mount()
+    if (editor.getMarkdown() !== localContent.value) {
+      editor.setContent(localContent.value)
     }
   })
 }
 
-function onBlockInput(i: number, e: Event) {
-  const val = (e.target as HTMLTextAreaElement).value
-  localBlocks.value[i] = val
-  autoResize(e.target as HTMLTextAreaElement)
-  syncToModel()
-}
+function setMode(newMode: 'source' | 'render') {
+  if (mode.value === newMode) return
 
-function onBlockBlur(i: number) {
-  if (blurTimer) {
-    clearTimeout(blurTimer)
-  }
-
-  blurTimer = setTimeout(() => {
-    const root = bodyRef.value
-    const active = document.activeElement as Node | null
-
-    // If focus moved to another element inside editor body, keep editing state.
-    if (root && active && root.contains(active)) {
-      return
-    }
-
-    if (focusedIndex.value === i) {
-      focusedIndex.value = null
-    }
-  }, 0)
-}
-
-function getLineCol(ta: HTMLTextAreaElement): { line: number; col: number; totalLines: number } {
-  const val = ta.value
-  const pos = ta.selectionStart
-  const before = val.substring(0, pos)
-  const lines = before.split('\n')
-  const line = lines.length - 1
-  const col = lines[line].length
-  const totalLines = val.split('\n').length
-  return { line, col, totalLines }
-}
-
-function focusBlockAtCol(targetI: number, col: number, fromBottom: boolean) {
-  pendingClickPos.value = null
-  focusedIndex.value = targetI
-  nextTick(() => {
-    const el = blockRefs[targetI]
-    if (!el) return
-    autoResize(el)
-    el.focus()
-    const lines = el.value.split('\n')
-    const targetLine = fromBottom ? lines.length - 1 : 0
-    const lineStart = lines.slice(0, targetLine).reduce((acc, l) => acc + l.length + 1, 0)
-    const lineLen = lines[targetLine]?.length ?? 0
-    el.selectionStart = el.selectionEnd = lineStart + Math.min(col, lineLen)
-  })
-}
-
-function onBlockKeydown(i: number, e: KeyboardEvent) {
-  const ta = e.target as HTMLTextAreaElement
-
-  if (e.key === 'Tab') {
-    e.preventDefault()
-    const start = ta.selectionStart
-    const end = ta.selectionEnd
-    const val = ta.value
-    const newVal = val.substring(0, start) + '  ' + val.substring(end)
-    localBlocks.value[i] = newVal
-    syncToModel()
-    nextTick(() => {
-      ta.selectionStart = ta.selectionEnd = start + 2
-      autoResize(ta)
+  if (mode.value === 'source' && editorView.value) {
+    localContent.value = editorView.value.state.doc.toString()
+  } else if (mode.value === 'render') {
+    withWysiwygEditor((editor) => {
+      emitContent(editor.getMarkdown())
+      editor.unmount()
     })
-    return
-  }
 
-  if (e.key === 'ArrowUp') {
-    const { line, col } = getLineCol(ta)
-    if (line === 0 && i > 1) {
-      e.preventDefault()
-      focusBlockAtCol(i - 1, col, true)
+    const view = editorView.value
+    if (view) {
+      const current = view.state.doc.toString()
+      if (current !== localContent.value) {
+        view.dispatch({ changes: { from: 0, to: current.length, insert: localContent.value } })
+      }
     }
-    return
   }
 
-  if (e.key === 'ArrowDown') {
-    const { line, col, totalLines } = getLineCol(ta)
-    if (line === totalLines - 1 && i < localBlocks.value.length - 1) {
-      e.preventDefault()
-      focusBlockAtCol(i + 1, col, false)
-    }
-    return
-  }
+  mode.value = newMode
 
-  if (e.key === 'Enter' && !e.shiftKey) {
-    const atEnd = ta.selectionStart === ta.value.length
-    const inList = /^(\s*[-*+]|\s*\d+\.) /.test(ta.value.split('\n').at(-1) || '')
-    const inCode = (ta.value.match(/```/g) || []).length % 2 !== 0
-    if (atEnd && !inList && !inCode) {
-      e.preventDefault()
-      localBlocks.value.splice(i + 1, 0, '')
-      syncToModel()
-      nextTick(() => focusBlock(i + 1))
-    }
-    return
-  }
-
-  if (e.key === 'Backspace' && ta.value === '' && localBlocks.value.length > 2) {
-    e.preventDefault()
-    localBlocks.value.splice(i, 1)
-    syncToModel()
-    nextTick(() => focusBlock(Math.max(0, i - 1)))
-    return
+  if (newMode === 'render') {
+    nextTick(() => {
+      mountRenderEditor()
+      withWysiwygEditor((editor) => {
+        editor.focusEnd()
+      })
+    })
+  } else {
+    nextTick(() => editorView.value?.focus())
   }
 }
 
-function getActiveTa(): HTMLTextAreaElement | null {
-  if (focusedIndex.value === null) return null
-  return blockRefs[focusedIndex.value] ?? null
+function syncToActiveEditor() {
+  if (mode.value === 'source') {
+    const view = editorView.value
+    if (view && view.state.doc.toString() !== localContent.value) {
+      view.dispatch({
+        changes: { from: 0, to: view.state.doc.length, insert: localContent.value },
+      })
+    }
+  } else {
+    mountRenderEditor()
+  }
 }
 
 function wrap(before: string, after: string, placeholder: string) {
-  const ta = getActiveTa()
-  if (!ta) return
-  const i = focusedIndex.value!
-  const start = ta.selectionStart
-  const end = ta.selectionEnd
-  const selected = ta.value.substring(start, end) || placeholder
-  const newVal = ta.value.substring(0, start) + before + selected + after + ta.value.substring(end)
-  localBlocks.value[i] = newVal
-  syncToModel()
-  nextTick(() => {
-    ta.focus()
-    ta.selectionStart = start + before.length
-    ta.selectionEnd = start + before.length + selected.length
-    autoResize(ta)
-  })
+  if (mode.value === 'source') {
+    const view = editorView.value
+    if (!view) return
+    const { from, to } = view.state.selection.main
+    const selected = view.state.sliceDoc(from, to) || placeholder
+    view.dispatch({
+      changes: { from, to, insert: before + selected + after },
+      selection: { anchor: from + before.length, head: from + before.length + selected.length },
+    })
+    view.focus()
+    emitContent(view.state.doc.toString())
+  } else {
+    withWysiwygEditor((editor) => {
+      editor.insertMarkdownAtCursor(before, after, placeholder)
+    })
+  }
 }
 
 function insertLine(prefix: string) {
-  const ta = getActiveTa()
-  if (!ta) return
-  const i = focusedIndex.value!
-  const start = ta.selectionStart
-  const val = ta.value
-  const lineStart = val.lastIndexOf('\n', start - 1) + 1
-  const newVal = val.substring(0, lineStart) + prefix + val.substring(lineStart)
-  localBlocks.value[i] = newVal
-  syncToModel()
+  if (mode.value === 'source') {
+    const view = editorView.value
+    if (!view) return
+    const { from } = view.state.selection.main
+    const line = view.state.doc.lineAt(from)
+    view.dispatch({
+      changes: { from: line.from, to: line.from, insert: prefix },
+      selection: { anchor: line.from + prefix.length },
+    })
+    view.focus()
+    emitContent(view.state.doc.toString())
+  } else {
+    withWysiwygEditor((editor) => {
+      editor.insertLinePrefixAtCursor(prefix)
+    })
+  }
+}
+
+const basicButtons = [
+  { label: '粗体', title: '粗体 (Ctrl+B)', action: () => wrap('**', '**', '粗体文字') },
+  { label: '斜体', title: '斜体', action: () => wrap('*', '*', '斜体文字') },
+  { label: '删除线', title: '删除线', action: () => wrap('~~', '~~', '删除线') },
+]
+
+const headingButtons = [
+  { label: 'H1', title: '一级标题', action: () => insertLine('# ') },
+  { label: 'H2', title: '二级标题', action: () => insertLine('## ') },
+  { label: 'H3', title: '三级标题', action: () => insertLine('### ') },
+]
+
+const codeButtons = [
+  { label: '行内代码', title: '行内代码', action: () => wrap('`', '`', 'code') },
+  { label: '代码块', title: '代码块', action: () => wrap('```\n', '\n```', 'code') },
+  { label: '引用', title: '引用', action: () => insertLine('> ') },
+  { label: '分割线', title: '分割线', action: () => insertLine('\n---\n') },
+  { label: '链接', title: '链接', action: () => wrap('[', '](url)', '链接文字') },
+]
+
+const wordCount = computed(() => {
+  const text = localContent.value.trim()
+  if (!text) return 0
+  const chinese = (text.match(/[一-龥]/g) || []).length
+  const english = (text.match(/[a-zA-Z]+/g) || []).length
+  return chinese + english
+})
+
+const readingTime = computed(() => {
+  const count = wordCount.value
+  const minutes = Math.ceil(count / 400)
+  return minutes < 1 ? '< 1分钟' : `${minutes}分钟`
+})
+
+function onTitleInput(e: Event) {
+  const target = e.target as HTMLInputElement
+  localTitle.value = target.value
+  emit('update:titleText', target.value)
+}
+
+function toggleFullscreen() {
+  isFullscreen.value = !isFullscreen.value
   nextTick(() => {
-    ta.focus()
-    ta.selectionStart = ta.selectionEnd = start + prefix.length
-    autoResize(ta)
+    if (mode.value === 'source') {
+      editorView.value?.focus()
+    } else {
+      mountRenderEditor()
+      withWysiwygEditor((editor) => {
+        editor.focusEnd()
+      })
+    }
   })
 }
 
-function ensureFocused() {
-  if (focusedIndex.value === null) {
-    focusBlock(localBlocks.value.length - 1)
-  }
+function onEditorScroll() {
+  const scroller = editorView.value?.scrollDOM
+  const preview = sourcePreviewPanelRef.value
+  if (!scroller || !preview) return
+  const scrollableHeight = scroller.scrollHeight - scroller.clientHeight
+  if (scrollableHeight <= 0) return
+  const ratio = scroller.scrollTop / scrollableHeight
+  preview.scrollTop = ratio * (preview.scrollHeight - preview.clientHeight)
 }
-
-const toolbarButtons = [
-  { label: 'B', title: '粗体', monospace: false, action: () => { ensureFocused(); nextTick(() => wrap('**', '**', '粗体文字')) } },
-  { label: 'I', title: '斜体', monospace: false, action: () => { ensureFocused(); nextTick(() => wrap('*', '*', '斜体文字')) } },
-  { label: '~~', title: '删除线', monospace: true, action: () => { ensureFocused(); nextTick(() => wrap('~~', '~~', '删除线')) } },
-  { label: 'H1', title: '一级标题', monospace: false, action: () => { ensureFocused(); nextTick(() => insertLine('# ')) } },
-  { label: 'H2', title: '二级标题', monospace: false, action: () => { ensureFocused(); nextTick(() => insertLine('## ')) } },
-  { label: 'H3', title: '三级标题', monospace: false, action: () => { ensureFocused(); nextTick(() => insertLine('### ')) } },
-  { label: '`code`', title: '行内代码', monospace: true, action: () => { ensureFocused(); nextTick(() => wrap('`', '`', 'code')) } },
-  { label: '```', title: '代码块', monospace: true, action: () => { ensureFocused(); nextTick(() => wrap('```\n', '\n```', 'code')) } },
-  { label: '> 引用', title: '引用', monospace: false, action: () => { ensureFocused(); nextTick(() => insertLine('> ')) } },
-  { label: '— 分割线', title: '分割线', monospace: false, action: () => { ensureFocused(); nextTick(() => insertLine('\n---\n')) } },
-  { label: '链接', title: '链接', monospace: false, action: () => { ensureFocused(); nextTick(() => wrap('[', '](url)', '链接文字')) } },
-]
 
 onMounted(() => {
-  if (localBlocks.value.length === 0) localBlocks.value = ['# ', '']
+  if (!editorContainerRef.value) return
+
+  checkForDraft()
+
+  const updateListener = EditorView.updateListener.of((update) => {
+    if (update.docChanged) {
+      emitContent(update.state.doc.toString())
+    }
+  })
+
+  editorView.value = new EditorView({
+    state: EditorState.create({
+      doc: localContent.value,
+      extensions: [
+        lineNumbers(),
+        history(),
+        highlightActiveLine(),
+        EditorView.lineWrapping,
+        markdown({ codeLanguages: languages }),
+        updateListener,
+        keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+        EditorView.theme({
+          '&': { height: '100%' },
+          '.cm-scroller': {
+            overflow: 'auto',
+            fontFamily: 'JetBrains Mono, Fira Code, monospace',
+            fontSize: '0.9375rem',
+          },
+          '.cm-line': { padding: '0 4px' },
+          '.cm-gutters': { backgroundColor: '#f9fafb', borderRight: '2px solid #000' },
+        }),
+        EditorView.domEventHandlers({
+          paste: (e) => {
+            onEditorPaste(e)
+          },
+        }),
+      ],
+    }),
+    parent: editorContainerRef.value,
+  })
+
+  editorView.value.scrollDOM.addEventListener('scroll', onEditorScroll, { passive: true })
 })
 
-function blockLineCount(text: string): number {
-  return Math.max(1, text.split('\n').length)
-}
+onBeforeUnmount(() => {
+  editorView.value?.scrollDOM.removeEventListener('scroll', onEditorScroll)
+  editorView.value?.destroy()
+  withWysiwygEditor((editor) => {
+    editor.unmount()
+  })
+})
 
-function blockStartLine(blockIndex: number): number {
-  // Line numbers are only for content blocks, title is excluded.
-  let line = 1
-  for (let i = 1; i < blockIndex; i++) {
-    line += blockLineCount(localBlocks.value[i] || '') + 1
-  }
-  return line
-}
+watch(
+  () => props.modelValue,
+  (newVal) => {
+    if (newVal === localContent.value) return
+    localContent.value = newVal
+    syncToActiveEditor()
+  },
+)
+
+defineExpose({ clearDraft })
 </script>
 
 <style scoped>
+.markdown-editor-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 600px;
+}
+
+.markdown-editor-wrapper.fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  background: white;
+}
+
 .markdown-editor {
-  border: 2px solid #000;
   display: flex;
   flex-direction: column;
   height: 100%;
-  min-height: 0;
+  background: #fff;
+  border: 2px solid #000;
 }
-.toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  padding: 0.375rem 0.75rem;
+
+.editor-title-bar {
   border-bottom: 2px solid #000;
-  background: #f9fafb;
+  padding: 1rem;
+  background: #fff;
   flex-shrink: 0;
 }
-.toolbar-btn {
-  padding: 0.2rem 0.45rem;
-  font-size: 0.75rem;
+
+.title-input {
+  width: 100%;
+  font-size: 1.5rem;
   font-weight: 900;
-  border: 1px solid #000;
+  border: 2px solid #000;
+  padding: 0.75rem 1rem;
+  outline: none;
+  transition: box-shadow 0.2s;
+}
+
+.title-input:focus {
+  box-shadow: 5px 5px 0 0 rgba(0, 0, 0, 1);
+}
+
+.title-input::placeholder {
+  color: #9ca3af;
+  font-weight: 700;
+}
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-bottom: 2px solid #000;
+  background: #fff;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.toolbar-group {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.toolbar-divider {
+  width: 2px;
+  height: 2rem;
+  background: #000;
+  margin: 0 0.5rem;
+}
+
+.toolbar-spacer {
+  flex: 1;
+}
+
+.mode-switch {
+  border: 2px solid #000;
+  gap: 0;
+}
+
+.toolbar-btn-mode {
+  border: 0;
+  border-right: 2px solid #000;
+}
+
+.toolbar-btn-mode:last-child {
+  border-right: 0;
+}
+
+.toolbar-btn {
+  padding: 0.5rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 2px solid #000;
   background: #fff;
   cursor: pointer;
   transition: all 0.15s;
 }
-.toolbar-btn:hover { background: #000; color: #fff; }
-.toolbar-btn.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.md-body {
+
+.toolbar-btn:hover {
+  background: #000;
+  color: #fff;
+}
+
+.toolbar-btn:active {
+  transform: translate(1px, 1px);
+}
+
+.toolbar-btn.active {
+  background: #000;
+  color: #fff;
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mode-switch .toolbar-btn-mode {
+  border: 0;
+  border-right: 2px solid #000;
+}
+
+.mode-switch .toolbar-btn-mode:last-child {
+  border-right: 0;
+}
+
+.toolbar-btn-heading {
+  font-family: monospace;
+  font-size: 0.75rem;
+}
+
+.toolbar-btn-code {
+  font-family: monospace;
+}
+
+.toolbar-btn-icon {
+  font-size: 1rem;
+  padding: 0.5rem 0.625rem;
+}
+
+.editor-content-wrapper {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  background: #f9fafb;
+}
+
+.editor-panel {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  background: #fff;
+}
+
+.source-split-divider {
+  width: 2px;
+  background: #000;
+  flex-shrink: 0;
+}
+
+.source-preview-panel {
   flex: 1;
   overflow-y: auto;
-  padding: 1.25rem 2.5rem 1.5rem;
-  max-width: 800px;
-  margin: 0 auto;
-  width: 100%;
-  box-sizing: border-box;
+  padding: 1.5rem 2rem;
+  background: #fafafa;
 }
-.md-title-wrap {
-  padding: 0.25rem 0 0.4rem;
+
+.codemirror-container {
+  flex: 1;
+  height: 100%;
+  overflow: hidden;
 }
-.md-title-input {
-  width: 100%;
-  border: none;
-  outline: none;
-  background: transparent;
-  font-size: 2.1rem;
-  font-weight: 900;
-  letter-spacing: -0.04em;
-  line-height: 1.1;
-  padding: 0;
+
+.markstream-preview {
+  font-size: 0.9375rem;
+  line-height: 1.75;
 }
-.md-title-input::placeholder {
-  color: #d1d5db;
-}
-.md-title-notch {
-  height: 0;
-  border-top: 2px solid #000;
-  margin: 0.3rem 0 0.8rem;
-}
-.md-block {
+
+.upload-progress-bar {
   position: relative;
+  height: 1.75rem;
+  background: #f3f4f6;
+  border-top: 2px solid #000;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
 }
-.md-content-block {
-  padding-left: 3rem;
-}
-.md-line-nos {
+
+.upload-progress-fill {
   position: absolute;
   left: 0;
   top: 0;
-  width: 2.4rem;
-  text-align: right;
-  color: #9ca3af;
-  font-size: 0.72rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  line-height: 1.5;
-  user-select: none;
-  pointer-events: none;
+  bottom: 0;
+  background: #000;
+  transition: width 0.2s;
+}
+
+.upload-progress-text {
+  position: relative;
+  z-index: 1;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #fff;
+  mix-blend-mode: difference;
+  padding: 0 0.75rem;
+}
+
+.editor-status-bar {
   display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-.md-raw {
-  width: 100%;
-  border: none;
-  outline: none;
-  resize: none;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.9rem;
-  line-height: 1.5;
-  padding: 1px 0;
-  background: #fafaf7;
-  overflow: hidden;
-  display: block;
-  box-sizing: border-box;
-}
-.md-block.focused .md-raw {
-  background: #fffdf0;
-}
-.md-rendered {
-  min-height: 1.4em;
-  cursor: text;
-  padding: 1px 0;
-}
-.md-rendered.empty::before {
-  content: attr(data-placeholder);
-  color: #d1d5db;
-  font-style: italic;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  border-top: 2px solid #000;
+  background: #f9fafb;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  flex-shrink: 0;
 }
 
-@media (max-width: 900px) {
-  .md-body {
-    padding: 1rem 1rem 1.25rem;
+.status-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.status-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.status-item {
+  color: #374151;
+}
+
+.status-divider {
+  color: #9ca3af;
+}
+
+.status-item.saved {
+  color: #059669;
+}
+
+.status-item.error {
+  color: #dc2626;
+  font-size: 0.75rem;
+}
+
+.hidden {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .editor-toolbar {
+    gap: 0.25rem;
+    padding: 0.375rem 0.5rem;
   }
 
-  .md-title-input {
-    font-size: 1.6rem;
+  .toolbar-divider {
+    display: none;
   }
 
-  .md-content-block {
-    padding-left: 2.35rem;
-  }
-
-  .md-line-nos {
-    width: 1.8rem;
-    font-size: 0.65rem;
+  .title-input {
+    font-size: 1.25rem;
   }
 }
-</style>
-
-<style>
-.prose-output {
-  font-size: 0.9375rem;
-  line-height: 1.55;
-  word-break: break-word;
-}
-
-.prose-output h1 { font-size: 1.75rem; font-weight: 900; margin: 1rem 0 0.25rem; line-height: 1.2; }
-.prose-output h2 { font-size: 1.375rem; font-weight: 900; margin: 0.875rem 0 0.25rem; line-height: 1.2; }
-.prose-output h3 { font-size: 1.125rem; font-weight: 900; margin: 0.75rem 0 0.2rem; line-height: 1.2; }
-.prose-output h4, .prose-output h5, .prose-output h6 { font-weight: 700; margin: 0.5rem 0 0.2rem; }
-.prose-output p { margin: 0.35rem 0; }
-.prose-output code {
-  background: #f3f4f6;
-  padding: 0.1em 0.35em;
-  font-size: 0.85em;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  border: 1px solid #e5e7eb;
-}
-.prose-output pre {
-  background: #111;
-  color: #f8f8f2;
-  padding: 1rem;
-  overflow-x: auto;
-  margin: 0.625rem 0;
-}
-.prose-output pre code {
-  background: none;
-  padding: 0;
-  color: inherit;
-  font-size: 0.875rem;
-  border: none;
-}
-.prose-output blockquote {
-  border-left: 4px solid black;
-  padding: 0.15rem 0 0.15rem 1rem;
-  margin: 0.625rem 0;
-  color: #555;
-}
-.prose-output blockquote > p { margin: 0.15rem 0; }
-.prose-output ul { list-style-type: disc; padding-left: 1.5rem; margin: 0.375rem 0; }
-.prose-output ol { list-style-type: decimal; padding-left: 1.5rem; margin: 0.375rem 0; }
-.prose-output li { margin: 0.1rem 0; }
-.prose-output li p { margin: 0; }
-.prose-output hr { border: none; border-top: 2px solid black; margin: 1rem 0; }
-.prose-output a { text-decoration: underline; color: inherit; }
-.prose-output a:hover { opacity: 0.7; }
-.prose-output img { max-width: 100%; border: 2px solid black; }
-.prose-output strong { font-weight: 900; }
-.prose-output em { font-style: italic; }
-.prose-output table { border-collapse: collapse; width: 100%; margin: 0.625rem 0; }
-.prose-output th, .prose-output td { border: 2px solid black; padding: 0.375rem 0.625rem; text-align: left; }
-.prose-output th { font-weight: 900; background: #f3f4f6; }
-.prose-output ::selection { background: rgba(0, 0, 0, 0.12); }
 </style>

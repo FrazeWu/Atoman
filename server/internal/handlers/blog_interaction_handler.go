@@ -65,7 +65,11 @@ type BookmarkFolderInput struct {
 // GetPostComments returns all visible comments for a post
 func GetPostComments(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		postID := c.Param("id")
+		postID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid post id"})
+			return
+		}
 		var comments []model.Comment
 
 		if err := db.Preload("User").Where("post_id = ? AND status = ?", postID, "visible").Order("created_at ASC").Find(&comments).Error; err != nil {
@@ -80,7 +84,12 @@ func GetPostComments(db *gorm.DB) gin.HandlerFunc {
 // CreateComment creates a new comment on a post
 func CreateComment(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		postID := c.Param("id")
+		postID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid post id"})
+			return
+		}
+
 		var input CommentInput
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -88,7 +97,7 @@ func CreateComment(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		var post model.Post
-		if err := db.First(&post, postID).Error; err != nil {
+		if err := db.Where("id = ?", postID).First(&post).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Post not found"})
 			return
 		}
@@ -132,10 +141,15 @@ func CreateComment(db *gorm.DB) gin.HandlerFunc {
 // DeleteComment deletes a comment (by comment owner or post owner)
 func DeleteComment(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		id := c.Param("id")
+		id, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid comment id"})
+			return
+		}
+
 		var comment model.Comment
 
-		if err := db.Preload("Post").First(&comment, id).Error; err != nil {
+		if err := db.Preload("Post").Where("id = ?", id).First(&comment).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Comment not found"})
 			return
 		}
@@ -203,9 +217,14 @@ func ToggleLike(db *gorm.DB, isLike bool) gin.HandlerFunc {
 			// Create notification if liking someone else's content
 			if targetOwnerID != userID {
 				notification := model.Notification{
-					UserID:     targetOwnerID,
-					Type:       "like",
-					Content:    "有人点赞了你的" + func() string { if input.TargetType == "post" { return "文章" }; return "评论" }(),
+					UserID: targetOwnerID,
+					Type:   "like",
+					Content: "有人点赞了你的" + func() string {
+						if input.TargetType == "post" {
+							return "文章"
+						}
+						return "评论"
+					}(),
 					TargetType: input.TargetType,
 					TargetID:   &input.TargetID,
 				}
@@ -225,7 +244,11 @@ func ToggleLike(db *gorm.DB, isLike bool) gin.HandlerFunc {
 // GetPostLikesCount returns the number of likes for a post
 func GetPostLikesCount(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		postID := c.Param("id")
+		postID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid post id"})
+			return
+		}
 		var count int64
 
 		if err := db.Model(&model.Like{}).Where("target_type = ? AND target_id = ?", "post", postID).Count(&count).Error; err != nil {
@@ -315,7 +338,12 @@ func CreateBookmark(db *gorm.DB) gin.HandlerFunc {
 // DeleteBookmark deletes a bookmark
 func DeleteBookmark(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		id := c.Param("id")
+		id, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid bookmark id"})
+			return
+		}
+
 		userIDVal, _ := c.Get("user_id")
 		userID := userIDVal.(uuid.UUID)
 
@@ -373,12 +401,17 @@ func CreateBookmarkFolder(db *gorm.DB) gin.HandlerFunc {
 // DeleteBookmarkFolder deletes a bookmark folder
 func DeleteBookmarkFolder(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		id := c.Param("id")
+		id, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid bookmark folder id"})
+			return
+		}
+
 		userIDVal, _ := c.Get("user_id")
 		userID := userIDVal.(uuid.UUID)
 
 		// Start transaction to delete folder and update bookmarks
-		err := db.Transaction(func(tx *gorm.DB) error {
+		err = db.Transaction(func(tx *gorm.DB) error {
 			// Set folder_id to null for all bookmarks in this folder
 			if err := tx.Model(&model.Bookmark{}).Where("bookmark_folder_id = ? AND user_id = ?", id, userID).Update("bookmark_folder_id", nil).Error; err != nil {
 				return err

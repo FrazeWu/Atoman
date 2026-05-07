@@ -14,7 +14,7 @@ export interface Album {
   release_date?: string;
   cover_url?: string;
   cover_source?: 'local' | 's3';
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'open' | 'closed' | 'pending' | 'approved' | 'rejected';
   uploaded_by?: number;
   artists?: Artist[];
   created_at?: string;
@@ -35,7 +35,7 @@ export interface Song {
   cover_url: string;
   cover_source?: 'local' | 's3';
   track_number?: number;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'open' | 'closed' | 'pending' | 'approved' | 'rejected';
   uploaded_by?: number;
   artists?: Artist[];
 }
@@ -86,6 +86,7 @@ export type RepeatMode = 'none' | 'one' | 'all'
 
 export interface User {
   id?: number
+  uuid?: string
   username: string
   email: string
   role?: 'user' | 'admin'
@@ -102,8 +103,8 @@ export interface User {
 // ===== Blog Types =====
 
 export interface Channel {
-  id: number
-  user_id: number
+  id: string
+  user_id: string
   user?: User
   name: string
   description?: string
@@ -113,10 +114,11 @@ export interface Channel {
 }
 
 export interface Collection {
-  id: number
-  channel_id: number
+  id: string
+  channel_id: string
   channel?: Channel
   name: string
+  is_default?: boolean
   description?: string
   cover_url?: string
   created_at: string
@@ -124,8 +126,8 @@ export interface Collection {
 }
 
 export interface Post {
-  id: number
-  user_id: number
+  id: string
+  user_id: string
   user?: User
   title: string
   content: string
@@ -142,9 +144,9 @@ export interface Post {
 }
 
 export interface Comment {
-  id: number
-  post_id: number
-  user_id: number
+  id: string
+  post_id: string
+  user_id: string
   user?: User
   content: string
   status: 'visible' | 'hidden'
@@ -153,36 +155,19 @@ export interface Comment {
 }
 
 export interface Like {
-  id: number
-  user_id: number
+  id: string
+  user_id: string
   target_type: 'post' | 'comment'
-  target_id: number
-  created_at: string
-}
-
-export interface BookmarkFolder {
-  id: number
-  user_id: number
-  name: string
-  created_at: string
-  updated_at: string
-}
-
-export interface Bookmark {
-  id: number
-  user_id: number
-  post_id: number
-  post?: Post
-  bookmark_folder_id?: number
+  target_id: string
   created_at: string
 }
 
 // ===== Feed / Types =====
 
 export interface FeedSource {
-  id: number
+  id: string
   source_type: 'internal_user' | 'internal_channel' | 'internal_collection' | 'external_rss'
-  source_id?: number
+  source_id?: string
   rss_url?: string
   hash: string
   title?: string
@@ -199,13 +184,16 @@ export interface SubscriptionGroup {
 }
 
 export interface Subscription {
-  id: number
-  user_id: number
-  feed_source_id: number
+  id: string
+  user_id: string
+  feed_source_id: string
   feed_source?: FeedSource
   title?: string
   subscription_group_id?: string
   subscription_group?: SubscriptionGroup
+  health_status?: 'healthy' | 'warning' | 'error'
+  error_message?: string
+  last_checked?: string
   created_at: string
 }
 
@@ -224,28 +212,130 @@ export interface FeedItem {
   enclosure_type?: string
   duration?: string
   image_url?: string
+  is_duplicate?: boolean
+  duplicate_count?: number
+  duplicate_of_id?: string
+  duplicate_sources?: string[]
+  is_starred?: boolean
 }
 
 // Unified timeline item returned by GET /api/feed/timeline
 export interface TimelineItem {
-  type: 'post' | 'feed_item'
+  type: 'post' | 'feed_item' | 'orbit_item'
   post?: Post
   feed_item?: FeedItem
+  orbit_item?: OrbitItem
   published_at: string
   is_read: boolean
+}
+
+// ===== Bookmark Types =====
+
+export interface BookmarkFolder {
+  id: string
+  user_id: string
+  name: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Bookmark {
+  id: string
+  user_id: string
+  post_id: string
+  post?: Post
+  bookmark_folder_id?: string
+  bookmark_folder?: BookmarkFolder
+  created_at: string
+}
+
+// ===== Orbit Types =====
+
+export interface OrbitItem {
+  id: string
+  feed_source_id: string
+  feed_source?: FeedSource
+  guid: string
+  title: string
+  link: string
+  summary: string
+  author: string
+  published_at: string
+  fetched_at: string
+  enclosure_url?: string
+  enclosure_type?: string
+  duration?: string
+  image_url?: string
+  is_starred?: boolean
 }
 
 // ===== Notification Types =====
 
 export interface Notification {
   id: number
-  user_id: number
-  type: 'comment' | 'like' | 'bookmark' | 'system'
+  user_id: string
+  type: 'comment' | 'like' | 'bookmark' | 'system' | 'forum_reply' | 'mention'
   content: string
   target_type?: string
-  target_id?: number
+  target_id?: string | number
   read_at?: string
   created_at: string
+}
+
+// ===== Forum Types =====
+
+export interface ForumCategory {
+  id: string
+  name: string
+  description?: string
+  color: string
+  topic_count?: number
+  created_at: string
+}
+
+export interface ForumTopic {
+  id: string
+  user_id: string
+  user?: User
+  category_id: string
+  category?: ForumCategory
+  title: string
+  content: string          // raw Markdown
+  tags: string[]
+  pinned: boolean
+  closed: boolean
+  reply_count: number
+  like_count: number
+  view_count: number
+  last_reply_at?: string
+  is_liked: boolean
+  is_bookmarked: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ForumReply {
+  id: string
+  topic_id: string
+  user_id: string
+  user?: User
+  parent_reply_id?: string // quoted reply id
+  content: string          // raw Markdown
+  path: string
+  floor_number: number
+  like_count: number
+  is_liked: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ForumDraft {
+  id?: string
+  context_key: string
+  title?: string
+  content: string
+  tags?: string
+  updated_at?: string
 }
 
 // ===== Profile Types =====
@@ -263,4 +353,118 @@ export interface UserProfile {
   following_count?: number
   posts_count?: number
   created_at: string
+}
+
+// ===== Debate Types =====
+
+export type DebateStatus = 'open' | 'concluded' | 'archived'
+export type ArgumentType = 'support' | 'oppose' | 'neutral' | 'evidence' | 'question' | 'counter'
+
+export interface Debate {
+  id: string
+  user_id: string
+  user?: User
+  title: string
+  description: string
+  content: string
+  status: DebateStatus
+  tags: string[]
+  view_count: number
+  argument_count: number
+  vote_count: number
+  conclusion_type?: 'yes' | 'no' | 'inconclusive' | ''
+  conclusion_summary?: string
+  conclude_vote_count?: number
+  conclude_threshold?: number
+  created_at: string
+  updated_at: string
+  concluded_at?: string
+}
+
+export interface Argument {
+  id: string
+  debate_id: string
+  debate?: Debate
+  parent_id?: string // quoted argument id
+  parent?: Argument
+  user_id: string
+  user?: User
+  content: string
+  argument_type: ArgumentType
+  vote_count: number
+  references?: Argument[]
+  referenced_debates?: Debate[]
+  is_concluded: boolean
+  conclusion?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface DebateVote {
+  id: string
+  argument_id: string
+  argument?: Argument
+  user_id: string
+  user?: User
+  vote_type: number // +1 or -1
+  created_at: string
+  updated_at: string
+}
+
+export interface VoteHistory {
+  id: string
+  argument_id: string
+  user_id: string
+  old_vote_type: number
+  new_vote_type: number
+  created_at: string
+}
+
+export interface TimelineEvent {
+  id: string
+  user_id: string
+  user?: User
+  title: string
+  description: string
+  content: string
+  event_date: string
+  end_date?: string
+  location: string
+  latitude?: number
+  longitude?: number
+  source: string
+  category: string
+  tags: string[]
+  is_public: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface TimelinePerson {
+  id: string
+  user_id: string
+  user?: User
+  name: string
+  bio: string
+  birth_date?: string
+  death_date?: string
+  tags: string[]
+  is_public: boolean
+  locations?: PersonLocation[]
+  created_at: string
+  updated_at: string
+}
+
+export interface PersonLocation {
+  id: string
+  person_id: string
+  date: string
+  end_date?: string
+  place_name: string
+  latitude: number
+  longitude: number
+  source: string
+  note: string
+  created_at: string
+  updated_at: string
 }

@@ -83,9 +83,9 @@ import { useApi } from '@/composables/useApi'
 import type { Comment } from '@/types'
 
 const props = defineProps<{
-  postId: number
+  postId: string
   allowComments: boolean
-  postOwnerId?: number
+  postOwnerId?: string
 }>()
 
 const authStore = useAuthStore()
@@ -96,13 +96,13 @@ const loading = ref(true)
 const newComment = ref('')
 const submitting = ref(false)
 const showDeleteConfirm = ref(false)
-const pendingDeleteCommentId = ref<number | null>(null)
+const pendingDeleteCommentId = ref<string | null>(null)
 
 const formatDate = (d: string) => new Date(d).toLocaleDateString('zh-CN')
 
 const canDelete = (c: Comment) => {
   if (!authStore.user) return false
-  return authStore.user.id === c.user_id || authStore.user.id === props.postOwnerId || authStore.user.role === 'admin'
+  return authStore.user.uuid === c.user_id || authStore.user.uuid === props.postOwnerId || authStore.user.role === 'admin'
 }
 
 const fetchComments = async () => {
@@ -140,7 +140,7 @@ const submitComment = async () => {
   }
 }
 
-const deleteComment = async (id: number) => {
+const deleteComment = async (id: string) => {
   try {
     const res = await fetch(`${api.blog.comments}/${id}`, {
       method: 'DELETE',
@@ -152,7 +152,7 @@ const deleteComment = async (id: number) => {
   }
 }
 
-const requestDeleteComment = (id: number) => {
+const requestDeleteComment = (id: string) => {
   pendingDeleteCommentId.value = id
   showDeleteConfirm.value = true
 }

@@ -1,9 +1,12 @@
 package storage
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
@@ -13,6 +16,45 @@ import (
 
 	"atoman/internal/model"
 )
+
+// SanitizeName sanitizes artist and album names for consistent file paths
+// Rules:
+// 1. Convert to lowercase
+// 2. Replace spaces and special chars with underscores
+// 3. Remove consecutive underscores
+// 4. Strip leading/trailing underscores
+func SanitizeName(name string) string {
+	if name == "" {
+		return "unknown"
+	}
+
+	// Convert to lowercase
+	result := strings.ToLower(name)
+
+	// Replace any non-alphanumeric character (except Chinese/Japanese/Korean characters) with underscore
+	var sb strings.Builder
+	for _, r := range result {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.Is(unicode.Hangul, r) || unicode.Is(unicode.Han, r) || unicode.Is(unicode.Hiragana, r) || unicode.Is(unicode.Katakana, r) {
+			sb.WriteRune(r)
+		} else {
+			sb.WriteRune('_')
+		}
+	}
+	result = sb.String()
+
+	// Replace consecutive underscores with single underscore
+	re := regexp.MustCompile(`_+`)
+	result = re.ReplaceAllString(result, "_")
+
+	// Strip leading/trailing underscores
+	result = strings.Trim(result, "_")
+
+	if result == "" {
+		return "unknown"
+	}
+
+	return result
+}
 
 // InitS3Client initializes and returns an S3 client configured for Oracle Object Storage
 func InitS3Client() (*s3.S3, error) {
@@ -103,17 +145,11 @@ func SaveFileLocally(file interface{}, filename, artist, album string) (string, 
 		return "", "", os.ErrInvalid
 	}
 
-	// Create safe directory names
-	safeArtist := strings.ReplaceAll(artist, "/", "-")
-	if safeArtist == "" {
-		safeArtist = "Unknown Artist"
-	}
-	safeAlbum := strings.ReplaceAll(album, "/", "-")
-	if safeAlbum == "" {
-		safeAlbum = "Unknown Album"
-	}
+	// Create sanitized directory names for consistency
+	safeArtist := SanitizeName(artist)
+	safeAlbum := SanitizeName(album)
 
-	// Create directory structure: uploads/music/Artist/Album/
+	// Create directory structure: uploads/music/artist/album/
 	dir := "uploads/music/" + safeArtist + "/" + safeAlbum
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", "", err
@@ -155,6 +191,20 @@ func SaveFileLocally(file interface{}, filename, artist, album string) (string, 
 
 // UploadLocalFileToS3 uploads a local file to S3 and returns the S3 URL
 func UploadLocalFileToS3(s3Client *s3.S3, localPath string) (string, error) {
+	if s3Client == nil {
+		return "", fmt.Errorf("s3 client is nil")
+	}
+
+	bucket := os.Getenv("S3_BUCKET")
+	if bucket == "" {
+		return "", fmt.Errorf("S3_BUCKET is not configured")
+	}
+
+	s3URLPrefix := os.Getenv("S3_URL_PREFIX")
+	if s3URLPrefix == "" {
+		return "", fmt.Errorf("S3_URL_PREFIX is not configured")
+	}
+
 	// Open local file
 	file, err := os.Open(localPath)
 	if err != nil {
@@ -168,7 +218,6 @@ func UploadLocalFileToS3(s3Client *s3.S3, localPath string) (string, error) {
 	s3Key = strings.ReplaceAll(s3Key, "\\", "/") // Windows compatibility
 
 	// Upload to S3
-	bucket := os.Getenv("S3_BUCKET")
 	_, err = s3Client.PutObject(&s3.PutObjectInput{
 		Bucket: aws.String(bucket),
 		Key:    aws.String(s3Key),
@@ -180,7 +229,7 @@ func UploadLocalFileToS3(s3Client *s3.S3, localPath string) (string, error) {
 	}
 
 	// Generate S3 URL
-	s3URL := os.Getenv("S3_URL_PREFIX") + "/" + s3Key
+	s3URL := s3URLPrefix + "/" + s3Key
 	log.Printf("File uploaded to S3: %s -> %s", localPath, s3URL)
 
 	return s3URL, nil

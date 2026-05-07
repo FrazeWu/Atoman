@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -33,6 +34,8 @@ func SetupFeedRoutes(router *gin.Engine, db *gorm.DB) {
 			protected.DELETE("/subscriptions/:id", DeleteSubscription(db))
 			protected.GET("/subscriptions", GetSubscriptions(db))
 			protected.GET("/timeline", GetTimeline(db))
+			protected.GET("/stats", GetFeedStats(db))
+			protected.GET("/items/:id", GetFeedItem(db))
 
 			protected.POST("/timeline/mark-read", MarkItemsRead(db))
 			protected.POST("/timeline/mark-all-read", MarkAllRead(db))
@@ -42,6 +45,30 @@ func SetupFeedRoutes(router *gin.Engine, db *gorm.DB) {
 			protected.PUT("/groups/:id", UpdateSubscriptionGroup(db))
 			protected.DELETE("/groups/:id", DeleteSubscriptionGroup(db))
 			protected.PUT("/subscriptions/:id/group", SetSubscriptionGroup(db))
+
+			protected.POST("/opml/import", ImportOPML(db))
+			protected.GET("/opml/export", ExportOPML(db))
+
+			protected.POST("/timeline/star", ToggleStar(db))
+			protected.GET("/stars", GetStarredItems(db))
+			protected.POST("/reading-list", ToggleReadingListItem(db))
+			protected.GET("/reading-list", GetReadingListItems(db))
+			protected.DELETE("/reading-list/:id", RemoveReadingListItem(db))
+
+			// Search subscriptions
+			protected.GET("/subscriptions/search", SearchSubscriptions(db))
+
+			// Health check endpoints
+			protected.POST("/subscriptions/:id/health", CheckSubscriptionHealth(db))
+			protected.POST("/subscriptions/health/check-all", CheckAllSubscriptionsHealth(db))
+
+			// Subscribe to channels and collections
+			protected.POST("/subscribe/channel/:channel_id", SubscribeChannel(db))
+			protected.DELETE("/subscribe/channel/:channel_id", UnsubscribeChannel(db))
+			protected.GET("/subscribe/channel/:channel_id/status", CheckChannelSubscription(db))
+			protected.POST("/subscribe/collection/:collection_id", SubscribeCollection(db))
+			protected.DELETE("/subscribe/collection/:collection_id", UnsubscribeCollection(db))
+			protected.GET("/subscribe/collection/:collection_id/status", CheckCollectionSubscription(db))
 		}
 	}
 }
@@ -135,10 +162,16 @@ func CreateSubscription(db *gorm.DB) gin.HandlerFunc {
 		userIDVal, _ := c.Get("user_id")
 		userID := userIDVal.(uuid.UUID)
 
-		defaultGroup, err := getOrCreateDefaultSubscriptionGroup(db, userID)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare default group"})
-			return
+		// Only auto-assign default group for external RSS and internal user subscriptions
+		// Channel and collection subscriptions require explicit group selection
+		var subscriptionGroupID *uuid.UUID
+		if input.TargetType == "external_rss" || input.TargetType == "internal_user" {
+			defaultGroup, err := getOrCreateDefaultSubscriptionGroup(db, userID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to prepare default group"})
+				return
+			}
+			subscriptionGroupID = &defaultGroup.ID
 		}
 
 		var sourceHash string
@@ -201,7 +234,7 @@ func CreateSubscription(db *gorm.DB) gin.HandlerFunc {
 			UserID:              userID,
 			FeedSourceID:        source.ID,
 			Title:               input.Title,
-			SubscriptionGroupID: &defaultGroup.ID,
+			SubscriptionGroupID: subscriptionGroupID,
 		}
 
 		if err := db.Create(&subscription).Error; err != nil {
@@ -271,6 +304,30 @@ type TimelineItem struct {
 	IsRead      bool            `json:"is_read"`
 }
 
+type FeedStatsPoint struct {
+	Label string `json:"label"`
+	Count int    `json:"count"`
+}
+
+type FeedSourceStat struct {
+	FeedSourceID uuid.UUID `json:"feed_source_id"`
+	Title        string    `json:"title"`
+	Count        int       `json:"count"`
+}
+
+type FeedStatsData struct {
+	Period          string           `json:"period"`
+	TotalRead       int              `json:"total_read"`
+	Points          []FeedStatsPoint `json:"points"`
+	SourceBreakdown []FeedSourceStat `json:"source_breakdown"`
+}
+
+type feedReadEvent struct {
+	ReadAt       time.Time `gorm:"column:read_at"`
+	FeedSourceID uuid.UUID `gorm:"column:feed_source_id"`
+	SourceTitle  string    `gorm:"column:source_title"`
+}
+
 func GetTimeline(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userIDVal, _ := c.Get("user_id")
@@ -286,6 +343,8 @@ func GetTimeline(db *gorm.DB) gin.HandlerFunc {
 		sourceType := c.Query("source_type")
 		sourceID := c.Query("source_id")
 		groupID := c.Query("group_id")
+		isReadFilter := c.Query("is_read") // "true", "false", or "" for all
+		hideDuplicates := c.Query("hide_duplicates") == "true"
 
 		var userSubscriptions []model.Subscription
 		query := db.Where("subscriptions.user_id = ?", userID)
@@ -377,6 +436,7 @@ func GetTimeline(db *gorm.DB) gin.HandlerFunc {
 		var feedItems []model.FeedItem
 		if len(feedSourceIDs) > 0 {
 			db.Preload("FeedSource").Where("feed_source_id IN ?", feedSourceIDs).Order("published_at DESC").Find(&feedItems)
+			service.AnnotateDuplicateFeedItems(feedItems)
 		}
 
 		var readFeedItemIDs map[uuid.UUID]bool
@@ -417,6 +477,28 @@ func GetTimeline(db *gorm.DB) gin.HandlerFunc {
 			return timeline[i].PublishedAt.After(timeline[j].PublishedAt)
 		})
 
+		if isReadFilter == "true" || isReadFilter == "false" {
+			want := isReadFilter == "true"
+			filtered := timeline[:0]
+			for _, item := range timeline {
+				if item.IsRead == want {
+					filtered = append(filtered, item)
+				}
+			}
+			timeline = filtered
+		}
+
+		if hideDuplicates {
+			filtered := timeline[:0]
+			for _, item := range timeline {
+				if item.Type == "feed_item" && item.FeedItem != nil && item.FeedItem.IsDuplicate {
+					continue
+				}
+				filtered = append(filtered, item)
+			}
+			timeline = filtered
+		}
+
 		total := len(timeline)
 		start := offset
 		if start > total {
@@ -436,6 +518,167 @@ func GetTimeline(db *gorm.DB) gin.HandlerFunc {
 			"message": "ok",
 		})
 	}
+}
+
+func GetFeedStats(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+		period := strings.ToLower(c.DefaultQuery("period", "day"))
+
+		points, pointIndex, rangeStart, err := buildFeedStatsBuckets(period, time.Now())
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid period"})
+			return
+		}
+
+		var events []feedReadEvent
+		if err := db.Table("feed_item_reads AS fir").
+			Select("fir.read_at, fi.feed_source_id, COALESCE(NULLIF(subscriptions.title, ''), fs.title, '未命名源') AS source_title").
+			Joins("JOIN feed_items fi ON fi.id = fir.feed_item_id").
+			Joins("LEFT JOIN feed_sources fs ON fs.id = fi.feed_source_id").
+			Joins("LEFT JOIN subscriptions ON subscriptions.feed_source_id = fi.feed_source_id AND subscriptions.user_id = ?", userID).
+			Where("fir.user_id = ? AND fir.read_at >= ?", userID, rangeStart).
+			Order("fir.read_at ASC").
+			Scan(&events).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch feed stats"})
+			return
+		}
+
+		totalRead := 0
+		sourceCounts := make(map[uuid.UUID]*FeedSourceStat)
+
+		for _, event := range events {
+			bucketKey := feedStatsBucketKey(period, event.ReadAt)
+			if pointPos, ok := pointIndex[bucketKey]; ok {
+				points[pointPos].Count++
+				totalRead++
+			}
+
+			stat, ok := sourceCounts[event.FeedSourceID]
+			if !ok {
+				stat = &FeedSourceStat{
+					FeedSourceID: event.FeedSourceID,
+					Title:        event.SourceTitle,
+				}
+				sourceCounts[event.FeedSourceID] = stat
+			}
+			stat.Count++
+		}
+
+		sourceBreakdown := make([]FeedSourceStat, 0, len(sourceCounts))
+		for _, stat := range sourceCounts {
+			sourceBreakdown = append(sourceBreakdown, *stat)
+		}
+
+		sort.Slice(sourceBreakdown, func(i, j int) bool {
+			if sourceBreakdown[i].Count == sourceBreakdown[j].Count {
+				return sourceBreakdown[i].Title < sourceBreakdown[j].Title
+			}
+			return sourceBreakdown[i].Count > sourceBreakdown[j].Count
+		})
+
+		if len(sourceBreakdown) > 10 {
+			sourceBreakdown = sourceBreakdown[:10]
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"data": FeedStatsData{
+				Period:          period,
+				TotalRead:       totalRead,
+				Points:          points,
+				SourceBreakdown: sourceBreakdown,
+			},
+			"message": "ok",
+		})
+	}
+}
+
+func buildFeedStatsBuckets(period string, now time.Time) ([]FeedStatsPoint, map[string]int, time.Time, error) {
+	now = now.Local()
+
+	switch period {
+	case "day":
+		const bucketCount = 7
+		start := startOfDay(now).AddDate(0, 0, -(bucketCount - 1))
+		points, pointIndex, rangeStart := feedStatsPoints(bucketCount, start, func(t time.Time) time.Time { return t.AddDate(0, 0, 1) }, func(t time.Time) string {
+			return t.Format("01-02")
+		}, func(t time.Time) string {
+			return startOfDay(t).Format("2006-01-02")
+		})
+		return points, pointIndex, rangeStart, nil
+	case "week":
+		const bucketCount = 8
+		start := startOfISOWeek(now).AddDate(0, 0, -7*(bucketCount-1))
+		points, pointIndex, rangeStart := feedStatsPoints(bucketCount, start, func(t time.Time) time.Time { return t.AddDate(0, 0, 7) }, func(t time.Time) string {
+			return t.Format("01-02")
+		}, func(t time.Time) string {
+			return startOfISOWeek(t).Format("2006-01-02")
+		})
+		return points, pointIndex, rangeStart, nil
+	case "month":
+		const bucketCount = 6
+		start := startOfMonth(now).AddDate(0, -(bucketCount - 1), 0)
+		points, pointIndex, rangeStart := feedStatsPoints(bucketCount, start, func(t time.Time) time.Time { return t.AddDate(0, 1, 0) }, func(t time.Time) string {
+			return t.Format("2006-01")
+		}, func(t time.Time) string {
+			return startOfMonth(t).Format("2006-01")
+		})
+		return points, pointIndex, rangeStart, nil
+	default:
+		return nil, nil, time.Time{}, fmt.Errorf("unsupported period: %s", period)
+	}
+}
+
+func feedStatsPoints(
+	bucketCount int,
+	start time.Time,
+	next func(time.Time) time.Time,
+	labelFor func(time.Time) string,
+	keyFor func(time.Time) string,
+) ([]FeedStatsPoint, map[string]int, time.Time) {
+	points := make([]FeedStatsPoint, 0, bucketCount)
+	pointIndex := make(map[string]int, bucketCount)
+	current := start
+
+	for i := 0; i < bucketCount; i++ {
+		key := keyFor(current)
+		pointIndex[key] = i
+		points = append(points, FeedStatsPoint{Label: labelFor(current), Count: 0})
+		current = next(current)
+	}
+
+	return points, pointIndex, start
+}
+
+func feedStatsBucketKey(period string, t time.Time) string {
+	switch period {
+	case "week":
+		return startOfISOWeek(t).Format("2006-01-02")
+	case "month":
+		return startOfMonth(t).Format("2006-01")
+	default:
+		return startOfDay(t).Format("2006-01-02")
+	}
+}
+
+func startOfDay(t time.Time) time.Time {
+	year, month, day := t.Date()
+	return time.Date(year, month, day, 0, 0, 0, 0, t.Location())
+}
+
+func startOfISOWeek(t time.Time) time.Time {
+	start := startOfDay(t)
+	weekday := int(start.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	return start.AddDate(0, 0, -(weekday - 1))
+}
+
+func startOfMonth(t time.Time) time.Time {
+	year, month, _ := t.Date()
+	return time.Date(year, month, 1, 0, 0, 0, 0, t.Location())
 }
 
 type MarkReadInput struct {
@@ -748,7 +991,7 @@ func GetUserRSS(db *gorm.DB) gin.HandlerFunc {
 			Version: "2.0",
 			Channel: RSSChannel{
 				Title:       user.DisplayName + " 的博客 - Atoman",
-				Link:        baseURL + "/blog/@" + user.Username,
+				Link:        baseURL + "/users/" + user.Username,
 				Description: user.DisplayName + " 的博客订阅",
 				Items:       []RSSItem{},
 			},
@@ -840,5 +1083,889 @@ func GetUnreadNotificationCount(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"unread_count": count, "message": "ok"})
+	}
+}
+
+// OPML 导入导出相关结构体
+type OPML struct {
+	XMLName xml.Name `xml:"opml"`
+	Version string   `xml:"version,attr"`
+	Head    OPMLHead `xml:"head"`
+	Body    OPMLBody `xml:"body"`
+}
+
+type OPMLHead struct {
+	Title string `xml:"title"`
+}
+
+type OPMLBody struct {
+	Outlines []OPMLOutline `xml:"outline"`
+}
+
+type OPMLOutline struct {
+	Text     string        `xml:"text,attr"`
+	Title    string        `xml:"title,attr"`
+	Type     string        `xml:"type,attr"`
+	XMLURL   string        `xml:"xmlUrl,attr"`
+	HtmlURL  string        `xml:"htmlUrl,attr"`
+	Outlines []OPMLOutline `xml:"outline"`
+}
+
+// Helper function to import feed from URL
+func importFeedFromURL(db *gorm.DB, userID uuid.UUID, title, xmlURL string) error {
+	// Check if feed source already exists
+	var feedSource model.FeedSource
+	result := db.Where("rss_url = ?", xmlURL).First(&feedSource)
+	if result.Error == gorm.ErrRecordNotFound {
+		// Create new feed source
+		feedSource = model.FeedSource{
+			Title:  title,
+			RssURL: xmlURL,
+		}
+		if err := db.Create(&feedSource).Error; err != nil {
+			return err
+		}
+	} else if result.Error != nil {
+		return result.Error
+	}
+
+	// Check if subscription already exists
+	var existingSub model.Subscription
+	if err := db.Where("user_id = ? AND feed_source_id = ?", userID, feedSource.ID).First(&existingSub).Error; err == nil {
+		// Already subscribed
+		return nil
+	}
+
+	// Create new subscription
+	subscription := model.Subscription{
+		UserID:       userID,
+		FeedSourceID: feedSource.ID,
+		Title:        title,
+	}
+
+	return db.Create(&subscription).Error
+}
+
+func ImportOPML(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		file, header, err := c.Request.FormFile("file")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to get uploaded file"})
+			return
+		}
+		defer file.Close()
+
+		if header.Size > 10<<20 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "File size exceeds 10MB limit"})
+			return
+		}
+
+		data := make([]byte, header.Size)
+		if _, err := file.Read(data); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read file"})
+			return
+		}
+
+		var opml OPML
+		if err := xml.Unmarshal(data, &opml); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid OPML format"})
+			return
+		}
+
+		imported := 0
+		failed := 0
+
+		for _, outline := range opml.Body.Outlines {
+			if outline.XMLURL != "" {
+				if err := importFeedFromURL(db, userID, outline.Text, outline.XMLURL); err != nil {
+					failed++
+				} else {
+					imported++
+				}
+			}
+
+			for _, subOutline := range outline.Outlines {
+				if subOutline.XMLURL != "" {
+					if err := importFeedFromURL(db, userID, subOutline.Text, subOutline.XMLURL); err != nil {
+						failed++
+					} else {
+						imported++
+					}
+				}
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message":  "OPML import completed",
+			"imported": imported,
+			"failed":   failed,
+		})
+	}
+}
+
+func ExportOPML(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		var subscriptions []model.Subscription
+		if err := db.Preload("FeedSource").Preload("SubscriptionGroup").Where("user_id = ?", userID).Find(&subscriptions).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch subscriptions"})
+			return
+		}
+
+		opml := OPML{
+			Version: "2.0",
+			Head: OPMLHead{
+				Title: "Atoman RSS Exports",
+			},
+		}
+
+		grouped := make(map[uuid.UUID][]model.Subscription)
+		var ungrouped []model.Subscription
+
+		for _, sub := range subscriptions {
+			if sub.SubscriptionGroupID != nil {
+				grouped[*sub.SubscriptionGroupID] = append(grouped[*sub.SubscriptionGroupID], sub)
+			} else {
+				ungrouped = append(ungrouped, sub)
+			}
+		}
+
+		for groupID, subs := range grouped {
+			var group model.SubscriptionGroup
+			if err := db.First(&group, groupID).Error; err != nil {
+				continue
+			}
+
+			outline := OPMLOutline{
+				Text:     group.Name,
+				Title:    group.Name,
+				Type:     "rss",
+				Outlines: []OPMLOutline{},
+			}
+
+			for _, sub := range subs {
+				if sub.FeedSource != nil {
+					outline.Outlines = append(outline.Outlines, OPMLOutline{
+						Text:   sub.FeedSource.Title,
+						Title:  sub.FeedSource.Title,
+						Type:   "rss",
+						XMLURL: sub.FeedSource.RssURL,
+					})
+				}
+			}
+			opml.Body.Outlines = append(opml.Body.Outlines, outline)
+		}
+
+		// Add ungrouped subscriptions
+		for _, sub := range ungrouped {
+			if sub.FeedSource != nil {
+				opml.Body.Outlines = append(opml.Body.Outlines, OPMLOutline{
+					Text:   sub.FeedSource.Title,
+					Title:  sub.FeedSource.Title,
+					Type:   "rss",
+					XMLURL: sub.FeedSource.RssURL,
+				})
+			}
+		}
+
+		output, err := xml.MarshalIndent(opml, "", "  ")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate OPML"})
+			return
+		}
+
+		c.Header("Content-Type", "application/x-opml+xml")
+		c.Header("Content-Disposition", "attachment; filename=\"atoman-export.opml\"")
+		c.Data(http.StatusOK, "application/x-opml+xml", output)
+	}
+}
+
+func ToggleStar(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		var input struct {
+			FeedItemID uuid.UUID `json:"feed_item_id" binding:"required"`
+		}
+
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "feed_item_id is required"})
+			return
+		}
+
+		var feedItem model.FeedItem
+		if err := db.First(&feedItem, input.FeedItemID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Feed item not found"})
+			return
+		}
+
+		var existing model.FeedItemStar
+		err := db.Where("user_id = ? AND feed_item_id = ?", userID, input.FeedItemID).First(&existing).Error
+
+		if err == nil {
+			if err := db.Delete(&existing).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove star"})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"starred": false, "message": "Star removed"})
+		} else if errors.Is(err, gorm.ErrRecordNotFound) {
+			star := model.FeedItemStar{
+				UserID:     userID,
+				FeedItemID: input.FeedItemID,
+				StarredAt:  time.Now(),
+			}
+			if err := db.Create(&star).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add star"})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"starred": true, "message": "Item starred"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		}
+	}
+}
+
+func GetStarredItems(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+		offset := (page - 1) * limit
+
+		var stars []model.FeedItemStar
+		if err := db.Where("user_id = ?", userID).Order("starred_at DESC").Offset(offset).Limit(limit).Find(&stars).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch starred items"})
+			return
+		}
+
+		feedItemIDs := make([]uuid.UUID, len(stars))
+		for i, star := range stars {
+			feedItemIDs[i] = star.FeedItemID
+		}
+
+		var feedItems []model.FeedItem
+		if err := db.Where("id IN ?", feedItemIDs).Order("created_at DESC").Find(&feedItems).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch feed items"})
+			return
+		}
+
+		type FeedItemWithSource struct {
+			model.FeedItem
+			SourceTitle    string `json:"source_title"`
+			SourceSiteURL  string `json:"source_site_url"`
+			SourceImageURL string `json:"source_image_url"`
+		}
+
+		result := make([]FeedItemWithSource, 0, len(feedItems))
+		for _, item := range feedItems {
+			var source model.FeedSource
+			if err := db.First(&source, item.FeedSourceID).Error; err == nil {
+				result = append(result, FeedItemWithSource{
+					FeedItem:       item,
+					SourceTitle:    source.Title,
+					SourceSiteURL:  source.RssURL, // Use RSS URL as site URL
+					SourceImageURL: "",            // No image field in FeedSource
+				})
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"items": result,
+			"page":  page,
+			"total": len(result),
+		})
+	}
+}
+
+func ToggleReadingListItem(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		var input struct {
+			FeedItemID uuid.UUID `json:"feed_item_id" binding:"required"`
+		}
+
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "feed_item_id is required"})
+			return
+		}
+
+		var feedItem model.FeedItem
+		if err := db.First(&feedItem, input.FeedItemID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Feed item not found"})
+			return
+		}
+
+		var existing model.ReadingListItem
+		err := db.Where("user_id = ? AND feed_item_id = ?", userID, input.FeedItemID).First(&existing).Error
+
+		if err == nil {
+			if err := db.Delete(&existing).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove reading list item"})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"saved": false})
+			return
+		}
+
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+			return
+		}
+
+		item := model.ReadingListItem{
+			UserID:     userID,
+			FeedItemID: input.FeedItemID,
+			CreatedAt:  time.Now(),
+		}
+		if err := db.Create(&item).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add reading list item"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"saved": true})
+	}
+}
+
+func GetReadingListItems(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+		if page < 1 {
+			page = 1
+		}
+		if limit < 1 || limit > 100 {
+			limit = 20
+		}
+		offset := (page - 1) * limit
+
+		var total int64
+		db.Model(&model.ReadingListItem{}).Where("user_id = ?", userID).Count(&total)
+
+		var listItems []model.ReadingListItem
+		if err := db.Preload("FeedItem").Preload("FeedItem.FeedSource").
+			Where("user_id = ?", userID).
+			Order("created_at DESC").
+			Offset(offset).
+			Limit(limit).
+			Find(&listItems).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch reading list"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"items": listItems,
+			"page":  page,
+			"total": total,
+		})
+	}
+}
+
+func RemoveReadingListItem(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		feedItemID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid feed item id"})
+			return
+		}
+
+		if err := db.Where("user_id = ? AND feed_item_id = ?", userID, feedItemID).Delete(&model.ReadingListItem{}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove reading list item"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"removed": true})
+	}
+}
+
+// CheckSubscriptionHealth checks the health of a specific subscription by attempting to fetch the feed
+func CheckSubscriptionHealth(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		subscriptionIDStr := c.Param("id")
+		subscriptionID, err := uuid.Parse(subscriptionIDStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid subscription ID"})
+			return
+		}
+
+		// Get subscription
+		var subscription model.Subscription
+		if err := db.Preload("FeedSource").First(&subscription, "id = ?", subscriptionID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Subscription not found"})
+			return
+		}
+
+		// Verify ownership
+		if subscription.UserID != userID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Access denied"})
+			return
+		}
+
+		// Internal subscriptions (user/channel/collection) read directly from DB — no network check needed
+		if subscription.FeedSource != nil && subscription.FeedSource.SourceType != "external_rss" {
+			now := time.Now()
+			subscription.HealthStatus = "healthy"
+			subscription.ErrorMessage = ""
+			subscription.LastChecked = &now
+			db.Save(&subscription)
+			c.JSON(http.StatusOK, gin.H{
+				"subscription_id": subscriptionID.String(),
+				"health_status":   "healthy",
+				"error_message":   "",
+				"last_checked":    subscription.LastChecked,
+				"skipped":         true,
+				"reason":          "internal subscription — no external URL to check",
+			})
+			return
+		}
+
+		// Attempt to fetch the external RSS feed
+		healthStatus := "healthy"
+		errorMessage := ""
+
+		resp, err := http.Get(subscription.FeedSource.RssURL)
+		if err != nil {
+			healthStatus = "error"
+			errorMessage = fmt.Sprintf("Failed to fetch feed: %v", err)
+		} else if resp.StatusCode >= 400 {
+			healthStatus = "warning"
+			errorMessage = fmt.Sprintf("HTTP status: %d", resp.StatusCode)
+		} else {
+			defer resp.Body.Close()
+			// Try to parse XML to verify it's valid
+			decoder := xml.NewDecoder(resp.Body)
+			_, err := decoder.Token()
+			if err != nil {
+				healthStatus = "error"
+				errorMessage = fmt.Sprintf("Invalid XML: %v", err)
+			}
+		}
+
+		// Update subscription health status
+		subscription.HealthStatus = healthStatus
+		subscription.ErrorMessage = errorMessage
+		now := time.Now()
+		subscription.LastChecked = &now
+		db.Save(&subscription)
+
+		c.JSON(http.StatusOK, gin.H{
+			"subscription_id": subscriptionID.String(),
+			"health_status":   healthStatus,
+			"error_message":   errorMessage,
+			"last_checked":    subscription.LastChecked,
+		})
+	}
+}
+
+// CheckAllSubscriptionsHealth checks health of all user's subscriptions
+func CheckAllSubscriptionsHealth(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		var subscriptions []model.Subscription
+		if err := db.Where("user_id = ?", userID).Find(&subscriptions).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch subscriptions"})
+			return
+		}
+
+		results := make([]gin.H, 0)
+		for _, sub := range subscriptions {
+			// Fetch feed source
+			var source model.FeedSource
+			if err := db.First(&source, sub.FeedSourceID).Error; err != nil {
+				continue
+			}
+
+			// Internal subscriptions read directly from DB — skip network check, always healthy
+			if source.SourceType != "external_rss" {
+				now := time.Now()
+				sub.HealthStatus = "healthy"
+				sub.ErrorMessage = ""
+				sub.LastChecked = &now
+				db.Save(&sub)
+				results = append(results, gin.H{
+					"subscription_id": sub.ID,
+					"health_status":   "healthy",
+					"error_message":   "",
+					"skipped":         true,
+				})
+				continue
+			}
+
+			healthStatus := "healthy"
+			errorMessage := ""
+
+			client := &http.Client{Timeout: 10 * time.Second}
+			resp, err := client.Get(source.RssURL)
+			if err != nil {
+				healthStatus = "error"
+				errorMessage = fmt.Sprintf("Failed to fetch: %v", err)
+			} else if resp.StatusCode >= 400 {
+				healthStatus = "warning"
+				errorMessage = fmt.Sprintf("HTTP %d", resp.StatusCode)
+			} else {
+				defer resp.Body.Close()
+			}
+
+			// Update subscription
+			sub.HealthStatus = healthStatus
+			sub.ErrorMessage = errorMessage
+			now := time.Now()
+			sub.LastChecked = &now
+			db.Save(&sub)
+
+			results = append(results, gin.H{
+				"subscription_id": sub.ID,
+				"health_status":   healthStatus,
+				"error_message":   errorMessage,
+			})
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"checked_count": len(results),
+			"results":       results,
+		})
+	}
+}
+
+// SearchSubscriptions searches user's subscriptions by title or feed source title
+func SearchSubscriptions(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		query := c.Query("q")
+		if query == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Query parameter 'q' is required"})
+			return
+		}
+
+		limitStr := c.DefaultQuery("limit", "20")
+		limit, err := strconv.Atoi(limitStr)
+		if err != nil || limit < 1 || limit > 100 {
+			limit = 20
+		}
+
+		var subscriptions []model.Subscription
+		err = db.Where("user_id = ?", userID).
+			Joins("JOIN feed_sources ON feed_sources.id = subscriptions.feed_source_id").
+			Where("subscriptions.title ILIKE ? OR feed_sources.title ILIKE ?", "%"+query+"%", "%"+query+"%").
+			Limit(limit).
+			Preload("FeedSource").
+			Find(&subscriptions).Error
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to search subscriptions"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"data":  subscriptions,
+			"count": len(subscriptions),
+		})
+	}
+}
+
+// GetFeedItem retrieves a single feed item by ID
+func GetFeedItem(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		itemID := c.Param("id")
+		id, err := uuid.Parse(itemID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid item ID"})
+			return
+		}
+
+		var item model.FeedItem
+		err = db.Preload("FeedSource").First(&item, "id = ?", id).Error
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Feed item not found"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch feed item"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"data": item,
+		})
+	}
+}
+
+// SubscribeChannel subscribes the current user to a channel
+func SubscribeChannel(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		channelIDStr := c.Param("channel_id")
+		channelID, err := uuid.Parse(channelIDStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid channel ID"})
+			return
+		}
+
+		// Verify channel exists
+		var channel model.Channel
+		if err := db.First(&channel, "id = ?", channelID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Channel not found"})
+			return
+		}
+
+		// Find or create FeedSource for this channel
+		var feedSource model.FeedSource
+		hashStr := fmt.Sprintf("internal_channel:%s", channelIDStr)
+		hash := fmt.Sprintf("%x", sha256.Sum256([]byte(hashStr)))
+
+		if err := db.Where("hash = ?", hash).First(&feedSource).Error; err != nil {
+			// Create new FeedSource
+			feedSource = model.FeedSource{
+				SourceType: "internal_channel",
+				SourceID:   &channelID,
+				Title:      channel.Name,
+				Hash:       hash,
+			}
+			if err := db.Create(&feedSource).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create feed source"})
+				return
+			}
+		}
+
+		// Check if already subscribed
+		var existingSub model.Subscription
+		if err := db.Where("user_id = ? AND feed_source_id = ?", userID, feedSource.ID).First(&existingSub).Error; err == nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "Already subscribed"})
+			return
+		}
+
+		// Create subscription
+		subscription := model.Subscription{
+			UserID:       userID,
+			FeedSourceID: feedSource.ID,
+			Title:        channel.Name,
+		}
+		if err := db.Create(&subscription).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create subscription"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Subscribed successfully", "subscription": subscription})
+	}
+}
+
+// UnsubscribeChannel unsubscribes the current user from a channel
+func UnsubscribeChannel(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		channelIDStr := c.Param("channel_id")
+		_, err := uuid.Parse(channelIDStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid channel ID"})
+			return
+		}
+
+		// Find FeedSource for this channel
+		var feedSource model.FeedSource
+		hashStr := fmt.Sprintf("internal_channel:%s", channelIDStr)
+		hash := fmt.Sprintf("%x", sha256.Sum256([]byte(hashStr)))
+
+		if err := db.Where("hash = ?", hash).First(&feedSource).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Subscription not found"})
+			return
+		}
+
+		// Delete subscription
+		if err := db.Where("user_id = ? AND feed_source_id = ?", userID, feedSource.ID).Delete(&model.Subscription{}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to unsubscribe"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Unsubscribed successfully"})
+	}
+}
+
+// SubscribeCollection subscribes the current user to a collection
+func SubscribeCollection(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		collectionIDStr := c.Param("collection_id")
+		collectionID, err := uuid.Parse(collectionIDStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid collection ID"})
+			return
+		}
+
+		// Verify collection exists
+		var collection model.Collection
+		if err := db.First(&collection, "id = ?", collectionID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Collection not found"})
+			return
+		}
+
+		// Find or create FeedSource for this collection
+		var feedSource model.FeedSource
+		hashStr := fmt.Sprintf("internal_collection:%s", collectionIDStr)
+		hash := fmt.Sprintf("%x", sha256.Sum256([]byte(hashStr)))
+
+		if err := db.Where("hash = ?", hash).First(&feedSource).Error; err != nil {
+			// Create new FeedSource
+			feedSource = model.FeedSource{
+				SourceType: "internal_collection",
+				SourceID:   &collectionID,
+				Title:      collection.Name,
+				Hash:       hash,
+			}
+			if err := db.Create(&feedSource).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create feed source"})
+				return
+			}
+		}
+
+		// Check if already subscribed
+		var existingSub model.Subscription
+		if err := db.Where("user_id = ? AND feed_source_id = ?", userID, feedSource.ID).First(&existingSub).Error; err == nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "Already subscribed"})
+			return
+		}
+
+		// Create subscription
+		subscription := model.Subscription{
+			UserID:       userID,
+			FeedSourceID: feedSource.ID,
+			Title:        collection.Name,
+		}
+		if err := db.Create(&subscription).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create subscription"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Subscribed successfully", "subscription": subscription})
+	}
+}
+
+// UnsubscribeCollection unsubscribes the current user from a collection
+func UnsubscribeCollection(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		collectionIDStr := c.Param("collection_id")
+		_, err := uuid.Parse(collectionIDStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid collection ID"})
+			return
+		}
+
+		// Find FeedSource for this collection
+		var feedSource model.FeedSource
+		hashStr := fmt.Sprintf("internal_collection:%s", collectionIDStr)
+		hash := fmt.Sprintf("%x", sha256.Sum256([]byte(hashStr)))
+
+		if err := db.Where("hash = ?", hash).First(&feedSource).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Subscription not found"})
+			return
+		}
+
+		// Delete subscription
+		if err := db.Where("user_id = ? AND feed_source_id = ?", userID, feedSource.ID).Delete(&model.Subscription{}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to unsubscribe"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Unsubscribed successfully"})
+	}
+}
+
+// CheckChannelSubscription checks if the current user is subscribed to a channel
+func CheckChannelSubscription(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		channelIDStr := c.Param("channel_id")
+		_, err := uuid.Parse(channelIDStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid channel ID"})
+			return
+		}
+
+		// Find FeedSource for this channel
+		var feedSource model.FeedSource
+		hashStr := fmt.Sprintf("internal_channel:%s", channelIDStr)
+		hash := fmt.Sprintf("%x", sha256.Sum256([]byte(hashStr)))
+
+		if err := db.Where("hash = ?", hash).First(&feedSource).Error; err != nil {
+			c.JSON(http.StatusOK, gin.H{"subscribed": false})
+			return
+		}
+
+		// Check subscription
+		var sub model.Subscription
+		err = db.Where("user_id = ? AND feed_source_id = ?", userID, feedSource.ID).First(&sub).Error
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"subscribed": false})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"subscribed": true, "subscription": sub})
+	}
+}
+
+// CheckCollectionSubscription checks if the current user is subscribed to a collection
+func CheckCollectionSubscription(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		collectionIDStr := c.Param("collection_id")
+		_, err := uuid.Parse(collectionIDStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid collection ID"})
+			return
+		}
+
+		// Find FeedSource for this collection
+		var feedSource model.FeedSource
+		hashStr := fmt.Sprintf("internal_collection:%s", collectionIDStr)
+		hash := fmt.Sprintf("%x", sha256.Sum256([]byte(hashStr)))
+
+		if err := db.Where("hash = ?", hash).First(&feedSource).Error; err != nil {
+			c.JSON(http.StatusOK, gin.H{"subscribed": false})
+			return
+		}
+
+		// Check subscription
+		var sub model.Subscription
+		err = db.Where("user_id = ? AND feed_source_id = ?", userID, feedSource.ID).First(&sub).Error
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"subscribed": false})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"subscribed": true, "subscription": sub})
 	}
 }

@@ -2,14 +2,18 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { usePlayerStore } from '@/stores/player'
+import { useAuthStore } from '@/stores/auth'
+import type { Album } from '@/types'
 
 const API_URL = import.meta.env.VITE_API_URL || '/api'
 const player = usePlayerStore()
+const authStore = useAuthStore()
 player.fetchSongs()
 
 interface ArtistOption { id: number; name: string }
 
 const artists = ref<ArtistOption[]>([])
+const albums = ref<Album[]>([])
 const selectedArtistName = ref('')
 const searchQuery = ref('')
 const showDropdown = ref(false)
@@ -31,9 +35,27 @@ async function fetchArtists(q = '') {
   try {
     const params = q ? `?q=${encodeURIComponent(q)}` : ''
     const res = await fetch(`${API_URL}/artists${params}`)
-    if (res.ok) artists.value = await res.json()
+    if (res.ok) {
+      artists.value = await res.json()
+      // 首次加载时随机选一个艺术家
+      if (!q && !selectedArtistName.value && artists.value.length > 0) {
+        const pick = artists.value[Math.floor(Math.random() * artists.value.length)]
+        selectedArtistName.value = pick.name
+      }
+    }
   } catch (e) {
     console.error('Failed to fetch artists:', e)
+  }
+}
+
+async function fetchAlbums() {
+  try {
+    const res = await fetch(`${API_URL}/albums`)
+    if (res.ok) {
+      albums.value = await res.json()
+    }
+  } catch (e) {
+    console.error('Failed to fetch albums:', e)
   }
 }
 
@@ -51,7 +73,7 @@ function pickRandom() {
   }
 }
 
-async function fetchProtectionStatus(albumId: number) {
+async function fetchProtectionStatus(albumId: string | number) {
   if (protectionStatuses.value.has(String(albumId))) {
     return protectionStatuses.value.get(String(albumId))
   }
@@ -89,68 +111,79 @@ async function fetchDiscussionCount(albumId: string) {
   }
 }
 
-const stopOnce = watch(
-  () => player.songs.length,
-  (len) => {
-    if (len > 0 && !selectedArtistName.value) {
-      const names = [...new Set(player.songs.map((s) => s.artist))]
-      selectedArtistName.value = names[Math.floor(Math.random() * names.length)]
-      stopOnce()
-    }
-  },
-)
-
 fetchArtists()
+fetchAlbums()
 onUnmounted(() => clearTimeout(searchTimer))
 
 interface AlbumGroup {
-  id: number
+  id: string | number
   album: string
   year: number
   release_date: string
   cover_url: string
   artist: string
+  status?: string
   songs: typeof player.songs
 }
 
 const albumGroups = computed(() => {
+  const selectedAlbums = selectedArtistName.value
+    ? albums.value.filter((album) => album.artists?.some((artist) => artist.name === selectedArtistName.value))
+    : albums.value
+
+  const groups = new Map<string, AlbumGroup>()
+  selectedAlbums.forEach((album) => {
+    const artistName = album.artists?.[0]?.name || 'Unknown Artist'
+    const releaseDate = album.release_date ? String(album.release_date).slice(0, 10) : ''
+    const year = album.year || (releaseDate ? Number(releaseDate.slice(0, 4)) : 0)
+    groups.set(String(album.id), {
+      id: album.id,
+      album: album.title,
+      year,
+      release_date: releaseDate,
+      cover_url: album.cover_url || '',
+      artist: artistName,
+      status: album.status,
+      songs: [],
+    })
+  })
+
   const songs = selectedArtistName.value
     ? player.songs.filter((s) => s.artist === selectedArtistName.value)
     : [...player.songs]
 
-  const groups = new Map<string, AlbumGroup>()
   songs.forEach((song) => {
-    const key = `${song.album}-${song.year}`
+    const key = String(song.album_id || `${song.album}-${song.year}`)
     if (!groups.has(key)) {
       groups.set(key, {
-        id: song.album_id, // Use album_id (UUID) from song
+        id: song.album_id,
         album: song.album,
         year: song.year,
         release_date: song.release_date,
         cover_url: song.cover_url,
         artist: song.artist,
+        status: song.status,
         songs: [],
       })
     }
-    groups.get(key)!.songs.push(song)
+    const group = groups.get(key)!
+    group.songs.push(song)
+    if (!group.cover_url && song.cover_url) {
+      group.cover_url = song.cover_url
+    }
   })
-  
+
   const result = Array.from(groups.values()).sort((a, b) => b.year - a.year)
-  
-  // Fetch protection status for all albums
+
   result.forEach((album) => {
     if (!protectionStatuses.value.has(String(album.id))) {
       fetchProtectionStatus(album.id)
     }
-  })
-
-  // Fetch discussion counts for all albums
-  result.forEach((album) => {
     if (!discussionCounts.value.has(String(album.id))) {
       fetchDiscussionCount(String(album.id))
     }
   })
-  
+
   return result
 })
 
@@ -179,7 +212,7 @@ const shouldShowYear = (index: number) =>
             placeholder="搜索艺术家..."
             class="search-input"
           />
-          <div v-if="showDropdown && dropdownArtists.length > 0" class="search-dropdown">
+          <div v-if="showDropdown" class="search-dropdown">
             <button
               v-for="artist in dropdownArtists"
               :key="artist.id"
@@ -189,6 +222,13 @@ const shouldShowYear = (index: number) =>
             >
               {{ artist.name }}
             </button>
+            <RouterLink
+              to="/music/artists/new"
+              @mousedown.prevent
+              class="search-item search-item-new"
+            >
+              + 新建艺术家
+            </RouterLink>
           </div>
         </div>
 
@@ -197,6 +237,14 @@ const shouldShowYear = (index: number) =>
         <button v-if="selectedArtistName" @click="selectedArtistName = ''" class="btn-all">
           全部
         </button>
+
+        <RouterLink
+          v-if="authStore.isAuthenticated"
+          to="/music/contribute"
+          class="btn-contribute"
+        >
+          贡献专辑
+        </RouterLink>
       </div>
     </div>
 
@@ -243,13 +291,20 @@ const shouldShowYear = (index: number) =>
                     {{ albumGroup.songs.length }}
                     {{ albumGroup.songs.length === 1 ? 'track' : 'tracks' }}
                   </p>
+                  <p class="album-status" :class="albumGroup.status === 'closed' ? 'album-status-closed' : 'album-status-open'">
+                    状态：{{ albumGroup.status === 'closed' ? '关闭' : '开放' }}
+                  </p>
 
                   <div class="album-actions">
-                    <button @click="player.playSong(albumGroup.songs[0])" class="btn-play">
+                    <button
+                      v-if="albumGroup.songs.length"
+                      @click="player.playSong(albumGroup.songs[0])"
+                      class="btn-play"
+                    >
                       ▶ 播放
                     </button>
                     <RouterLink
-                      :to="`/music/artists/${encodeURIComponent(albumGroup.artist.replace(/ /g, '_'))}/albums/${encodeURIComponent(albumGroup.album.replace(/ /g, '_'))}`"
+                      :to="`/music/albums/${albumGroup.id}`"
                       class="btn-detail"
                     >
                       详情
@@ -340,6 +395,45 @@ const shouldShowYear = (index: number) =>
 }
 .btn-random:hover, .btn-all:hover { background: #000; color: #fff; }
 .btn-all { border-width: 1px; color: #6b7280; }
+.btn-contribute {
+  border: 2px solid #000;
+  padding: 0.5rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  background: #000;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-decoration: none;
+  display: inline-block;
+}
+.btn-contribute:hover { background: #fff; color: #000; }
+.album-status {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 0.25rem 0 0.75rem;
+}
+.album-status-open { color: #166534; }
+.album-status-closed { color: #991b1b; }
+.search-item-new {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 900;
+  background: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+  color: #000;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.search-item-new:hover { background: #000; color: #fff; }
 
 /* Timeline */
 .timeline-wrap {

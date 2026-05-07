@@ -133,7 +133,9 @@ onMounted(async () => {
         <div class="album-info">
           <h1 class="album-title">
             {{ albumInfo.title }}
-            <span v-if="albumInfo.status === 'pending'" class="pending-badge">待审核</span>
+            <span class="pending-badge" :class="albumInfo.status === 'closed' ? 'closed-badge' : 'open-badge'">
+              {{ albumInfo.status === 'closed' ? '关闭' : '开放' }}
+            </span>
           </h1>
           <p class="album-artist">{{ albumInfo.artist }}</p>
           <p class="album-tracks">{{ albumInfo.trackCount }} {{ albumInfo.trackCount === 1 ? 'track' : 'tracks' }}</p>
@@ -143,8 +145,8 @@ onMounted(async () => {
               ▶ 播放专辑
             </button>
             <RouterLink
-              v-if="authStore.isAuthenticated"
-              :to="`/music/artists/${encodeURIComponent(artistName || 'unknown')}/albums/${encodeURIComponent(albumName)}/edit`"
+              v-if="authStore.isAuthenticated && albumInfo?.artist"
+              :to="`/music/artists/${encodeURIComponent(albumInfo.artist)}/albums/${encodeURIComponent(albumName)}/edit`"
               class="btn-edit-album"
             >
               编辑专辑
@@ -194,6 +196,10 @@ onMounted(async () => {
             <span class="track-num">{{ String(index + 1).padStart(2, '0') }}</span>
             <div class="track-title">
               <h3>{{ song.title }}</h3>
+              <div class="track-wiki-links">
+                <RouterLink :to="`/music/songs/${song.id}/history`">历史</RouterLink>
+                <RouterLink :to="`/music/songs/${song.id}/discussion`">讨论</RouterLink>
+              </div>
             </div>
             <button
               @click="player.playSong(song)"
@@ -270,12 +276,20 @@ onMounted(async () => {
 
 .pending-badge {
   display: inline-block;
-  background: #facc15;
-  color: #713f12;
   font-size: 0.875rem;
   font-weight: 700;
   padding: 0.25rem 0.75rem;
   border-radius: 9999px;
+}
+
+.open-badge {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.closed-badge {
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 .album-artist {
@@ -456,6 +470,22 @@ onMounted(async () => {
   font-weight: 700;
   font-size: 1.125rem;
   margin: 0;
+}
+
+.track-wiki-links {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+.track-wiki-links a {
+  color: #555;
+  text-decoration: none;
+}
+.track-wiki-links a:hover {
+  color: #000;
+  text-decoration: underline;
 }
 
 .btn-track-play {

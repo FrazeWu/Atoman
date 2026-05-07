@@ -3,6 +3,7 @@ package handlers
 import (
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -38,6 +39,10 @@ func SetupAdminRoutes(router *gin.Engine, db *gorm.DB, s3Client *s3.S3) {
 	}
 }
 
+func canUploadToS3(s3Client *s3.S3) bool {
+	return s3Client != nil && os.Getenv("S3_BUCKET") != "" && os.Getenv("S3_URL_PREFIX") != ""
+}
+
 func GetPendingSongsHandler(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var songs []model.Song
@@ -65,7 +70,7 @@ func ApproveSongHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 			return
 		}
 
-		if song.AudioSource == "local" && song.AudioURL != "" {
+		if canUploadToS3(s3Client) && song.AudioSource == "local" && song.AudioURL != "" {
 			localPath := storage.GetLocalPathFromURL(song.AudioURL)
 			if localPath != "" {
 				s3URL, err := storage.UploadLocalFileToS3(s3Client, localPath)
@@ -79,7 +84,7 @@ func ApproveSongHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 			}
 		}
 
-		if song.CoverSource == "local" && song.CoverURL != "" {
+		if canUploadToS3(s3Client) && song.CoverSource == "local" && song.CoverURL != "" {
 			localPath := storage.GetLocalPathFromURL(song.CoverURL)
 			if localPath != "" {
 				s3URL, err := storage.UploadLocalFileToS3(s3Client, localPath)
@@ -223,6 +228,7 @@ func GetPendingAlbumsHandler(db *gorm.DB) gin.HandlerFunc {
 		if err := db.Where("status = ?", "pending").
 			Preload("Artists").
 			Preload("User").
+			Preload("Songs").
 			Order("created_at desc").
 			Find(&albums).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch pending albums"})
@@ -237,12 +243,13 @@ func ApproveAlbumHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 		id := c.Param("id")
 
 		var album model.Album
-		if err := db.First(&album, "id = ?", id).Error; err != nil {
+		if err := db.Preload("Songs").First(&album, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Album not found"})
 			return
 		}
 
-		if album.CoverSource == "local" && album.CoverURL != "" {
+		// Upload album cover to S3 if local
+		if canUploadToS3(s3Client) && album.CoverSource == "local" && album.CoverURL != "" {
 			localPath := storage.GetLocalPathFromURL(album.CoverURL)
 			if localPath != "" {
 				s3URL, err := storage.UploadLocalFileToS3(s3Client, localPath)
@@ -254,6 +261,39 @@ func ApproveAlbumHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 				album.CoverSource = "s3"
 				storage.DeleteLocalFile(localPath)
 			}
+		}
+
+		// Upload all songs' local files to S3
+		for i := range album.Songs {
+			song := &album.Songs[i]
+			if canUploadToS3(s3Client) && song.AudioSource == "local" && song.AudioURL != "" {
+				localPath := storage.GetLocalPathFromURL(song.AudioURL)
+				if localPath != "" {
+					s3URL, err := storage.UploadLocalFileToS3(s3Client, localPath)
+					if err != nil {
+						log.Printf("Failed to upload song audio to S3: %v", err)
+						continue
+					}
+					song.AudioURL = s3URL
+					song.AudioSource = "s3"
+					storage.DeleteLocalFile(localPath)
+				}
+			}
+			if canUploadToS3(s3Client) && song.CoverSource == "local" && song.CoverURL != "" {
+				localPath := storage.GetLocalPathFromURL(song.CoverURL)
+				if localPath != "" {
+					s3URL, err := storage.UploadLocalFileToS3(s3Client, localPath)
+					if err != nil {
+						log.Printf("Failed to upload song cover to S3: %v", err)
+						continue
+					}
+					song.CoverURL = s3URL
+					song.CoverSource = "s3"
+					storage.DeleteLocalFile(localPath)
+				}
+			}
+			song.Status = "approved"
+			db.Save(song)
 		}
 
 		album.Status = "approved"

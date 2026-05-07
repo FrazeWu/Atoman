@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"atoman/internal/model"
@@ -36,7 +37,7 @@ func AdminMiddleware(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		var user model.User
-		if err := db.First(&user, userID).Error; err != nil {
+		if err := findUserByContextID(db, userIDVal, userID, &user); err != nil {
 			if err == gorm.ErrRecordNotFound {
 				c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 			} else {
@@ -56,8 +57,17 @@ func AdminMiddleware(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+func findUserByContextID(db *gorm.DB, raw interface{}, numericID uint, user *model.User) error {
+	if uid, ok := raw.(uuid.UUID); ok {
+		return db.Where("uuid = ?", uid).First(user).Error
+	}
+	return db.First(user, numericID).Error
+}
+
 func normalizeUserID(value interface{}) (uint, error) {
 	switch v := value.(type) {
+	case uuid.UUID:
+		return 0, nil
 	case float64:
 		return uint(v), nil
 	case float32:

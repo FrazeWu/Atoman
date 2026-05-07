@@ -1,12 +1,12 @@
 <template>
   <div class="artist-select" ref="wrapRef">
-    <label class="field-label">{{ label || '艺术家' }}</label>
+    <label v-if="label" class="field-label">{{ label }}</label>
 
     <!-- Selected tags -->
     <div v-if="selected.length" class="tags">
       <span v-for="a in selected" :key="a.id" class="tag">
         {{ a.name }}
-        <button class="tag-remove" @click="remove(a.id)">✕</button>
+        <button class="tag-remove" type="button" :disabled="disabled" @click="remove(a.id)">✕</button>
       </span>
     </div>
 
@@ -15,8 +15,9 @@
       <input
         ref="inputRef"
         v-model="query"
-        :placeholder="placeholder || '搜索或新增艺术家'"
+        :placeholder="placeholder || '搜索艺术家'"
         class="field-input"
+        :disabled="disabled"
         @focus="open = true"
         @keydown.esc="open = false"
       />
@@ -34,31 +35,29 @@
         {{ a.name }}
       </div>
 
-      <!-- Create new -->
-      <div v-if="query.trim() && !exactMatch" class="dropdown-section">
+      <div class="dropdown-section">
         <div class="dropdown-divider" />
-        <p class="dropdown-hint">新增艺术家</p>
-        <div class="new-form">
-          <input v-model="newName" placeholder="艺术家姓名" class="field-input field-input-sm" />
-          <button class="btn-create" @mousedown.prevent="createNew">添加</button>
-        </div>
+        <RouterLink to="/music/artists/new" class="add-artist-link" @mousedown.prevent>
+          没找到艺术家？前往新增页面
+        </RouterLink>
       </div>
 
-      <div v-if="!filtered.length && !query.trim()" class="dropdown-empty">输入搜索或新增</div>
+      <div v-if="!filtered.length && !query.trim()" class="dropdown-empty">输入关键字搜索</div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { RouterLink } from 'vue-router'
 import { useApi } from '@/composables/useApi'
-import { useAuthStore } from '@/stores/auth'
 import type { Artist } from '@/types'
 
 const props = defineProps<{
   modelValue: Artist[]
   label?: string
   placeholder?: string
+  disabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -66,12 +65,10 @@ const emit = defineEmits<{
 }>()
 
 const api = useApi()
-const authStore = useAuthStore()
 
 const wrapRef = ref<HTMLElement | null>(null)
 const inputRef = ref<HTMLInputElement | null>(null)
 const query = ref('')
-const newName = ref('')
 const open = ref(false)
 const allArtists = ref<Artist[]>([])
 
@@ -85,39 +82,25 @@ const filtered = computed(() => {
     .slice(0, 8)
 })
 
-const exactMatch = computed(() =>
-  allArtists.value.some(a => a.name.toLowerCase() === query.value.trim().toLowerCase())
-)
-
 const select = (a: Artist) => {
+  if (props.disabled) return
   emit('update:modelValue', [...selected.value, a])
   query.value = ''
 }
 
 const remove = (id: number) => {
+  if (props.disabled) return
   emit('update:modelValue', selected.value.filter(a => a.id !== id))
 }
 
-const createNew = async () => {
-  const name = (newName.value || query.value).trim()
-  if (!name) return
-  try {
-    const res = await fetch('/api/artists', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${authStore.token}`
-      },
-      body: JSON.stringify({ name })
-    })
-    if (res.ok) {
-      const d = await res.json()
-      const artist: Artist = d.data || d
-      allArtists.value.push(artist)
-      select(artist)
-      newName.value = ''
-    }
-  } catch (e) { console.error(e) }
+const dedupeArtistsByName = (artists: Artist[]) => {
+  const seen = new Set<string>()
+  return artists.filter((artist) => {
+    const key = artist.name.trim().toLowerCase()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 const fetchArtists = async () => {
@@ -125,7 +108,7 @@ const fetchArtists = async () => {
     const res = await fetch(api.artists || '/api/artists')
     if (res.ok) {
       const d = await res.json()
-      allArtists.value = d.data || d || []
+      allArtists.value = dedupeArtistsByName(d.data || d || [])
     }
   } catch (e) { console.error(e) }
 }
@@ -191,7 +174,6 @@ watch(query, (v) => { if (v) open.value = true })
   box-sizing: border-box;
 }
 .field-input:focus { box-shadow: 5px 5px 0px 0px rgba(0,0,0,1); }
-.field-input-sm { padding: 0.5rem 0.75rem; }
 .dropdown {
   position: absolute;
   left: 0;
@@ -215,18 +197,18 @@ watch(query, (v) => { if (v) open.value = true })
 .dropdown-empty { padding: 1rem; color: #9ca3af; font-size: 0.875rem; text-align: center; }
 .dropdown-section { padding: 0.5rem; }
 .dropdown-divider { height: 1px; background: #e5e7eb; margin: 0.25rem 0; }
-.dropdown-hint { font-size: 0.75rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: #9ca3af; margin: 0 0 0.5rem; }
-.new-form { display: flex; gap: 0.5rem; }
-.btn-create {
+.add-artist-link {
+  display: inline-block;
   background: #000;
   color: #fff;
+  text-decoration: none;
   border: 2px solid #000;
-  padding: 0.5rem 0.75rem;
+  padding: 0.45rem 0.75rem;
   font-size: 0.75rem;
   font-weight: 900;
-  cursor: pointer;
-  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   transition: all 0.15s;
 }
-.btn-create:hover { background: #fff; color: #000; }
+.add-artist-link:hover { background: #fff; color: #000; }
 </style>
