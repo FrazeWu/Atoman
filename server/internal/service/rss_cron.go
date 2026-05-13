@@ -78,6 +78,8 @@ type ExtAtomAuthor struct {
 // StartRSSCron starts a background worker that fetches all unique RSS URLs periodically
 func StartRSSCron(db *gorm.DB) {
 	go func() {
+		// Wait a few seconds before starting the first sync to not block server startup
+		time.Sleep(5 * time.Second)
 		// Run immediately first
 		log.Println("Starting initial RSS sync...")
 		syncAllRSSFeeds(db)

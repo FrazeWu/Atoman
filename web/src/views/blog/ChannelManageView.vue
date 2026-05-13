@@ -34,7 +34,7 @@
           </div>
           <div style="display:flex;gap:0.5rem">
             <ABtn outline size="sm" @click="showEditModal(channel)">编辑</ABtn>
-            <ABtn v-if="!channel.is_default" outline size="sm" style="color:#ef4444;border-color:#ef4444" @click="showDeleteModal(channel)">删除</ABtn>
+            <ABtn v-if="!channel.is_default" variant="danger" size="sm" @click="showDeleteModal(channel)">删除</ABtn>
           </div>
         </div>
       </div>

@@ -21,6 +21,8 @@ const formData = reactive({
   album: '',
   releaseDate: new Date().toISOString().split('T')[0],
   source: '',
+  albumType: 'album' as 'single' | 'ep' | 'album',
+  editSummary: '',
 });
 
 const tracks = ref<TrackFile[]>([]);
@@ -64,6 +66,11 @@ const parseAndSortTracks = (files: FileList) => {
   });
   
   tracks.value = [...tracks.value, ...newTracks];
+  // Auto-suggest album type
+  const count = tracks.value.length;
+  if (count === 1) formData.albumType = 'single';
+  else if (count >= 2 && count <= 6) formData.albumType = 'ep';
+  else formData.albumType = 'album';
 };
 
 const triggerFileInput = () => {
@@ -139,6 +146,10 @@ const handleSubmit = async () => {
     alert('请至少选择一个音频文件');
     return;
   }
+  if (!formData.editSummary.trim()) {
+    alert('请填写编辑摘要');
+    return;
+  }
   
   isUploading.value = true;
   totalTracks.value = tracks.value.length;
@@ -162,6 +173,7 @@ const handleSubmit = async () => {
      data.append('track_number', (i + 1).toString());
      data.append('audio', track.file);
      data.append('batch_id', batchId);
+     data.append('album_type', formData.albumType);
     
     if (coverFile.value && i === 0) {
       data.append('cover', coverFile.value);
@@ -254,157 +266,170 @@ const handleCreateAlbumOnly = async () => {
 </script>
 
 <template>
-  <div class="max-w-3xl mx-auto px-8 py-20">
-    <h1 class="text-4xl font-black tracking-tighter mb-8">贡献新档案</h1>
-    <p class="text-gray-500 mb-12">
-      帮助我们完善 Ye 的音乐史料库。支持批量上传和拖拽排序。
-    </p>
+  <div class="music-form-page">
+    <div class="music-form-header">
+      <h1 class="music-form-title">贡献新档案</h1>
+      <p class="music-form-desc">帮助我们完善 Ye 的音乐史料库。支持批量上传、封面预览和拖拽排序。</p>
+    </div>
 
-    <form class="space-y-8">
-      <div>
-        <label class="block text-sm font-black uppercase tracking-widest mb-4">艺术家</label>
+    <form class="music-form" @submit.prevent="handleSubmit">
+      <div class="music-field">
+        <label class="music-label">艺术家</label>
         <ArtistSelect
           v-model="formData.artist"
           placeholder="选择艺术家"
           :disabled="isUploading"
-          class="w-full max-w-md"
+          class="music-control"
         />
-        <!-- Selected Artists Display -->
-        <div v-if="formData.artist.length" class="mt-4 flex flex-wrap gap-2">
+        <div v-if="formData.artist.length" class="selected-tags">
           <span
             v-for="(artist, idx) in formData.artist"
-            :key="idx"
-            class="inline-flex items-center bg-gray-100 border-2 border-black px-3 py-1.5 text-sm font-bold"
+            :key="artist.id || idx"
+            class="selected-tag"
           >
             {{ artist.name }}
             <button
               type="button"
               @click.prevent="removeArtist(idx)"
-              class="ml-2 text-red-600 hover:text-red-700 font-black"
+              class="selected-tag-remove"
             >
               ×
             </button>
           </span>
         </div>
       </div>
-      
-      <div>
-        <label class="block text-sm font-black uppercase tracking-widest mb-4">专辑名称</label>
-        <input 
-          type="text" 
-          required
-          class="w-full max-w-md bg-white border-2 border-black p-4 focus:shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] outline-none transition-all"
-          v-model="formData.album"
+
+      <div class="music-grid">
+        <div class="music-field">
+          <label class="music-label">专辑名称</label>
+          <input
+            v-model="formData.album"
+            type="text"
+            required
+            class="music-input"
+          />
+        </div>
+
+        <div class="music-field">
+          <label class="music-label">发行日期</label>
+          <input
+            v-model="formData.releaseDate"
+            type="date"
+            required
+            class="music-input"
+          />
+        </div>
+      </div>
+
+      <div class="music-field">
+        <label class="music-label">信息来源</label>
+        <input
+          v-model="formData.source"
+          type="text"
+          placeholder="例如：官方网站、维基百科、音乐平台等"
+          class="music-input"
         />
       </div>
 
-       <div class="space-y-4">
-         <label class="block text-sm font-black uppercase tracking-widest">发行日期</label>
-         <input
-           type="date"
-           required
-           class="w-full max-w-md bg-white border-2 border-black p-4 focus:shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] outline-none transition-all"
-           v-model="formData.releaseDate"
-         />
-       </div>
+      <div class="upload-card">
+        <label class="music-label">专辑类型</label>
+        <select v-model="formData.albumType" class="music-input">
+          <option value="single">Single（单曲）</option>
+          <option value="ep">EP</option>
+          <option value="album">Album（专辑）</option>
+        </select>
+        <p class="field-hint">根据曲目数量自动建议，可手动修改</p>
+      </div>
 
-       <div class="space-y-4">
-         <label class="block text-sm font-black uppercase tracking-widest">信息来源</label>
-         <input
-           type="text"
-           placeholder="例如：官方网站、维基百科、音乐平台等"
-           class="w-full max-w-md bg-white border-2 border-black p-4 focus:shadow-[5px_5px_0px_0px_rgba(0,0,0,1)] outline-none transition-all"
-           v-model="formData.source"
-         />
-       </div>
+      <div class="upload-card">
+        <label class="music-label">编辑摘要 <span class="required">*</span></label>
+        <input
+          v-model="formData.editSummary"
+          type="text"
+          placeholder="简要描述本次贡献内容（如：添加专辑《...》）"
+          class="music-input"
+          required
+        />
+      </div>
 
-      <div class="space-y-4">
-        <label class="block text-sm font-black uppercase tracking-widest">专辑封面（可选，不上传默认为纯黑）</label>
-        <input 
-          type="file" 
-          ref="coverInput" 
-          class="hidden" 
+      <div class="upload-card">
+        <label class="music-label">专辑封面（可选，不上传默认为纯黑）</label>
+        <input
+          ref="coverInput"
+          type="file"
+          class="hidden"
           accept="image/*"
           @change="handleCoverChange"
         />
-        <div v-if="!coverPreview" 
+        <div
+          v-if="!coverPreview"
+          class="dropzone"
           @click="triggerCoverInput"
-          class="border-2 border-dashed border-black p-12 text-center cursor-pointer hover:bg-gray-100 transition-colors"
         >
-          <p class="font-bold">点击上传封面图片</p>
-          <p class="text-xs text-gray-400 mt-2">不上传将默认为纯黑色</p>
+          <p class="dropzone-title">点击上传封面图片</p>
+          <p class="dropzone-desc">不上传将默认为纯黑色</p>
         </div>
-        <div v-else class="relative border-2 border-black inline-block">
-          <img :src="coverPreview" class="w-48 h-48 object-cover grayscale" alt="封面预览" />
-          <button 
-            type="button"
-            @click="removeCover"
-            class="absolute top-2 right-2 bg-black text-white px-3 py-1 text-xs font-bold hover:bg-red-600"
-          >
-            删除
-          </button>
+        <div v-else class="cover-preview-wrap">
+          <img :src="coverPreview" class="cover-preview" alt="封面预览" />
+          <button type="button" @click="removeCover" class="cover-action danger-action">删除</button>
+          <button type="button" @click="triggerCoverInput" class="cover-action">更换</button>
         </div>
       </div>
 
-      <div class="space-y-4">
-        <label class="block text-sm font-black uppercase tracking-widest">音频文件 (支持多选)</label>
-        <input 
-          type="file" 
-          ref="fileInput" 
-          class="hidden" 
+      <div class="upload-card">
+        <label class="music-label">音频文件（支持多选）</label>
+        <input
+          ref="fileInput"
+          type="file"
+          class="hidden"
           accept="audio/*"
           multiple
           @change="handleFileChange"
         />
-        <div 
-          @click="triggerFileInput"
-          class="border-2 border-dashed border-black p-12 text-center cursor-pointer hover:bg-gray-100 transition-colors"
-        >
-          <p class="font-bold">点击选择多个音频文件</p>
-          <p class="text-xs text-gray-400 mt-2">支持批量上传</p>
+        <div class="dropzone" @click="triggerFileInput">
+          <p class="dropzone-title">点击选择多个音频文件</p>
+          <p class="dropzone-desc">支持批量上传</p>
         </div>
       </div>
 
-       <!-- Track List -->
-       <div class="space-y-4">
-         <div class="flex justify-between items-center">
-           <label class="block text-sm font-black uppercase tracking-widest">歌曲列表 (拖拽排序)</label>
-           <div class="flex gap-2">
-             <button
-               v-if="tracks.length > 0"
-               type="button"
-               @click="removeAllTracks"
-               class="px-3 py-1 text-xs font-black border-2 border-black hover:bg-black hover:text-white transition-colors"
-             >
-               删除所有
-             </button>
-           </div>
-         </div>
-        <div class="space-y-2 border-2 border-black p-4 bg-gray-50">
-          <div 
-            v-for="(track, index) in tracks" 
+      <div class="track-section">
+        <div class="track-header">
+          <label class="music-label">歌曲列表（拖拽排序）</label>
+          <button
+            v-if="tracks.length > 0"
+            type="button"
+            @click="removeAllTracks"
+            class="mini-action"
+          >
+            删除所有
+          </button>
+        </div>
+
+        <div class="track-list">
+          <div
+            v-for="(track, index) in tracks"
             :key="track.id"
             draggable="true"
             @dragstart="onDragStart(index)"
             @dragover="onDragOver"
             @drop="onDrop(index)"
-            class="bg-white border-2 border-black p-4 flex items-center gap-4 cursor-move hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-shadow"
-            :class="{ 'opacity-50': draggingIndex === index }"
+            class="track-row"
+            :class="{ 'is-dragging': draggingIndex === index }"
           >
-            <span class="font-mono text-gray-400 w-8 text-center">{{ index + 1 }}</span>
-            <div class="flex-1">
-              <input 
-                type="text" 
+            <span class="track-index">{{ index + 1 }}</span>
+            <div class="track-body">
+              <input
                 v-model="track.title"
-                class="w-full font-bold outline-none border-b border-transparent focus:border-black transition-colors"
+                type="text"
+                class="track-title-input"
                 placeholder="歌曲名称"
               />
-              <p class="text-xs text-gray-400 truncate">{{ track.file.name }}</p>
+              <p class="track-meta">{{ track.file.name }}</p>
             </div>
-            <button 
-              type="button" 
+            <button
+              type="button"
               @click="removeTrack(index)"
-              class="text-red-500 font-bold hover:underline text-sm"
+              class="track-remove"
             >
               移除
             </button>
@@ -412,46 +437,378 @@ const handleCreateAlbumOnly = async () => {
         </div>
       </div>
 
-      <!-- Progress Display -->
-      <div v-if="isUploading" class="space-y-2 pt-4">
-        <div class="flex justify-between items-center text-sm font-bold">
+      <div v-if="isUploading" class="progress-panel">
+        <div class="progress-row">
           <span>正在上传: {{ currentTrackIndex }} / {{ totalTracks }}</span>
-          <span>
-            {{ Math.round((currentTrackIndex / totalTracks) * 100) }}%
-          </span>
+          <span>{{ Math.round((currentTrackIndex / totalTracks) * 100) }}%</span>
         </div>
-        <div class="w-full bg-gray-200 h-2">
-          <div 
-            class="bg-black h-2 transition-all duration-300" 
-            :style="{ width: `${(currentTrackIndex / totalTracks) * 100}%` }"
-          ></div>
+        <div class="progress-bar">
+          <div class="progress-bar-fill" :style="{ width: `${(currentTrackIndex / totalTracks) * 100}%` }"></div>
         </div>
-        <p class="text-sm text-gray-500">
-          正在处理: {{ tracks[currentTrackIndex - 1]?.title }}...
-        </p>
+        <p class="progress-text">正在处理: {{ tracks[currentTrackIndex - 1]?.title }}...</p>
       </div>
 
+      <div class="form-actions stacked-actions">
+        <button
+          type="submit"
+          class="primary-action"
+          :disabled="tracks.length === 0 || isUploading"
+          :class="{ 'is-disabled': tracks.length === 0 || isUploading }"
+        >
+          {{ isUploading ? '正在提交...' : `直接上传 (${tracks.length} 首)` }}
+        </button>
 
-      <button 
-        type="button"
-        @click="handleSubmit"
-        class="w-full bg-black text-white py-6 font-black uppercase tracking-widest hover:bg-white hover:text-black border-2 border-black transition-all"
-        :disabled="tracks.length === 0 || isUploading"
-        :class="{ 'opacity-50 cursor-not-allowed': tracks.length === 0 || isUploading }"
-      >
-        {{ isUploading ? '正在提交...' : `直接上传 (${tracks.length} 首)` }}
-      </button>
-
-      <button
-        v-if="isAdmin"
-        type="button"
-        @click="handleCreateAlbumOnly"
-        class="w-full bg-white text-black py-5 font-black uppercase tracking-widest hover:bg-black hover:text-white border-2 border-black transition-all"
-        :disabled="tracks.length > 0 || isUploading || formData.artist.length === 0 || !formData.album.trim()"
-        :class="{ 'opacity-50 cursor-not-allowed': tracks.length > 0 || isUploading || formData.artist.length === 0 || !formData.album.trim() }"
-      >
-        仅创建专辑档案
-      </button>
+        <button
+          v-if="isAdmin"
+          type="button"
+          @click="handleCreateAlbumOnly"
+          class="secondary-action"
+          :disabled="tracks.length > 0 || isUploading || formData.artist.length === 0 || !formData.album.trim()"
+          :class="{ 'is-disabled': tracks.length > 0 || isUploading || formData.artist.length === 0 || !formData.album.trim() }"
+        >
+          仅创建专辑档案
+        </button>
+      </div>
     </form>
   </div>
 </template>
+
+<style scoped>
+.music-form-page {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: 5rem 2rem 12rem;
+}
+
+.music-form-header {
+  margin-bottom: 2.5rem;
+}
+
+.music-form-title {
+  margin: 0 0 0.75rem;
+  font-size: 2.75rem;
+  font-weight: 900;
+  letter-spacing: -0.05em;
+}
+
+.music-form-desc {
+  margin: 0;
+  max-width: 42rem;
+  color: #6b7280;
+  line-height: 1.7;
+}
+
+.music-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.music-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+.music-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.music-control {
+  width: 100%;
+}
+
+.music-label {
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.music-input {
+  width: 100%;
+  border: 2px solid #000;
+  background: #fff;
+  padding: 1rem;
+  font-size: 0.95rem;
+  outline: none;
+  transition: box-shadow 0.2s;
+}
+
+.music-input:focus,
+.track-title-input:focus {
+  box-shadow: 5px 5px 0 0 rgba(0, 0, 0, 1);
+}
+
+.selected-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.selected-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 2px solid #000;
+  background: #f3f4f6;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 800;
+}
+
+.selected-tag-remove {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: #dc2626;
+  font-size: 1rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.upload-card,
+.track-section,
+.progress-panel {
+  border: 2px solid #000;
+  background: #fff;
+  padding: 1.25rem;
+}
+
+.dropzone {
+  border: 2px dashed #000;
+  padding: 3rem 1rem;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.dropzone:hover {
+  background: #f9fafb;
+}
+
+.dropzone-title {
+  margin: 0;
+  font-weight: 800;
+}
+
+.dropzone-desc {
+  margin: 0.5rem 0 0;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.cover-preview-wrap {
+  position: relative;
+  display: inline-block;
+  border: 2px solid #000;
+}
+
+.cover-preview {
+  display: block;
+  width: 12rem;
+  height: 12rem;
+  object-fit: cover;
+  filter: grayscale(100%);
+}
+
+.cover-action {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  border: 2px solid #000;
+  background: #fff;
+  color: #000;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.cover-action:hover {
+  background: #000;
+  color: #fff;
+}
+
+.danger-action {
+  top: 0.5rem;
+  bottom: auto;
+}
+
+.danger-action:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+.track-header,
+.progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.track-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.track-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border: 2px solid #000;
+  background: #f9fafb;
+  padding: 1rem;
+  cursor: move;
+}
+
+.track-row:hover {
+  box-shadow: 4px 4px 0 0 rgba(0, 0, 0, 1);
+}
+
+.track-row.is-dragging {
+  opacity: 0.5;
+}
+
+.track-index {
+  width: 2rem;
+  flex-shrink: 0;
+  text-align: center;
+  color: #9ca3af;
+  font-weight: 900;
+}
+
+.track-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.track-title-input {
+  width: 100%;
+  border: 2px solid transparent;
+  background: transparent;
+  padding: 0.35rem 0.5rem;
+  font-weight: 800;
+  outline: none;
+}
+
+.track-meta,
+.progress-text {
+  margin: 0.35rem 0 0;
+  color: #6b7280;
+  font-size: 0.8rem;
+}
+
+.track-remove,
+.mini-action,
+.secondary-action,
+.primary-action {
+  border: 2px solid #000;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.track-remove,
+.mini-action {
+  padding: 0.5rem 0.75rem;
+  background: #fff;
+  color: #000;
+  font-size: 0.75rem;
+}
+
+.track-remove:hover,
+.mini-action:hover,
+.secondary-action:hover {
+  background: #000;
+  color: #fff;
+}
+
+.progress-bar {
+  margin-top: 0.75rem;
+  width: 100%;
+  height: 0.5rem;
+  background: #e5e7eb;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: #000;
+  transition: width 0.3s;
+}
+
+.form-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.stacked-actions {
+  flex-direction: column;
+}
+
+.primary-action,
+.secondary-action {
+  width: 100%;
+  padding: 1.1rem 1.5rem;
+  font-size: 0.8125rem;
+}
+
+.primary-action {
+  background: #000;
+  color: #fff;
+}
+
+.primary-action:hover {
+  background: #fff;
+  color: #000;
+}
+
+.secondary-action {
+  background: #fff;
+  color: #000;
+}
+
+.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .music-form-page {
+    padding: 3rem 1rem 8rem;
+  }
+
+  .music-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .track-row,
+  .track-header,
+  .progress-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .cover-preview {
+    width: min(100%, 16rem);
+    height: auto;
+    aspect-ratio: 1;
+  }
+}
+
+.field-hint {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin-top: 0.25rem;
+}
+.required {
+  color: #dc2626;
+}
+</style>

@@ -11,6 +11,7 @@ type Channel struct {
 	UserID      uuid.UUID `json:"user_id" gorm:"type:uuid;not null;index"`
 	User        *User     `json:"user,omitempty" gorm:"foreignKey:UserID;references:UUID"`
 	Name        string    `json:"name" gorm:"not null;uniqueIndex:idx_channels_name"`
+	Slug        string    `json:"slug" gorm:"uniqueIndex"`
 	Description string    `json:"description" gorm:"type:text"`
 	CoverURL    string    `json:"cover_url" gorm:"type:text"`
 	IsDefault   bool      `json:"is_default" gorm:"default:false;index"`
@@ -34,6 +35,8 @@ type Post struct {
 	Base
 	UserID        uuid.UUID    `json:"user_id" gorm:"type:uuid;not null;index"`
 	User          *User        `json:"user,omitempty" gorm:"foreignKey:UserID;references:UUID"`
+	ChannelID     *uuid.UUID   `json:"channel_id,omitempty" gorm:"type:uuid;index"`
+	Channel       *Channel     `json:"channel,omitempty" gorm:"foreignKey:ChannelID"`
 	Title         string       `json:"title" gorm:"not null"`
 	Content       string       `json:"content" gorm:"type:text;not null"`
 	Summary       string       `json:"summary" gorm:"type:text"`
@@ -45,6 +48,22 @@ type Post struct {
 }
 
 func (Post) TableName() string { return "posts" }
+
+type BlogDraft struct {
+	Base
+	UserID        uuid.UUID  `json:"user_id" gorm:"type:uuid;not null;index;uniqueIndex:idx_blog_drafts_user_context,priority:1"`
+	ContextKey    string     `json:"context_key" gorm:"not null;uniqueIndex:idx_blog_drafts_user_context,priority:2"`
+	SourcePostID  *uuid.UUID `json:"source_post_id,omitempty" gorm:"type:uuid;index"`
+	Title         string     `json:"title"`
+	Content       string     `json:"content" gorm:"type:text"`
+	Summary       string     `json:"summary" gorm:"type:text"`
+	CoverURL      string     `json:"cover_url" gorm:"type:text"`
+	AllowComments bool       `json:"allow_comments" gorm:"default:true"`
+	ChannelID     *uuid.UUID `json:"channel_id,omitempty" gorm:"type:uuid;index"`
+	CollectionIDs string     `json:"collection_ids" gorm:"type:text"`
+}
+
+func (BlogDraft) TableName() string { return "blog_drafts" }
 
 type PostCollection struct {
 	PostID       uuid.UUID `json:"post_id" gorm:"type:uuid;primaryKey"`

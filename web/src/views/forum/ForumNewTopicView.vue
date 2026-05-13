@@ -66,7 +66,7 @@
           </span>
         </label>
         <div class="editor-wrap" :class="{ 'editor-error': !!errors.editor }">
-          <MarkdownEditor v-model="editorValue" placeholder="话题标题..." />
+          <AEditor v-model="editorValue" mode="sv" :enable-mentions="true" placeholder="话题标题…" />
         </div>
         <p v-if="errors.editor" class="field-error">{{ errors.editor }}</p>
       </div>
@@ -90,7 +90,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import ABtn from '@/components/ui/ABtn.vue'
 import APageHeader from '@/components/ui/APageHeader.vue'
-import MarkdownEditor from '@/components/blog/MarkdownEditor.vue'
+import AEditor from '@/components/shared/AEditor.vue'
 import { useForumStore } from '@/stores/forum'
 import { useAuthStore } from '@/stores/auth'
 

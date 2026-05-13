@@ -14,7 +14,12 @@ export const usePlayerStore = defineStore('player', () => {
   const currentTime = ref(0);
   const duration = ref(0);
 
+  // Album-based queue
+  const queue = ref<Song[]>([]);
+  const currentAlbum = ref<Song[] | null>(null);
+
   const audio = new Audio();
+  const hasRestoredPlayback = ref(false);
 
   audio.addEventListener('timeupdate', () => {
     currentTime.value = audio.currentTime;
@@ -41,6 +46,8 @@ export const usePlayerStore = defineStore('player', () => {
   };
 
   const loadPlaybackState = async () => {
+    if (hasRestoredPlayback.value || currentSong.value || isPlaying.value) return;
+
     const savedState = localStorage.getItem('playbackState');
     if (savedState) {
       try {
@@ -48,7 +55,7 @@ export const usePlayerStore = defineStore('player', () => {
         volume.value = state.volume || 1;
         isShuffled.value = state.isShuffled || false;
         repeatMode.value = state.repeatMode || 'none';
-        
+
         if (state.songId) {
           const song = songs.value.find(s => s.id === state.songId);
           if (song) {
@@ -56,17 +63,15 @@ export const usePlayerStore = defineStore('player', () => {
             audio.volume = volume.value;
             audio.currentTime = state.currentTime || 0;
             currentSong.value = song;
-            
-            if (state.isPlaying) {
-              await audio.play();
-              isPlaying.value = true;
-            }
+            isPlaying.value = false;
           }
         }
       } catch (error) {
         console.error('Failed to restore playback state:', error);
       }
     }
+
+    hasRestoredPlayback.value = true;
   };
 
   watch([currentSong, currentTime, volume, isPlaying, isShuffled, repeatMode], () => {
@@ -85,6 +90,7 @@ export const usePlayerStore = defineStore('player', () => {
     }
   };
 
+  // Play a single song (uses queue if set, else falls back to all songs)
   const playSong = (song: Song) => {
     if (currentSong.value?.id === song.id) {
       togglePlay();
@@ -95,6 +101,19 @@ export const usePlayerStore = defineStore('player', () => {
       currentSong.value = song;
       isPlaying.value = true;
     }
+  };
+
+  // Play an album starting from a specific index
+  const playAlbum = (albumSongs: Song[], startIndex = 0) => {
+    if (albumSongs.length === 0) return;
+    currentAlbum.value = albumSongs;
+    queue.value = [...albumSongs];
+    const song = albumSongs[startIndex];
+    audio.src = song.audio_url;
+    audio.volume = volume.value;
+    audio.play();
+    currentSong.value = song;
+    isPlaying.value = true;
   };
 
   const togglePlay = () => {
@@ -108,36 +127,38 @@ export const usePlayerStore = defineStore('player', () => {
     }
   };
 
+  const _getActiveList = () => queue.value.length > 0 ? queue.value : songs.value;
+
   const playNext = () => {
-    if (!currentSong.value || songs.value.length === 0) return;
-    const currentIndex = songs.value.findIndex(s => s.id === currentSong.value?.id);
+    const list = _getActiveList();
+    if (!currentSong.value || list.length === 0) return;
+    const currentIndex = list.findIndex(s => s.id === currentSong.value?.id);
 
     let nextIndex;
     if (isShuffled.value) {
-      nextIndex = Math.floor(Math.random() * songs.value.length);
+      nextIndex = Math.floor(Math.random() * list.length);
     } else {
       if (repeatMode.value === 'one') {
-        // Single loop: replay current song
         audio.currentTime = 0;
         audio.play();
         isPlaying.value = true;
         return;
-      } else if (repeatMode.value === 'all' || currentIndex < songs.value.length - 1) {
-         nextIndex = (currentIndex + 1) % songs.value.length;
+      } else if (repeatMode.value === 'all' || currentIndex < list.length - 1) {
+        nextIndex = (currentIndex + 1) % list.length;
       } else {
-         // End of list and not repeat all
-         isPlaying.value = false;
-         return;
+        isPlaying.value = false;
+        return;
       }
     }
-    playSong(songs.value[nextIndex]);
+    playSong(list[nextIndex]);
   };
 
   const playPrevious = () => {
-    if (!currentSong.value || songs.value.length === 0) return;
-    const currentIndex = songs.value.findIndex(s => s.id === currentSong.value?.id);
-    let prevIndex = (currentIndex - 1 + songs.value.length) % songs.value.length;
-    playSong(songs.value[prevIndex]);
+    const list = _getActiveList();
+    if (!currentSong.value || list.length === 0) return;
+    const currentIndex = list.findIndex(s => s.id === currentSong.value?.id);
+    let prevIndex = (currentIndex - 1 + list.length) % list.length;
+    playSong(list[prevIndex]);
   };
 
   const toggleShuffle = () => {
@@ -169,8 +190,11 @@ export const usePlayerStore = defineStore('player', () => {
     volume,
     currentTime,
     duration,
+    queue,
+    currentAlbum,
     fetchSongs,
     playSong,
+    playAlbum,
     togglePlay,
     playNext,
     playPrevious,

@@ -10,11 +10,12 @@ const player = usePlayerStore()
 const authStore = useAuthStore()
 player.fetchSongs()
 
-interface ArtistOption { id: number; name: string }
+interface ArtistOption { id: string; name: string }
 
 const artists = ref<ArtistOption[]>([])
 const albums = ref<Album[]>([])
 const selectedArtistName = ref('')
+const selectedArtistId = ref<string | null>(null)
 const searchQuery = ref('')
 const showDropdown = ref(false)
 const protectionStatuses = ref<Map<string, any>>(new Map())
@@ -41,6 +42,7 @@ async function fetchArtists(q = '') {
       if (!q && !selectedArtistName.value && artists.value.length > 0) {
         const pick = artists.value[Math.floor(Math.random() * artists.value.length)]
         selectedArtistName.value = pick.name
+        selectedArtistId.value = String(pick.id)
       }
     }
   } catch (e) {
@@ -59,8 +61,9 @@ async function fetchAlbums() {
   }
 }
 
-function selectArtist(name: string) {
+function selectArtist(name: string, id?: string) {
   selectedArtistName.value = name
+  selectedArtistId.value = id || null
   searchQuery.value = ''
   showDropdown.value = false
 }
@@ -69,6 +72,7 @@ function pickRandom() {
   if (artists.value.length > 0) {
     const pick = artists.value[Math.floor(Math.random() * artists.value.length)]
     selectedArtistName.value = pick.name
+    selectedArtistId.value = String(pick.id)
     searchQuery.value = ''
   }
 }
@@ -123,6 +127,8 @@ interface AlbumGroup {
   cover_url: string
   artist: string
   status?: string
+  album_type?: string
+  entry_status?: string
   songs: typeof player.songs
 }
 
@@ -144,6 +150,8 @@ const albumGroups = computed(() => {
       cover_url: album.cover_url || '',
       artist: artistName,
       status: album.status,
+      album_type: album.album_type,
+      entry_status: album.entry_status,
       songs: [],
     })
   })
@@ -196,7 +204,15 @@ const shouldShowYear = (index: number) =>
     <!-- Header -->
     <div class="home-header">
       <h1 class="home-title">
-        {{ selectedArtistName ? selectedArtistName.toUpperCase() : 'ATOMAN' }}<br />TIMELINE
+        <template v-if="selectedArtistId">
+          <RouterLink :to="`/music/artists/${selectedArtistId}/detail`" class="artist-title-link">
+            {{ selectedArtistName ? selectedArtistName.toUpperCase() : 'ATOMAN' }}
+          </RouterLink>
+        </template>
+        <template v-else>
+          {{ selectedArtistName ? selectedArtistName.toUpperCase() : 'ATOMAN' }}
+        </template>
+        <br />TIMELINE
       </h1>
       <p class="home-subtitle">
         An interactive archival project. Browse the complete discography of any artist.
@@ -216,7 +232,7 @@ const shouldShowYear = (index: number) =>
             <button
               v-for="artist in dropdownArtists"
               :key="artist.id"
-              @mousedown.prevent="selectArtist(artist.name)"
+              @mousedown.prevent="selectArtist(artist.name, String(artist.id))"
               class="search-item"
               :class="{ active: artist.name === selectedArtistName }"
             >
@@ -234,7 +250,7 @@ const shouldShowYear = (index: number) =>
 
         <button @click="pickRandom" class="btn-random">随机</button>
 
-        <button v-if="selectedArtistName" @click="selectedArtistName = ''" class="btn-all">
+        <button v-if="selectedArtistName" @click="selectedArtistName = ''; selectedArtistId = null" class="btn-all">
           全部
         </button>
 
@@ -291,6 +307,11 @@ const shouldShowYear = (index: number) =>
                     {{ albumGroup.songs.length }}
                     {{ albumGroup.songs.length === 1 ? 'track' : 'tracks' }}
                   </p>
+                  <div class="album-badges-row">
+                    <span v-if="albumGroup.album_type" class="album-type-badge">{{ albumGroup.album_type.toUpperCase() }}</span>
+                    <span v-if="albumGroup.entry_status === 'confirmed'" class="entry-badge entry-confirmed">已确认</span>
+                    <span v-else-if="albumGroup.entry_status === 'disputed'" class="entry-badge entry-disputed">争议</span>
+                  </div>
                   <p class="album-status" :class="albumGroup.status === 'closed' ? 'album-status-closed' : 'album-status-open'">
                     状态：{{ albumGroup.status === 'closed' ? '关闭' : '开放' }}
                   </p>
@@ -563,4 +584,33 @@ const shouldShowYear = (index: number) =>
   background: #facc15;
   color: #000;
 }
+.artist-title-link {
+  color: inherit;
+  text-decoration: none;
+}
+.artist-title-link:hover {
+  text-decoration: underline;
+}
+.album-badges-row {
+  display: flex;
+  gap: 0.375rem;
+  margin: 0.375rem 0 0.375rem;
+  flex-wrap: wrap;
+}
+.album-type-badge {
+  font-size: 0.5rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  border: 1px solid #000;
+  padding: 0.125rem 0.375rem;
+}
+.entry-badge {
+  font-size: 0.5rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  padding: 0.125rem 0.375rem;
+  border: 1px solid;
+}
+.entry-confirmed { border-color: #166534; color: #166534; }
+.entry-disputed { border-color: #991b1b; color: #991b1b; }
 </style>

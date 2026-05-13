@@ -16,15 +16,31 @@
       <div style="display:flex;gap:2rem">
         <!-- Left sidebar -->
         <div style="width:18rem;flex-shrink:0">
-          <div style="border:2px solid #000">
+          <div style="border:var(--a-border)">
             <!-- All subscriptions -->
             <button
               @click="selectAll"
-              style="width:100%;text-align:left;padding:1rem 1.25rem;font-weight:900;font-size:.75rem;text-transform:uppercase;letter-spacing:.1em;border-bottom:2px solid #000;cursor:pointer;transition:all .2s;background:none;border-right:none;border-left:none;border-top:none"
-              :style="isAllActive ? 'background:#000;color:#fff' : 'background:#fff;color:#000'"
+              style="width:100%;text-align:left;padding:1rem 1.25rem;font-weight:900;font-size:.75rem;text-transform:uppercase;letter-spacing:.1em;border-bottom:var(--a-border);cursor:pointer;transition:all .2s;background:none;border-right:none;border-left:none;border-top:none"
+              :style="isAllActive ? 'background:var(--a-color-fg);color:var(--a-color-bg)' : 'background:var(--a-color-bg);color:var(--a-color-fg)'"
             >
               全部订阅
             </button>
+
+            <!-- Quick links -->
+            <RouterLink
+              to="/feed/starred"
+              style="display:flex;align-items:center;gap:.5rem;width:100%;padding:.75rem 1.25rem;font-weight:900;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid var(--a-color-disabled-border);text-decoration:none;color:var(--a-color-fg);transition:all .2s"
+              :style="$route.path === '/feed/starred' ? 'background:var(--a-color-fg);color:var(--a-color-bg)' : 'background:var(--a-color-bg);color:var(--a-color-muted)'"
+            >
+              ★ 收藏
+            </RouterLink>
+            <RouterLink
+              to="/feed/reading-list"
+              style="display:flex;align-items:center;gap:.5rem;width:100%;padding:.75rem 1.25rem;font-weight:900;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;border-bottom:var(--a-border);text-decoration:none;transition:all .2s"
+              :style="$route.path === '/feed/reading-list' ? 'background:var(--a-color-fg);color:var(--a-color-bg)' : 'background:var(--a-color-bg);color:var(--a-color-muted)'"
+            >
+              ◷ 稍后阅读
+            </RouterLink>
 
             <div v-if="loadingSubscriptions" style="padding:1rem">
               <div v-for="i in 4" :key="i" class="a-skeleton" style="height:3rem;margin-bottom:.5rem" />
@@ -34,8 +50,8 @@
               <!-- Groups -->
               <template v-for="group in groups" :key="group.id">
                 <div
-                  style="display:flex;align-items:center;border-bottom:1px solid #e5e7eb;cursor:pointer;transition:all .2s"
-                  :style="activeGroupId === group.id ? 'background:#000;color:#fff' : 'background:#f9fafb;color:#000'"
+                  style="display:flex;align-items:center;border-bottom:1px solid var(--a-color-disabled-border);cursor:pointer;transition:all .2s"
+                  :style="activeGroupId === group.id ? 'background:var(--a-color-fg);color:var(--a-color-bg)' : 'background:var(--a-color-surface);color:var(--a-color-fg)'"
                 >
                   <button
                     @click="toggleGroup(group)"
@@ -47,31 +63,31 @@
                     <button
                       @click.stop="startRenameGroup(group)"
                       style="font-size:.65rem;font-weight:900;padding:.25rem .4rem;border:1px solid;cursor:pointer;transition:all .2s;background:none"
-                      :style="activeGroupId === group.id ? 'border-color:#fff;color:#fff' : 'border-color:#9ca3af;color:#6b7280'"
+                      :style="activeGroupId === group.id ? 'border-color:var(--a-color-bg);color:var(--a-color-bg)' : 'border-color:var(--a-color-muted-soft);color:var(--a-color-muted)'"
                     >改名</button>
                     <button
                       @click.stop="requestRemoveGroup(group.id)"
                       style="font-size:.65rem;font-weight:900;padding:.25rem .4rem;border:1px solid;cursor:pointer;transition:all .2s;background:none"
-                      :style="activeGroupId === group.id ? 'border-color:#fff;color:#fff' : 'border-color:#fca5a5;color:#ef4444'"
+                      :style="activeGroupId === group.id ? 'border-color:var(--a-color-bg);color:var(--a-color-bg)' : 'border-color:var(--a-color-danger);color:var(--a-color-danger)'"
                     >删除</button>
                   </div>
                 </div>
                 <!-- Rename inline -->
-                <div v-if="renamingGroupId === group.id" style="padding:.5rem .75rem;border-bottom:1px solid #e5e7eb;background:#fff;display:flex;gap:.5rem">
+                <div v-if="renamingGroupId === group.id" style="padding:.5rem .75rem;border-bottom:1px solid var(--a-color-disabled-border);background:var(--a-color-bg);display:flex;gap:.5rem">
                   <input v-model="renameGroupName" class="a-input" style="flex:1;padding:.35rem .5rem;font-size:.8rem" @keyup.enter="confirmRenameGroup" @keyup.esc="renamingGroupId = null" />
-                  <button @click="confirmRenameGroup" style="font-weight:900;font-size:.7rem;padding:.35rem .5rem;background:#000;color:#fff;border:none;cursor:pointer">确认</button>
+                  <button @click="confirmRenameGroup" style="font-weight:900;font-size:.7rem;padding:.35rem .5rem;background:var(--a-color-fg);color:var(--a-color-bg);border:none;cursor:pointer">确认</button>
                 </div>
                 <!-- Group subscriptions -->
                 <template v-if="expandedGroups.has(group.id)">
                   <div
                     v-for="sub in subscriptionsInGroup(group.id)"
                     :key="sub.id"
-                    style="display:flex;align-items:flex-start;justify-content:space-between;padding:.75rem 1.25rem .75rem 2rem;border-bottom:1px solid #f3f4f6;cursor:pointer;transition:all .2s"
-                    :style="activeSourceId === sub.id ? 'background:#000;color:#fff' : 'background:#fff;color:#000'"
+                    style="display:flex;align-items:flex-start;justify-content:space-between;padding:.75rem 1.25rem .75rem 2rem;border-bottom:1px solid var(--a-color-disabled-bg);cursor:pointer;transition:all .2s"
+                    :style="activeSourceId === sub.id ? 'background:var(--a-color-fg);color:var(--a-color-bg)' : 'background:var(--a-color-bg);color:var(--a-color-fg)'"
                     @click="selectSource(sub.id)"
                   >
                     <div style="flex:1;min-width:0">
-                      <span class="a-label" style="display:block;margin-bottom:.15rem;color:#9ca3af;font-size:.65rem">
+                      <span class="a-label" style="display:block;margin-bottom:.15rem;color:var(--a-color-muted-soft);font-size:.65rem">
                         {{ sourceTypeLabel(sub.feed_source?.source_type || '') }}
                       </span>
                       <span style="font-weight:700;font-size:.8rem;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
@@ -82,7 +98,7 @@
                       <div style="position:relative">
                         <button
                           @click.stop="toggleGroupPopover(sub.id)"
-                          style="font-size:.65rem;padding:.2rem .45rem;border:1px solid #d1d5db;background:#fff;color:#000;cursor:pointer;font-weight:700"
+                          style="font-size:.65rem;padding:.2rem .45rem;border:1px solid var(--a-color-disabled-border);background:var(--a-color-bg);color:var(--a-color-fg);cursor:pointer;font-weight:700"
                           :title="'移至分组'"
                         >
                           {{ currentGroupName(sub) }} ▾
@@ -110,7 +126,7 @@
                       </div>
                       <span
                         @click.stop="requestUnsubscribeSource(sub.id)"
-                        style="font-size:.75rem;font-weight:900;background:none;border:none;cursor:pointer;opacity:0.4;transition:opacity .2s;color:#ef4444"
+                        style="font-size:.75rem;font-weight:900;background:none;border:none;cursor:pointer;opacity:0.4;transition:opacity .2s;color:var(--a-color-danger)"
                       >✕</span>
                     </div>
                   </div>
@@ -120,19 +136,19 @@
               <!-- Ungrouped subscriptions -->
               <div
                 v-if="ungroupedSubscriptions.length && !defaultGroupId"
-                style="padding:.6rem 1.25rem;font-weight:900;font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:#9ca3af;border-bottom:1px solid #e5e7eb;background:#f9fafb"
+                style="padding:.6rem 1.25rem;font-weight:900;font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--a-color-muted-soft);border-bottom:1px solid var(--a-color-disabled-border);background:var(--a-color-surface)"
               >
                 默认分组
               </div>
               <div
                 v-for="sub in ungroupedSubscriptions"
                 :key="sub.id"
-                style="display:flex;align-items:flex-start;justify-content:space-between;padding:.75rem 1.25rem;border-bottom:1px solid #f3f4f6;cursor:pointer;transition:all .2s"
-                :style="activeSourceId === sub.id ? 'background:#000;color:#fff' : 'background:#fff;color:#000'"
+                style="display:flex;align-items:flex-start;justify-content:space-between;padding:.75rem 1.25rem;border-bottom:1px solid var(--a-color-disabled-bg);cursor:pointer;transition:all .2s"
+                :style="activeSourceId === sub.id ? 'background:var(--a-color-fg);color:var(--a-color-bg)' : 'background:var(--a-color-bg);color:var(--a-color-fg)'"
                 @click="selectSource(sub.id)"
               >
                 <div style="flex:1;min-width:0">
-                  <span class="a-label" style="display:block;margin-bottom:.15rem;color:#9ca3af;font-size:.65rem">
+                  <span class="a-label" style="display:block;margin-bottom:.15rem;color:var(--a-color-muted-soft);font-size:.65rem">
                     {{ sourceTypeLabel(sub.feed_source?.source_type || '') }}
                   </span>
                   <span style="font-weight:700;font-size:.8rem;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
@@ -143,7 +159,7 @@
                   <div style="position:relative">
                     <button
                       @click.stop="toggleGroupPopover(sub.id)"
-                      style="font-size:.65rem;padding:.2rem .45rem;border:1px solid #d1d5db;background:#fff;color:#000;cursor:pointer;font-weight:700"
+                      style="font-size:.65rem;padding:.2rem .45rem;border:1px solid var(--a-color-disabled-border);background:var(--a-color-bg);color:var(--a-color-fg);cursor:pointer;font-weight:700"
                       :title="'移至分组'"
                     >
                       {{ currentGroupName(sub) }} ▾
@@ -171,13 +187,13 @@
                   </div>
                   <span
                     @click.stop="requestUnsubscribeSource(sub.id)"
-                    style="font-size:.75rem;font-weight:900;background:none;border:none;cursor:pointer;opacity:0.4;transition:opacity .2s;color:#ef4444"
+                    style="font-size:.75rem;font-weight:900;background:none;border:none;cursor:pointer;opacity:0.4;transition:opacity .2s;color:var(--a-color-danger)"
                   >✕</span>
                 </div>
               </div>
 
               <!-- New group button -->
-              <div style="padding:.75rem 1.25rem;border-top:2px solid #000">
+              <div style="padding:.75rem 1.25rem;border-top:var(--a-border)">
                 <div v-if="addingGroup" style="display:flex;gap:.5rem">
                   <input
                     v-model="newGroupName"
@@ -188,13 +204,13 @@
                     @keyup.esc="cancelAddGroup"
                     ref="newGroupInput"
                   />
-                  <button @click="confirmAddGroup" style="font-weight:900;font-size:.7rem;padding:.35rem .5rem;background:#000;color:#fff;border:none;cursor:pointer">确认</button>
-                  <button @click="cancelAddGroup" style="font-weight:900;font-size:.7rem;padding:.35rem .5rem;background:#fff;color:#000;border:1px solid #000;cursor:pointer">取消</button>
+                  <button @click="confirmAddGroup" style="font-weight:900;font-size:.7rem;padding:.35rem .5rem;background:var(--a-color-fg);color:var(--a-color-bg);border:none;cursor:pointer">确认</button>
+                  <button @click="cancelAddGroup" style="font-weight:900;font-size:.7rem;padding:.35rem .5rem;background:var(--a-color-bg);color:var(--a-color-fg);border:var(--a-border);cursor:pointer">取消</button>
                 </div>
                 <button
                   v-else
                   @click="startAddGroup"
-                  style="font-weight:900;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;background:none;border:none;cursor:pointer;color:#6b7280;transition:color .2s"
+                  style="font-weight:900;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;background:none;border:none;cursor:pointer;color:var(--a-color-muted);transition:color .2s"
                 >+ 新建分组</button>
               </div>
             </template>
@@ -206,8 +222,8 @@
           <div style="display:flex;justify-content:flex-end;margin-bottom:1rem">
             <button
               @click="markAllReadAndRefresh"
-              style="font-weight:900;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;padding:.5rem 1rem;border:2px solid #000;background:#fff;cursor:pointer;transition:all .2s"
-              :style="markingAllRead ? 'background:#000;color:#fff' : ''"
+              style="font-weight:900;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;padding:.5rem 1rem;border:var(--a-border);background:var(--a-color-bg);cursor:pointer;transition:all .2s"
+              :style="markingAllRead ? 'background:var(--a-color-fg);color:var(--a-color-bg)' : ''"
             >
               {{ markingAllRead ? '标记中...' : '全部已读' }}
             </button>
@@ -229,7 +245,7 @@
                 v-if="item.type === 'post' && item.post"
                 :to="`/post/${item.post.id}`"
                 class="a-card a-card-hover"
-                style="display:block;text-decoration:none;color:#000;transition:all .3s;position:relative"
+                style="display:block;text-decoration:none;color:var(--a-color-fg);transition:all .3s;position:relative"
                 @click="onItemClick(item)"
               >
                 <div style="display:flex;gap:1rem;align-items:flex-start">
@@ -237,8 +253,8 @@
                   <div style="flex:1;min-width:0">
                     <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem;flex-wrap:wrap">
                       <span class="a-label a-muted">{{ item.post.user?.display_name || item.post.user?.username || '未知作者' }}</span>
-                      <span style="font-size:.75rem;color:#d1d5db">{{ formatDate(item.published_at) }}</span>
-                      <span class="a-label" style="margin-left:auto;color:#d1d5db">内部文章 →</span>
+                      <span style="font-size:.75rem;color:var(--a-color-disabled-border)">{{ formatDate(item.published_at) }}</span>
+                      <span class="a-label" style="margin-left:auto;color:var(--a-color-disabled-border)">内部文章 →</span>
                     </div>
                     <h3 class="a-clamp-2" style="font-weight:900;font-size:1.125rem;letter-spacing:-0.025em;margin-bottom:.5rem">
                       {{ item.post.title }}
@@ -248,11 +264,7 @@
                     </p>
                   </div>
                 </div>
-                <span
-                  v-if="item.is_read"
-                  class="a-label"
-                  style="position:absolute;right:1rem;bottom:1rem;color:#2bb24c;border:1px solid #2bb24c;padding:.1rem .4rem;background:#f0fff4"
-                >已读</span>
+                <span v-if="item.is_read" class="a-label is-read-badge">已读</span>
               </RouterLink>
 
               <!-- External RSS Item -->
@@ -262,7 +274,7 @@
                 target="_blank"
                 rel="noopener noreferrer"
                 class="a-card a-card-hover"
-                style="display:block;text-decoration:none;color:#000;transition:all .3s;position:relative"
+                style="display:block;text-decoration:none;color:var(--a-color-fg);transition:all .3s;position:relative"
                 @click="onItemClick(item)"
               >
                 <div style="display:flex;gap:1rem;align-items:flex-start">
@@ -270,18 +282,18 @@
                   <img
                     v-if="item.feed_item.image_url"
                     :src="item.feed_item.image_url"
-                    style="width:4rem;height:4rem;object-fit:cover;border:2px solid #000;filter:grayscale(100%);flex-shrink:0"
+                    style="width:4rem;height:4rem;object-fit:cover;border:var(--a-border);filter:grayscale(100%);flex-shrink:0"
                   />
                   <span v-else class="a-badge" style="flex-shrink:0">外部</span>
 
                   <div style="flex:1;min-width:0">
                     <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem;flex-wrap:wrap">
                       <span class="a-label a-muted">{{ item.feed_item.author || item.feed_item.feed_source?.title || 'RSS' }}</span>
-                      <span v-if="item.feed_item.duration" style="font-size:.7rem;color:#9ca3af;font-weight:700">
+                      <span v-if="item.feed_item.duration" style="font-size:.7rem;color:var(--a-color-muted-soft);font-weight:700">
                         时长: {{ item.feed_item.duration }}
                       </span>
-                      <span style="font-size:.75rem;color:#d1d5db">{{ formatDate(item.feed_item.published_at) }}</span>
-                      <span class="a-label" style="margin-left:auto;color:#d1d5db">↗ 外部链接</span>
+                      <span style="font-size:.75rem;color:var(--a-color-disabled-border)">{{ formatDate(item.feed_item.published_at) }}</span>
+                      <span class="a-label" style="margin-left:auto;color:var(--a-color-disabled-border)">↗ 外部链接</span>
                     </div>
                     <h3 class="a-clamp-2" style="font-weight:900;font-size:1.125rem;letter-spacing:-0.025em;margin-bottom:.5rem">
                       {{ item.feed_item.title }}
@@ -296,33 +308,44 @@
                       @click.prevent.stop="playPodcast(item.feed_item, $event)"
                     >
                       <button
-                        style="font-weight:900;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;padding:.4rem 1rem;border:2px solid #000;cursor:pointer;transition:all .2s"
-                        :style="isPodcastPlaying(item.feed_item) ? 'background:#000;color:#fff' : 'background:#fff;color:#000'"
+                        style="font-weight:900;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;padding:.4rem 1rem;border:var(--a-border);cursor:pointer;transition:all .2s"
+                        :style="isPodcastPlaying(item.feed_item) ? 'background:var(--a-color-fg);color:var(--a-color-bg)' : 'background:var(--a-color-bg);color:var(--a-color-fg)'"
                       >
                         {{ isPodcastPlaying(item.feed_item) ? '■ 播放中' : '▶ 播放' }}
                       </button>
                     </div>
+                    <!-- Action buttons -->
+                    <div style="display:flex;gap:.5rem;margin-top:.75rem" @click.prevent.stop>
+                      <button
+                        @click="toggleStar(item.feed_item.id)"
+                        style="font-size:.7rem;font-weight:900;padding:.25rem .6rem;border:var(--a-border);cursor:pointer;transition:all .2s;letter-spacing:.05em"
+                        :style="starredIds.has(item.feed_item.id) ? 'background:var(--a-color-fg);color:var(--a-color-bg)' : 'background:var(--a-color-bg);color:var(--a-color-fg)'"
+                        :title="starredIds.has(item.feed_item.id) ? '取消收藏' : '收藏'"
+                      >{{ starredIds.has(item.feed_item.id) ? '★ 已收藏' : '☆ 收藏' }}</button>
+                      <button
+                        @click="toggleReadingList(item.feed_item.id)"
+                        style="font-size:.7rem;font-weight:900;padding:.25rem .6rem;border:var(--a-border);cursor:pointer;transition:all .2s;letter-spacing:.05em"
+                        :style="readingListIds.has(item.feed_item.id) ? 'background:var(--a-color-fg);color:var(--a-color-bg)' : 'background:var(--a-color-bg);color:var(--a-color-fg)'"
+                        :title="readingListIds.has(item.feed_item.id) ? '从稍后阅读移除' : '稍后阅读'"
+                      >{{ readingListIds.has(item.feed_item.id) ? '◷ 已加入' : '◷ 稍后读' }}</button>
+                    </div>
                   </div>
                 </div>
-                <span
-                  v-if="item.is_read"
-                  class="a-label"
-                  style="position:absolute;right:1rem;bottom:1rem;color:#2bb24c;border:1px solid #2bb24c;padding:.1rem .4rem;background:#f0fff4"
-                >已读</span>
+                <span v-if="item.is_read" class="a-label is-read-badge">已读</span>
               </a>
             </template>
 
             <!-- Pagination -->
             <div style="display:flex;flex-direction:column;align-items:center;gap:.75rem;padding:1.5rem 0">
-              <p style="font-size:.75rem;color:#9ca3af;font-weight:700">
+              <p style="font-size:.75rem;color:var(--a-color-muted-soft);font-weight:700">
                 已加载 {{ timeline.length }} / {{ totalItems }} 条
               </p>
               <button
                 v-if="timeline.length < totalItems"
                 @click="loadMore"
                 :disabled="loadingMore"
-                style="font-weight:900;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;padding:.75rem 2rem;border:2px solid #000;cursor:pointer;transition:all .2s;background:#fff"
-                :style="loadingMore ? 'opacity:.5;cursor:not-allowed' : 'hover:background:#000'"
+                style="font-weight:900;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;padding:.75rem 2rem;border:var(--a-border);cursor:pointer;transition:all .2s;background:var(--a-color-bg)"
+                :style="loadingMore ? 'opacity:.5;cursor:not-allowed' : ''"
               >
                 {{ loadingMore ? '加载中...' : '加载更多' }}
               </button>
@@ -346,17 +369,20 @@
         </div>
         <div v-if="groups.length" class="a-field">
           <label class="a-field-label">添加到分组（可选）</label>
-          <select v-model="newRssGroupId" class="a-input" style="cursor:pointer">
-            <option :value="defaultGroupId || ''">默认分组</option>
-            <option v-for="g in nonDefaultGroups" :key="g.id" :value="g.id">{{ g.name }}</option>
-          </select>
+          <ASelect
+            v-model="newRssGroupId"
+            :options="[
+              { label: '默认分组', value: defaultGroupId || '' },
+              ...nonDefaultGroups.map(g => ({ label: g.name, value: g.id }))
+            ]"
+          />
         </div>
       </div>
       <div v-if="addError" class="a-error" style="margin-bottom:1rem">{{ addError }}</div>
-      <div style="display:flex;gap:.75rem">
+      <template #footer>
         <ABtn style="flex:1" @click="addSubscription" :loading="adding" loadingText="添加中...">添加</ABtn>
         <ABtn outline @click="showAddModal = false">取消</ABtn>
-      </div>
+      </template>
     </AModal>
 
     <AConfirm
@@ -380,12 +406,26 @@ import AModal from '@/components/ui/AModal.vue'
 import AEmpty from '@/components/ui/AEmpty.vue'
 import APageHeader from '@/components/ui/APageHeader.vue'
 import AConfirm from '@/components/ui/AConfirm.vue'
+import ASelect from '@/components/ui/ASelect.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePlayerStore } from '@/stores/player'
+import { useFeedStore } from '@/stores/feed'
 import type { Subscription, SubscriptionGroup, TimelineItem, FeedItem } from '@/types'
 
 const authStore = useAuthStore()
 const playerStore = usePlayerStore()
+const feedStore = useFeedStore()
+
+const starredIds = feedStore.starredItemIds
+const readingListIds = feedStore.readingListItemIds
+
+const toggleStar = async (feedItemId: string) => {
+  await feedStore.toggleStar(feedItemId)
+}
+
+const toggleReadingList = async (feedItemId: string) => {
+  await feedStore.toggleReadingListItem(feedItemId)
+}
 const API_URL = import.meta.env.VITE_API_URL || '/api'
 const authHeaders = () => ({ Authorization: `Bearer ${authStore.token}` })
 
@@ -432,10 +472,10 @@ const totalItems = ref(0)
 const currentPage = ref(1)
 const pageLimit = 20
 
-const activeSourceId = ref<number | null>(null)
+const activeSourceId = ref<string | null>(null)
 const activeGroupId = ref<string | null>(null)
 const expandedGroups = ref<Set<string>>(new Set())
-const groupPopoverSubId = ref<number | null>(null)
+const groupPopoverSubId = ref<string | null>(null)
 
 const loadingSubscriptions = ref(true)
 const loadingTimeline = ref(false)
@@ -590,7 +630,7 @@ const selectAll = () => {
   fetchTimeline()
 }
 
-const selectSource = (id: number) => {
+const selectSource = (id: string) => {
   activeSourceId.value = id
   activeGroupId.value = null
   currentPage.value = 1
@@ -641,7 +681,7 @@ const markAllReadAndRefresh = async () => {
 }
 
 // Unsubscribe
-const unsubscribeSource = async (id: number) => {
+const unsubscribeSource = async (id: string) => {
   try {
     await fetch(`${API_URL}/feed/subscriptions/${id}`, { method: 'DELETE', headers: authHeaders() })
     if (activeSourceId.value === id) activeSourceId.value = null
@@ -672,7 +712,7 @@ const confirmDeleteAction = async () => {
   }
 }
 
-const requestUnsubscribeSource = (id: number) => {
+const requestUnsubscribeSource = (id: string) => {
   requestDeleteAction('取消订阅', '确定要取消这个订阅吗？', () => unsubscribeSource(id))
 }
 
@@ -751,7 +791,7 @@ const requestRemoveGroup = (id: string) => {
   )
 }
 
-const moveToGroup = async (subId: number, groupId: string) => {
+const moveToGroup = async (subId: string, groupId: string) => {
   try {
     await fetch(`${API_URL}/feed/subscriptions/${subId}/group`, {
       method: 'PUT',
@@ -764,12 +804,12 @@ const moveToGroup = async (subId: number, groupId: string) => {
   }
 }
 
-const setSubscriptionGroupAndClose = async (subId: number, groupId: string) => {
+const setSubscriptionGroupAndClose = async (subId: string, groupId: string) => {
   await moveToGroup(subId, groupId)
   groupPopoverSubId.value = null
 }
 
-const toggleGroupPopover = (subId: number) => {
+const toggleGroupPopover = (subId: string) => {
   groupPopoverSubId.value = groupPopoverSubId.value === subId ? null : subId
 }
 
@@ -833,6 +873,8 @@ onMounted(async () => {
   if (authStore.isAuthenticated) {
     await Promise.all([fetchSubscriptions(), fetchGroups()])
     await fetchTimeline()
+    feedStore.fetchStarredIds()
+    feedStore.fetchReadingListIds()
   }
 })
 
@@ -849,18 +891,18 @@ onUnmounted(() => {
   min-width: 9rem;
   max-height: 14rem;
   overflow-y: auto;
-  background: #fff;
-  border: 2px solid #000;
-  box-shadow: 8px 8px 0 0 rgba(0, 0, 0, 1);
-  z-index: 40;
+  background: var(--a-color-bg);
+  border: var(--a-border);
+  box-shadow: var(--a-shadow-dropdown);
+  z-index: var(--a-z-dropdown);
 }
 
 .group-popover-item {
   width: 100%;
   border: none;
-  border-bottom: 1px solid #e5e7eb;
-  background: #fff;
-  color: #000;
+  border-bottom: 1px solid var(--a-color-disabled-border);
+  background: var(--a-color-bg);
+  color: var(--a-color-fg);
   text-align: left;
   font-size: 0.7rem;
   font-weight: 900;
@@ -875,7 +917,17 @@ onUnmounted(() => {
 }
 
 .group-popover-item:hover {
-  background: #000;
-  color: #fff;
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
+}
+
+.is-read-badge {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  color: var(--a-color-success);
+  border: 1px solid var(--a-color-success);
+  padding: 0.1rem 0.4rem;
+  background: var(--a-color-success-bg);
 }
 </style>

@@ -315,6 +315,11 @@ func (s *RevisionService) applyRevisionToContent(tx *gorm.DB, revision *model.Re
 			Where("id = ?", revision.ContentID).
 			Updates(content).Error
 
+	case "artist":
+		return tx.Model(&model.Artist{}).
+			Where("id = ?", revision.ContentID).
+			Updates(content).Error
+
 	default:
 		return fmt.Errorf("unsupported content type: %s", revision.ContentType)
 	}

@@ -216,13 +216,11 @@
           </div>
           <div class="a-field">
             <label class="a-field-label">论点内容</label>
-            <textarea
+            <AEditor
               v-model="newArgument.content"
-              required
-              rows="4"
-              class="a-textarea"
-              placeholder="阐述你的观点..."
-            ></textarea>
+              mode="plain"
+              placeholder="阐述你的观点…"
+            />
           </div>
           <div class="flex justify-end gap-4 mt-6">
             <ABtn outline type="button" @click="handleCloseArgumentModal">取消</ABtn>
@@ -250,12 +248,11 @@
           </div>
           <div class="a-field">
             <label class="a-field-label">论点内容</label>
-            <textarea
+            <AEditor
               v-model="editArgumentForm.content"
-              required
-              rows="4"
-              class="a-textarea"
-            ></textarea>
+              mode="plain"
+              placeholder="阐述你的观点…"
+            />
           </div>
           <div class="flex justify-end gap-4 mt-6">
             <ABtn outline type="button" @click="showEditArgumentModal = false">取消</ABtn>
@@ -389,6 +386,7 @@ import AModal from '@/components/ui/AModal.vue'
 import AEmpty from '@/components/ui/AEmpty.vue'
 import ArgumentNode from '@/components/debate/ArgumentNode.vue'
 import { useMarkdownRenderer } from '@/composables/useMarkdownRenderer'
+import AEditor from '@/components/shared/AEditor.vue'
 
 const router = useRouter()
 const route = useRoute()

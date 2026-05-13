@@ -20,7 +20,16 @@
             <div class="author-avatar">
               {{ (post.user?.display_name || post.user?.username || '?').charAt(0).toUpperCase() }}
             </div>
-            <span class="author-name">{{ post.user?.display_name || post.user?.username }}</span>
+            <span class="author-name">
+              <template v-if="showChannel && post.channel">
+                <RouterLink
+                  :to="`/channel/${post.channel.slug || post.channel.id}`"
+                  class="channel-link"
+                  @click.stop
+                >{{ post.channel.name }}</RouterLink>
+              </template>
+              <template v-else>{{ post.user?.display_name || post.user?.username }}</template>
+            </span>
           </div>
           <div class="post-stats">
             <span v-if="post.likes_count !== undefined">♥ {{ post.likes_count }}</span>
@@ -37,7 +46,7 @@
 import { RouterLink } from 'vue-router'
 import type { Post } from '@/types'
 
-defineProps<{ post: Post }>()
+defineProps<{ post: Post; showChannel?: boolean }>()
 
 const formatDate = (dateStr: string) => {
   const d = new Date(dateStr)
@@ -114,6 +123,8 @@ const formatDate = (dateStr: string) => {
   flex-shrink: 0;
 }
 .author-name { font-size: 0.75rem; font-weight: 700; color: #374151; }
+.channel-link { color: #374151; text-decoration: none; font-weight: 700; }
+.channel-link:hover { text-decoration: underline; }
 .post-stats {
   display: flex;
   align-items: center;

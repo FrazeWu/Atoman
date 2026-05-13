@@ -8,15 +8,15 @@
       <nav class="nav">
         <RouterLink to="/feed" class="nav-link" :class="{ active: $route.path === '/' || $route.path.startsWith('/feed') }">订阅</RouterLink>
         <RouterLink to="/music" class="nav-link" :class="{ active: $route.path.startsWith('/music') || $route.path.startsWith('/artist=') }">音乐</RouterLink>
-        <RouterLink to="/blog" class="nav-link" :class="{ active: $route.path.startsWith('/blog') }">博客</RouterLink>
+        <RouterLink to="/blog" class="nav-link" :class="{ active: isBlogContext }">博客</RouterLink>
         <RouterLink to="/debate" class="nav-link" :class="{ active: $route.path.startsWith('/debate') }">辩论</RouterLink>
         <RouterLink to="/timeline" class="nav-link" :class="{ active: $route.path.startsWith('/timeline') }">时间线</RouterLink>
 
         <!-- Blog sub-links when in blog context -->
-        <template v-if="$route.path.startsWith('/blog')">
+        <template v-if="isBlogContext">
           <span class="nav-sep">|</span>
           <RouterLink v-if="authStore.isAuthenticated" to="/post/new" class="nav-link-sm">写文章</RouterLink>
-          <RouterLink to="/blog/explore" class="nav-link-sm">探索</RouterLink>
+          <RouterLink to="/blog" class="nav-link-sm">发现</RouterLink>
         </template>
       </nav>
 
@@ -71,7 +71,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink, useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useApi } from '@/composables/useApi'
 import type { Notification } from '@/types'
@@ -86,6 +86,18 @@ const notifications = ref<Notification[]>([])
 const unreadCount = computed(() => notifications.value.filter(n => !n.read_at).length)
 const recentNotifications = computed(() => notifications.value.slice(0, 5))
 const userInitial = computed(() => (authStore.user?.username || '?').charAt(0).toUpperCase())
+
+const route = useRoute()
+const isBlogContext = computed(() => {
+  const p = route.path
+  return (
+    p.startsWith('/blog') ||
+    p.startsWith('/channel') ||
+    p.startsWith('/collection') ||
+    p.startsWith('/post') ||
+    p.startsWith('/user')
+  )
+})
 
 const toggleDropdown = (name: string) => {
   activeDropdown.value = activeDropdown.value === name ? null : name
@@ -200,9 +212,9 @@ const openNotification = (n: Notification) => {
 }
 .dropdown-wrap { position: relative; }
 .notif-btn {
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: #6b7280;
+  font-size: var(--a-text-sm);
+  font-weight: var(--a-font-weight-strong);
+  color: var(--a-color-muted);
   background: none;
   border: none;
   cursor: pointer;
@@ -210,14 +222,14 @@ const openNotification = (n: Notification) => {
   position: relative;
   transition: color 0.2s;
 }
-.notif-btn:hover { color: #000; text-decoration: underline; }
+.notif-btn:hover { color: var(--a-color-fg); text-decoration: underline; }
 .notif-count {
   display: inline-block;
   margin-left: 3px;
-  background: #000;
-  color: #fff;
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
   font-size: 0.6rem;
-  font-weight: 900;
+  font-weight: var(--a-font-weight-black);
   border-radius: 9999px;
   padding: 1px 5px;
   line-height: 1;
@@ -225,55 +237,55 @@ const openNotification = (n: Notification) => {
 }
 .notif-dropdown { width: 280px; right: 0; }
 .notif-drop-empty {
-  padding: 1rem;
+  padding: var(--a-space-4);
   font-size: 0.8rem;
-  color: #9ca3af;
+  color: var(--a-color-muted-soft);
   text-align: center;
 }
 .notif-drop-item {
   display: flex;
   align-items: flex-start;
-  gap: 0.5rem;
-  padding: 0.625rem 1rem;
+  gap: var(--a-space-2);
+  padding: 0.625rem var(--a-space-4);
   cursor: pointer;
   transition: background 0.1s;
 }
-.notif-drop-item:hover { background: #f9fafb; }
+.notif-drop-item:hover { background: var(--a-color-surface); }
 .notif-drop-item:hover .notif-drop-text { text-decoration: underline; }
 .notif-drop-dot {
   width: 6px;
   height: 6px;
   border-radius: 9999px;
-  background: #000;
+  background: var(--a-color-fg);
   flex-shrink: 0;
   margin-top: 0.3rem;
 }
 .notif-drop-text {
   font-size: 0.8rem;
-  font-weight: 500;
+  font-weight: var(--a-font-weight-normal);
   line-height: 1.4;
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
-.notif-drop-item.unread .notif-drop-text { font-weight: 700; }
+.notif-drop-item.unread .notif-drop-text { font-weight: var(--a-font-weight-strong); }
 .notif-drop-all {
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: var(--a-text-xs);
+  font-weight: var(--a-font-weight-strong);
   text-align: center;
-  color: #6b7280;
+  color: var(--a-color-muted);
 }
 .user-btn {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--a-space-2);
   background: none;
-  border: 2px solid #000;
+  border: var(--a-border);
   cursor: pointer;
   padding: 0.375rem 0.75rem;
-  font-weight: 700;
-  font-size: 0.875rem;
+  font-weight: var(--a-font-weight-strong);
+  font-size: var(--a-text-sm);
   transition: all 0.2s;
 }
 .user-btn:hover { text-decoration: underline; }
@@ -281,25 +293,24 @@ const openNotification = (n: Notification) => {
   width: 24px;
   height: 24px;
   border-radius: 9999px;
-  background: #000;
-  color: #fff;
-  font-weight: 900;
-  font-size: 0.75rem;
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
+  font-weight: var(--a-font-weight-black);
+  font-size: var(--a-text-xs);
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.user-btn:hover .user-avatar { background: #000; color: #fff; }
-.user-name { font-weight: 700; }
-.chevron { font-size: 0.75rem; transition: transform 0.2s; }
+.user-name { font-weight: var(--a-font-weight-strong); }
+.chevron { font-size: var(--a-text-xs); transition: transform 0.2s; }
 .dropdown {
   position: absolute;
   right: 0;
   top: calc(100% + 4px);
-  background: #fff;
-  border: 2px solid #000;
-  box-shadow: 4px 4px 0px 0px rgba(0,0,0,1);
-  z-index: 100;
+  background: var(--a-color-bg);
+  border: var(--a-border);
+  box-shadow: var(--a-shadow-dropdown);
+  z-index: var(--a-z-dropdown);
   min-width: 140px;
 }
 .user-dropdown { width: 144px; }
@@ -307,31 +318,32 @@ const openNotification = (n: Notification) => {
   display: block;
   width: 100%;
   text-align: left;
-  padding: 0.625rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: #000;
+  padding: 0.625rem var(--a-space-4);
+  font-size: var(--a-text-sm);
+  font-weight: var(--a-font-weight-strong);
+  color: var(--a-color-fg);
   text-decoration: none;
   background: none;
   border: none;
+  border-bottom: 1px solid #f3f4f6;
   cursor: pointer;
-  transition: background 0.15s;
 }
+.dropdown-item:last-child { border-bottom: none; }
 .dropdown-item:hover { text-decoration: underline; background: none; }
-.dropdown-item-danger { color: #ef4444; }
+.dropdown-item-danger { color: var(--a-color-danger); }
 .dropdown-item-danger:hover { background: none; text-decoration: underline; }
 .dropdown-divider { height: 1px; background: #f3f4f6; margin: 0.25rem 0; }
 .login-btn {
-  font-size: 0.875rem;
-  font-weight: 900;
+  font-size: var(--a-text-sm);
+  font-weight: var(--a-font-weight-black);
   text-decoration: none;
-  color: #fff;
-  background: #000;
-  border: 2px solid #000;
-  padding: 0.375rem 1rem;
+  color: var(--a-color-bg);
+  background: var(--a-color-fg);
+  border: var(--a-border);
+  padding: 0.375rem var(--a-space-4);
   transition: all 0.2s;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--a-letter-spacing-widest);
 }
-.login-btn:hover { text-decoration: underline; background: #000; color: #fff; }
+.login-btn:hover { text-decoration: underline; }
 </style>

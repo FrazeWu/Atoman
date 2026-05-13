@@ -229,14 +229,6 @@ func CreateSongHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 			return
 		}
 
-		// Determine user role first
-		var userRole string
-		if roleVal, exists := c.Get("role"); exists {
-			if role, ok := roleVal.(string); ok {
-				userRole = role
-			}
-		}
-
 		// Handle File Upload Logic
 		var audioURL string
 		var audioSource string
@@ -259,8 +251,8 @@ func CreateSongHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 			}
 			defer file.Close()
 
-			if userRole == "admin" {
-				// Admin: upload directly to S3
+			if s3Client != nil && os.Getenv("STORAGE_TYPE") == "s3" {
+				// Upload directly to S3
 				safeArtist := storage.SanitizeName(input.Artist)
 				safeAlbum := storage.SanitizeName(input.Album)
 				key := "music/" + safeArtist + "/" + safeAlbum + "/" + header.Filename
@@ -277,7 +269,7 @@ func CreateSongHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 				audioURL = os.Getenv("S3_URL_PREFIX") + "/" + key
 				audioSource = "s3"
 			} else {
-				// Regular user: save locally
+				// Fallback to local
 				_, localURL, err := storage.SaveFileLocally(file, header.Filename, input.Artist, input.Album)
 				if err != nil {
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file locally"})
@@ -301,7 +293,7 @@ func CreateSongHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 			if err == nil {
 				defer coverFile.Close()
 
-				if userRole == "admin" {
+				if s3Client != nil && os.Getenv("STORAGE_TYPE") == "s3" {
 					safeArtist := storage.SanitizeName(input.Artist)
 					safeAlbum := storage.SanitizeName(input.Album)
 					coverKey := "music/" + safeArtist + "/" + safeAlbum + "/cover_" + coverHeader.Filename
@@ -496,7 +488,7 @@ func UpdateSongHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 				safeAlbum = "Unknown Album"
 			}
 
-			if userRole == "admin" {
+			if s3Client != nil && os.Getenv("STORAGE_TYPE") == "s3" {
 				// Admin: upload to S3
 				coverKey := "music/" + safeArtist + "/" + safeAlbum + "/cover_" + coverHeader.Filename
 

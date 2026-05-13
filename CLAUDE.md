@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Atoman is an open platform for freedom of speech: blogs, RSS feed subscriptions, forum, debate, and music archive. Supports private/self-hosted deployment. License: GPL.
+Atoman is an open platform for freedom of speech: Studio (blog/video/podcast), RSS feed subscriptions, forum, debate, and music archive. Supports private/self-hosted deployment. License: GPL.
 
 ## Tech Stack
 
@@ -14,14 +14,14 @@ Atoman is an open platform for freedom of speech: blogs, RSS feed subscriptions,
 | Storage | AWS S3-compatible (MinIO for dev) |
 | Infra | Docker Compose + Nginx + supervisord |
 
-## Module Status (Updated 2026-04-08)
+## Module Status
 
 ### ✅ 完整实现的模块（基础CRUD完整，165+ API）
 
 | Module | Status | Core Features | Enhancement Features |
 |---|---|---|---|
 | **Music** | ✅ Done | 上传、专辑、艺术家、播放器 | 纠正系统、批量处理、S3存储 |
-| **Blog** | ✅ Done | Channel-Collection-Post三层架构 | 草稿/发布、置顶、书签分组、RSS生成 |
+| **Studio** | ✅ Done (Blog) | Channel-Collection-Post三层架构，文章发布 | 草稿/发布、置顶、书签分组、RSS生成；待扩展：Video、Podcast |
 | **Forum** | ✅ Done | 分类、话题、嵌套回复 | 置顶/关闭、点赞、排序 |
 | **Feed** | ✅ Done | RSS订阅、分组、时间线、已读 | OPML导入导出、健康检查、内部订阅 |
 | **Debate** | ✅ Done | 话题、论点树、投票 | 引用系统、投票历史、结论功能 |
@@ -32,6 +32,8 @@ Atoman is an open platform for freedom of speech: blogs, RSS feed subscriptions,
 | Module | Status | Description |
 |---|---|---|
 | review | 📋 Planned | 音乐/电影/书籍/游戏评分系统 |
+| video | 📋 Planned | 视频发布（Studio 子模块），YouTube 布局，本地上传 + 外链 |
+| podcast | 📋 Planned | 播客发布（Studio 子模块），复用频道体系，RSS 输出 |
 | timeline | 📋 Planned | 历史事件年表可视化 |
 | reading | 📋 Planned | 电子书阅读器 + 笔记 |
 | P2P video/music | 📋 Planned | IPFS去中心化分享 |
@@ -73,121 +75,40 @@ Minimalist Archive aesthetic (极简主义 + 档案馆美学). Feedly-inspired l
 - Covers: `filter:grayscale(100%)`. No soft shadows. No icons.
 - Topbar hover: underline only. Other elements: black/white inversion.
 
-## Pending Work (Priority Order)
+## Development Planning
 
-### ✅ 已完成（2026-04-08）
-1. ~~Fix TypeScript errors~~ ✅ Done (2026-04-07)
-2. ~~Verify debate module completeness~~ ✅ Done (2026-04-08)
-3. ~~Feed keyboard shortcuts (j/k/o/m/s/r)~~ ✅ Done (2026-04-08)
+所有功能规划、任务进度、设计决策均以 `plan/` 目录下的 Markdown 文件为准，不在本文件维护。
 
-### 🔴 第一优先级：Feed 模块实用增强（选定）
+### plan/ 目录结构
 
-#### 1. ~~健康检查UI补全（1天）~~ ✅ Done (2026-04-26)
-**状态**: 已完成
-- 在订阅列表显示健康状态图标（✓ ⚠ ✕）
-- 添加"检查所有健康"按钮
-- 悬停显示错误信息和检查时间
-- 文件：`web/src/stores/feed.ts`, `web/src/views/feed/FeedView.vue`
+每个模块对应三个文件：
 
-#### 2. ~~重复文章检测（1天）~~ ✅ Done (2026-04-26)
-**状态**: 已完成
-- 标题相似度算法（Levenshtein Distance）
-- URL规范化比较
-- 标记重复并可选隐藏
-- 文件：`server/internal/service/duplicate_detector.go`, `server/internal/model/feed.go`, `web/src/views/feed/FeedView.vue`
+| 文件 | 用途 |
+|---|---|
+| `plan/<module>_task_plan.md` | 阶段划分、任务清单、当前进度、已做决策 |
+| `plan/<module>_findings.md` | 研究发现、技术调研结论 |
+| `plan/<module>_progress.md` | 会话日志、操作记录、遇到的错误 |
 
-#### 3. ~~阅读统计图表（1天）~~ ✅ Done (2026-04-26)
-**状态**: 已完成
-- 后端聚合统计API
-- Chart.js图表展示
-- 按订阅源分类统计
-- 文件：`server/internal/handlers/feed_handler.go`, `web/src/views/feed/FeedStatsView.vue`, `web/src/router.ts`
+### 当前各模块 plan 文件
 
-#### 4. 规则过滤系统（2天）
-**功能**: 关键词黑白名单 + 自动操作
-- FilterRule CRUD
-- 正则表达式支持
-- 自动标记已读/删除/收藏
-- 文件：`server/internal/model/feed.go`, `server/internal/service/filter_engine.go`, `web/src/views/feed/FilterRulesView.vue`
+| 模块 | Task Plan |
+|---|---|
+| Studio (Blog→Studio) | `plan/blog_task_plan.md` |
+| Video | `plan/video_task_plan.md` |
+| Podcast | `plan/podcast_task_plan.md` |
+| Forum | `plan/forum_task_plan.md` |
+| Music | `plan/music_task_plan.md` |
+| Debate | `plan/debate_task_plan.md` |
+| Timeline | `plan/timeline_task_plan.md` |
 
-#### 5. 性能优化（1天）
-**功能**: 虚拟滚动 + 图片懒加载
-- 集成 vue-virtual-scroller
-- IntersectionObserver 懒加载
-- 文件：`web/src/views/feed/FeedView.vue`
+### 工作规范
 
-### 🟡 第二优先级：已有模块增强
-
-#### Feed Q3 增强（中优先级）
-- 全文抓取（summary-only feeds）- 2天
-- RSS文章评论功能 - 1天
-- 分享功能（链接/社交媒体）- 1天
-- 离线阅读（PWA）- 2-3天
-- 推荐系统 - 2-3天
-
-#### Blog 增强
-- 全文搜索（跨Post）- 1天
-- 标签系统 - 1天
-- 推荐系统 - 2-3天
-
-#### Music 增强
-- 播放列表功能 - 1-2天
-- 歌词同步显示（LRC）- 1天
-
-### 🟢 第三优先级：全新模块
-
-#### Review 模块（2-3天）⭐ 推荐优先
-**基础功能**:
-- Review CRUD（评论创建、编辑、删除、列表）
-- 评分系统（1-10分）
-- 短评/长评支持
-- 分类（music/movie/book/game）
-- 探索页面
-
-**技术实现**:
-- 后端：`server/internal/handlers/review_handler.go`, `server/internal/model/review.go`
-- 前端：`web/src/views/review/`
-- 数据库模型：`Review(id, user_id, item_type, item_name, rating, short_review, long_review)`
-
-#### Timeline 模块（3-4天）
-**基础功能**:
-- Event CRUD
-- 时间轴可视化展示
-- 事件分类、地理位置
-- 人物关联
-
-**技术实现**:
-- 后端：`server/internal/handlers/timeline_handler.go`, `server/internal/model/timeline.go`
-- 前端：`web/src/views/timeline/`（需要时间轴可视化组件）
-- 数据库模型：`TimelineEvent`, `TimelinePerson`
-
-#### Reading 模块（4-5天）
-**基础功能**:
-- Book CRUD
-- 阅读进度追踪
-- 书签、笔记系统
-- 书架管理
-
-**技术实现**:
-- 后端：`server/internal/handlers/reading_handler.go`, `server/internal/model/reading.go`
-- 前端：`web/src/views/reading/`（需要集成 epub.js）
-- 数据库模型：`Book`, `ReadingProgress`, `BookNote`
-
-### 🔵 第四优先级：跨模块功能
-
-- 全站搜索（统一搜索入口）- 2-3天
-- 高级权限系统（角色管理）- 3-4天
-- 通知中心增强（推送、邮件）- 2天
-- 主题系统（暗黑模式、自定义配色）- 2-3天
-
-### 🟣 第五优先级：Feed Q4 功能
-
-- Newsletter订阅（email → RSS）- 3天
-- API开放平台（OAuth + 限流）- 5-7天
-- 主题定制 - 2-3天
+- **开始任何功能前**，先读对应模块的 `task_plan.md` 确认当前阶段
+- **每个阶段完成后**，更新 `task_plan.md` 状态（`in_progress` → `complete`）并在 `progress.md` 记录操作日志
+- **新模块**按照上述三文件结构在 `plan/` 下新建
 
 ## Key References
 
 - Project guidelines: `AGENTS.md`
-- Plans & decisions: `.sisyphus/plans/`, `.sisyphus/decisions/`
-- Feature docs: `doc/rss-feature-analysis.md`, `doc/feed-completed-features.md`
+- Feature plans: `plan/` directory（见上）
+- Legacy docs: `doc/rss-feature-analysis.md`, `doc/feed-completed-features.md`

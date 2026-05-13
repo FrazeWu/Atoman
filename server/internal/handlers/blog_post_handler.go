@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -25,6 +26,10 @@ func SetupBlogPostRoutes(router *gin.Engine, db *gorm.DB) {
 			protected.POST("/posts", CreatePost(db))
 			protected.PUT("/posts/:id", UpdatePost(db))
 			protected.DELETE("/posts/:id", DeletePost(db))
+
+			protected.GET("/drafts", GetBlogDraft(db))
+			protected.PUT("/drafts", PutBlogDraft(db))
+			protected.DELETE("/drafts", DeleteBlogDraft(db))
 
 			protected.POST("/posts/:id/publish", PublishPost(db))
 			protected.POST("/posts/:id/unpublish", UnpublishPost(db))
@@ -56,14 +61,46 @@ type CollectionActionInput struct {
 	CollectionID uuid.UUID `json:"collection_id" binding:"required"`
 }
 
+type BlogDraftInput struct {
+	ContextKey    string   `json:"context_key" binding:"required"`
+	SourcePostID  string   `json:"source_post_id"`
+	Title         string   `json:"title"`
+	Content       string   `json:"content"`
+	Summary       string   `json:"summary"`
+	CoverURL      string   `json:"cover_url"`
+	AllowComments *bool    `json:"allow_comments"`
+	ChannelID     string   `json:"channel_id"`
+	CollectionIDs []string `json:"collection_ids"`
+}
+
+type BlogDraftResponse struct {
+	ID            uuid.UUID `json:"id"`
+	UserID        uuid.UUID `json:"user_id"`
+	ContextKey    string    `json:"context_key"`
+	SourcePostID  *string   `json:"source_post_id,omitempty"`
+	Title         string    `json:"title"`
+	Content       string    `json:"content"`
+	Summary       string    `json:"summary"`
+	CoverURL      string    `json:"cover_url"`
+	AllowComments bool      `json:"allow_comments"`
+	ChannelID     *string   `json:"channel_id,omitempty"`
+	CollectionIDs []string  `json:"collection_ids"`
+	CreatedAt     any       `json:"created_at"`
+	UpdatedAt     any       `json:"updated_at"`
+}
+
 // GetPosts returns a list of published posts, optionally filtered
 func GetPosts(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var posts []model.Post
-		query := db.Preload("User").Preload("Collections").Where("status = ?", "published")
+		query := db.Preload("User").Preload("Channel").Preload("Collections").Where("status = ?", "published")
 
 		if userID := c.Query("user_id"); userID != "" {
 			query = query.Where("user_id = ?", userID)
+		}
+
+		if channelID := c.Query("channel_id"); channelID != "" {
+			query = query.Where("channel_id = ?", channelID)
 		}
 
 		if collectionID := c.Query("collection_id"); collectionID != "" {
@@ -86,7 +123,7 @@ func GetPost(db *gorm.DB) gin.HandlerFunc {
 		id := c.Param("id")
 		var post model.Post
 
-		if err := db.Preload("User").Preload("Collections").First(&post, "id = ?", id).Error; err != nil {
+		if err := db.Preload("User").Preload("Channel").Preload("Collections").First(&post, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Post not found"})
 			return
 		}
@@ -178,6 +215,7 @@ func CreatePost(db *gorm.DB) gin.HandlerFunc {
 
 		post := model.Post{
 			UserID:        userID,
+			ChannelID:     channelID,
 			Title:         input.Title,
 			Content:       input.Content,
 			Summary:       input.Summary,
@@ -215,7 +253,7 @@ func CreatePost(db *gorm.DB) gin.HandlerFunc {
 			}
 		}
 
-		if err := db.Preload("Collections").First(&post, "id = ?", post.ID).Error; err != nil {
+		if err := db.Preload("Channel").Preload("Collections").First(&post, "id = ?", post.ID).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch created post"})
 			return
 		}
@@ -255,6 +293,58 @@ func UpdatePost(db *gorm.DB) gin.HandlerFunc {
 			"cover_url": input.CoverURL,
 		}
 
+		var targetChannelID *uuid.UUID
+		if input.ChannelID != "" {
+			parsedChannelID, err := uuid.Parse(input.ChannelID)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid channel UUID"})
+				return
+			}
+
+			var channel model.Channel
+			if err := db.First(&channel, "id = ?", parsedChannelID).Error; err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Channel not found"})
+				return
+			}
+
+			if channel.UserID != userID {
+				c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to move post to this channel"})
+				return
+			}
+
+			targetChannelID = &parsedChannelID
+			updates["channel_id"] = parsedChannelID
+		} else {
+			updates["channel_id"] = nil
+		}
+
+		selectedCollections := make([]model.Collection, 0, len(input.CollectionIDs))
+		for _, collectionIDStr := range input.CollectionIDs {
+			collectionID, err := uuid.Parse(collectionIDStr)
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid collection UUID"})
+				return
+			}
+
+			var collection model.Collection
+			if err := db.Preload("Channel").First(&collection, "id = ?", collectionID).Error; err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "Collection not found"})
+				return
+			}
+
+			if collection.Channel.UserID != userID {
+				c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to assign this collection"})
+				return
+			}
+
+			if targetChannelID == nil || collection.ChannelID != *targetChannelID {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Collection does not belong to selected channel"})
+				return
+			}
+
+			selectedCollections = append(selectedCollections, collection)
+		}
+
 		if input.Status == "published" || input.Status == "draft" {
 			updates["status"] = input.Status
 		}
@@ -265,6 +355,35 @@ func UpdatePost(db *gorm.DB) gin.HandlerFunc {
 
 		if err := db.Model(&post).Updates(updates).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update post"})
+			return
+		}
+
+		if targetChannelID != nil {
+			defaultCollection, err := ensureDefaultCollection(db, *targetChannelID)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to ensure default collection"})
+				return
+			}
+
+			collectionsToAssign := make([]model.Collection, 0, len(selectedCollections)+1)
+			collectionsToAssign = append(collectionsToAssign, *defaultCollection)
+			for _, collection := range selectedCollections {
+				if collection.ID == defaultCollection.ID {
+					continue
+				}
+				collectionsToAssign = append(collectionsToAssign, collection)
+			}
+			if err := db.Model(&post).Association("Collections").Replace(collectionsToAssign); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update post collections"})
+				return
+			}
+		} else if err := db.Model(&post).Association("Collections").Clear(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear post collections"})
+			return
+		}
+
+		if err := db.Preload("Channel").Preload("Collections").First(&post, "id = ?", post.ID).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch updated post"})
 			return
 		}
 
@@ -344,6 +463,119 @@ func GetDrafts(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+func GetBlogDraft(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		contextKey := strings.TrimSpace(c.Query("context_key"))
+		if contextKey == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "context_key required"})
+			return
+		}
+
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		var draft model.BlogDraft
+		if err := db.Where("user_id = ? AND context_key = ?", userID, contextKey).First(&draft).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Draft not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"data": buildBlogDraftResponse(draft), "message": "ok"})
+	}
+}
+
+func PutBlogDraft(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var input BlogDraftInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		sourcePostID, err := parseOptionalUUID(input.SourcePostID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid source_post_id"})
+			return
+		}
+
+		channelID, err := parseOptionalUUID(input.ChannelID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid channel_id"})
+			return
+		}
+
+		collectionIDs, err := normalizeUUIDList(input.CollectionIDs)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid collection_ids"})
+			return
+		}
+
+		allowComments := true
+		if input.AllowComments != nil {
+			allowComments = *input.AllowComments
+		}
+
+		var draft model.BlogDraft
+		result := db.Where("user_id = ? AND context_key = ?", userID, strings.TrimSpace(input.ContextKey)).First(&draft)
+		if result.Error != nil {
+			draft = model.BlogDraft{
+				UserID:        userID,
+				ContextKey:    strings.TrimSpace(input.ContextKey),
+				SourcePostID:  sourcePostID,
+				Title:         input.Title,
+				Content:       input.Content,
+				Summary:       input.Summary,
+				CoverURL:      input.CoverURL,
+				AllowComments: allowComments,
+				ChannelID:     channelID,
+				CollectionIDs: strings.Join(collectionIDs, ","),
+			}
+			if err := db.Create(&draft).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save draft"})
+				return
+			}
+		} else {
+			draft.SourcePostID = sourcePostID
+			draft.Title = input.Title
+			draft.Content = input.Content
+			draft.Summary = input.Summary
+			draft.CoverURL = input.CoverURL
+			draft.AllowComments = allowComments
+			draft.ChannelID = channelID
+			draft.CollectionIDs = strings.Join(collectionIDs, ",")
+			if err := db.Save(&draft).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save draft"})
+				return
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"data": buildBlogDraftResponse(draft), "message": "ok"})
+	}
+}
+
+func DeleteBlogDraft(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		contextKey := strings.TrimSpace(c.Query("context_key"))
+		if contextKey == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "context_key required"})
+			return
+		}
+
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		if err := db.Where("user_id = ? AND context_key = ?", userID, contextKey).Delete(&model.BlogDraft{}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete draft"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	}
+}
+
 // AddPostToCollection adds a post to a collection
 func AddPostToCollection(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -368,6 +600,11 @@ func AddPostToCollection(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		if post.ChannelID == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Post is not assigned to a channel"})
+			return
+		}
+
 		// Verify collection exists and belongs to user's channel
 		var collection model.Collection
 		if err := db.Preload("Channel").First(&collection, "id = ?", input.CollectionID).Error; err != nil {
@@ -377,6 +614,11 @@ func AddPostToCollection(db *gorm.DB) gin.HandlerFunc {
 
 		if collection.Channel.UserID != userID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to add to this collection"})
+			return
+		}
+
+		if collection.ChannelID != *post.ChannelID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Collection does not belong to post channel"})
 			return
 		}
 
@@ -410,9 +652,19 @@ func RemovePostFromCollection(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		if post.ChannelID == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Post is not assigned to a channel"})
+			return
+		}
+
 		var collection model.Collection
 		if err := db.First(&collection, "id = ?", collectionID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Collection not found"})
+			return
+		}
+
+		if collection.ChannelID != *post.ChannelID {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Collection does not belong to post channel"})
 			return
 		}
 
@@ -476,4 +728,77 @@ func updatePostPin(c *gin.Context, db *gorm.DB, pinned bool) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "ok"})
+}
+
+func parseOptionalUUID(raw string) (*uuid.UUID, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil, nil
+	}
+	parsed, err := uuid.Parse(trimmed)
+	if err != nil {
+		return nil, err
+	}
+	return &parsed, nil
+}
+
+func normalizeUUIDList(values []string) ([]string, error) {
+	if len(values) == 0 {
+		return []string{}, nil
+	}
+
+	normalized := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		parsed, err := uuid.Parse(strings.TrimSpace(value))
+		if err != nil {
+			return nil, err
+		}
+		stringID := parsed.String()
+		if _, exists := seen[stringID]; exists {
+			continue
+		}
+		seen[stringID] = struct{}{}
+		normalized = append(normalized, stringID)
+	}
+	return normalized, nil
+}
+
+func buildBlogDraftResponse(draft model.BlogDraft) BlogDraftResponse {
+	var sourcePostID *string
+	if draft.SourcePostID != nil {
+		value := draft.SourcePostID.String()
+		sourcePostID = &value
+	}
+
+	var channelID *string
+	if draft.ChannelID != nil {
+		value := draft.ChannelID.String()
+		channelID = &value
+	}
+
+	collectionIDs := []string{}
+	for _, collectionID := range strings.Split(draft.CollectionIDs, ",") {
+		trimmed := strings.TrimSpace(collectionID)
+		if trimmed == "" {
+			continue
+		}
+		collectionIDs = append(collectionIDs, trimmed)
+	}
+
+	return BlogDraftResponse{
+		ID:            draft.ID,
+		UserID:        draft.UserID,
+		ContextKey:    draft.ContextKey,
+		SourcePostID:  sourcePostID,
+		Title:         draft.Title,
+		Content:       draft.Content,
+		Summary:       draft.Summary,
+		CoverURL:      draft.CoverURL,
+		AllowComments: draft.AllowComments,
+		ChannelID:     channelID,
+		CollectionIDs: collectionIDs,
+		CreatedAt:     draft.CreatedAt,
+		UpdatedAt:     draft.UpdatedAt,
+	}
 }

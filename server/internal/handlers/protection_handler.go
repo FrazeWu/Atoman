@@ -34,7 +34,7 @@ func SetupProtectionRoutes(router *gin.Engine, db *gorm.DB) {
 		}
 
 		// Artist protection
-		artists := protected.Group("/api/artists/:id")
+		artists := protected.Group("/artists/:id")
 		{
 			artists.GET("/protection", GetArtistProtectionHandler(db))
 			artists.POST("/protect", middleware.AuthMiddleware(), middleware.AdminMiddleware(db), SetArtistProtectionHandler(db))

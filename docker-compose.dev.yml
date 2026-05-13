@@ -1,10 +1,10 @@
-name: atoman-dev
+name: atoman-infrastructure-dev
 
 services:
   postgres:
     image: postgres:16-alpine
     env_file:
-      - ./server/.env.dev
+      - .env.dev
     ports:
       - "5432:5432"
     volumes:
@@ -20,7 +20,7 @@ services:
   db-init:
     image: postgres:16-alpine
     env_file:
-      - ./server/.env.dev
+      - .env.dev
     depends_on:
       postgres:
         condition: service_healthy
@@ -41,7 +41,7 @@ services:
       - "9100:9000"
       - "9101:9001"
     env_file:
-      - ./server/.env.dev
+      - .env.dev
     command: server /data --console-address ":9001"
     volumes:
       - minio-data:/data
@@ -56,7 +56,7 @@ services:
   minio-setup:
     image: minio/mc
     env_file:
-      - ./server/.env.dev
+      - .env.dev
     depends_on:
       minio:
         condition: service_healthy
@@ -65,28 +65,12 @@ services:
     entrypoint: >
       /bin/sh -c "
       set -e;
+      # Wait for MinIO to be fully ready
+      sleep 3;
       /usr/bin/mc alias set myminio http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD;
-      /usr/bin/mc ls myminio/kanye-archive >/dev/null 2>&1 || /usr/bin/mc mb myminio/kanye-archive;
-      /usr/bin/mc anonymous set public myminio/kanye-archive;
+      /usr/bin/mc ls myminio/$$S3_BUCKET >/dev/null 2>&1 || /usr/bin/mc mb myminio/$$S3_BUCKET;
+      /usr/bin/mc anonymous set public myminio/$$S3_BUCKET;
       "
-
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "5173:80"
-    env_file:
-      - ./server/.env.dev
-    depends_on:
-      postgres:
-        condition: service_healthy
-      db-init:
-        condition: service_completed_successfully
-      minio-setup:
-        condition: service_completed_successfully
-    networks:
-      - app-network
 
 networks:
   app-network:

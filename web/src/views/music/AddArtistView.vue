@@ -32,7 +32,7 @@
 
       <div class="actions">
         <ABtn to="/music/contribute" outline>返回贡献页</ABtn>
-        <ABtn :loading="creating" loadingText="创建中..." @click="handleCreate">创建艺术家</ABtn>
+        <ABtn tag="button" type="submit" :loading="creating" loadingText="创建中...">创建艺术家</ABtn>
       </div>
     </form>
   </div>

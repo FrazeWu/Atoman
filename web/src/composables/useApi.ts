@@ -8,6 +8,9 @@ export function useApi() {
   return {
     url: apiUrl,
     songs: `${apiUrl}/songs`,
+    song: (id: number | string) => `${apiUrl}/songs/${id}`,
+    albums: `${apiUrl}/albums`,
+    album: (id: number | string) => `${apiUrl}/albums/${id}`,
     artists: `${apiUrl}/artists`,
     corrections: `${apiUrl}/corrections`,
     
@@ -16,6 +19,8 @@ export function useApi() {
       channel: (id: number | string) => `${apiUrl}/blog/channels/${id}`,
       channelEnsureDefault: `${apiUrl}/blog/channels/ensure-default`,
       channelCollections: (id: number | string) => `${apiUrl}/blog/channels/${id}/collections`,
+      channelBySlug: (slug: string) => `${apiUrl}/blog/channels/slug/${slug}`,
+      channelCollectionsBySlug: (slug: string) => `${apiUrl}/blog/channels/slug/${slug}/collections`,
       collections: `${apiUrl}/blog/collections`,
       collection: (id: number | string) => `${apiUrl}/blog/collections/${id}`,
       
@@ -25,6 +30,7 @@ export function useApi() {
       postUnpublish: (id: number | string) => `${apiUrl}/blog/posts/${id}/unpublish`,
       postPin: (id: number | string) => `${apiUrl}/blog/posts/${id}/pin`,
       postUnpin: (id: number | string) => `${apiUrl}/blog/posts/${id}/unpin`,
+      draft: `${apiUrl}/blog/drafts`,
       drafts: `${apiUrl}/blog/posts/drafts`,
       postCollections: (id: number | string) => `${apiUrl}/blog/posts/${id}/collections`,
       postCollection: (id: number | string, collectionId: number | string) => `${apiUrl}/blog/posts/${id}/collections/${collectionId}`,

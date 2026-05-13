@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import AEditor from '@/components/shared/AEditor.vue'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -125,11 +126,11 @@ onMounted(fetchDiscussions)
 
     <section v-if="authStore.isAuthenticated" class="new-discussion">
       <h2 class="section-title">发起讨论</h2>
-      <textarea
+      <AEditor
         v-model="newContent"
-        class="textarea"
-        placeholder="写下你的想法..."
-        rows="4"
+        mode="sv"
+        :enable-mentions="true"
+        placeholder="写下你的想法…（支持 Markdown，@ 提及用户）"
       />
       <button
         @click="createDiscussion"
@@ -168,7 +169,12 @@ onMounted(fetchDiscussions)
         </button>
 
         <div v-if="replyingTo === discussion.id" class="reply-form">
-          <textarea v-model="replyContent" class="textarea" placeholder="写下你的回复..." rows="3" />
+          <AEditor
+            v-model="replyContent"
+            mode="sv"
+            :enable-mentions="true"
+            placeholder="写下你的回复…"
+          />
           <div class="reply-actions">
             <button @click="replyingTo = null" class="btn-cancel">取消</button>
             <button @click="replyTo(discussion.id)" class="btn-submit" :disabled="!replyContent.trim()">回复</button>

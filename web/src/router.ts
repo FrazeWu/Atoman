@@ -12,6 +12,14 @@ const routes: RouteRecordRaw[] = [
   { path: '/music/albums/:albumId/discussion', component: () => import('@/views/music/AlbumDiscussionView.vue') },
   { path: '/music/songs/:songId/history', component: () => import('@/views/music/SongHistoryView.vue') },
   { path: '/music/songs/:songId/discussion', component: () => import('@/views/music/SongDiscussionView.vue') },
+  // Artist wiki routes
+  { path: '/music/artists/:artistId/detail', component: () => import('@/views/music/ArtistDetailView.vue') },
+  {
+    path: '/music/artists/:artistId/edit',
+    component: () => import('@/views/music/ArtistEditView.vue'),
+    meta: { requiresAuth: true },
+  },
+  { path: '/music/artists/:artistId/history', component: () => import('@/views/music/ArtistHistoryView.vue') },
   {
     path: '/music/albums/:albumId/edit',
     component: () => import('@/views/music/EditAlbumView.vue'),
@@ -32,6 +40,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/music/AddArtistView.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/music/artists/add',
+    component: () => import('@/views/music/AddArtistView.vue'),
+    meta: { requiresAuth: true },
+  },
   { path: '/login', component: () => import('@/views/auth/LoginView.vue') },
   { path: '/register', component: () => import('@/views/auth/LoginView.vue') },
   {
@@ -40,15 +53,28 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true },
   },
   { path: '/blog', component: () => import('@/views/blog/BlogHomeView.vue') },
+  // /blog/explore redirects to /blog (discovery page merged)
+  { path: '/blog/explore', redirect: '/blog' },
+  { path: '/explore', redirect: '/blog' },
+  {
+    path: '/blog/bookmarks',
+    component: () => import('@/views/blog/BookmarkView.vue'),
+    meta: { requiresAuth: true },
+  },
   { path: '/blog/manage', component: () => import('@/views/blog/BlogManageView.vue'), meta: { requiresAuth: true } },
   { path: '/channels', component: () => import('@/views/blog/ChannelManageView.vue'), meta: { requiresAuth: true } },
+  // New slug-based channel routes (canonical)
+  { path: '/channel/:slug', component: () => import('@/views/blog/ChannelView.vue') },
+  {
+    path: '/channel/:slug/manage',
+    component: () => import('@/views/blog/ChannelManageDetailView.vue'),
+    meta: { requiresAuth: true },
+  },
+  // Legacy ID-based routes kept for compatibility
   { path: '/blog/channel/:id', component: () => import('@/views/blog/ChannelView.vue') },
-  { path: '/channel/:id', component: () => import('@/views/blog/ChannelView.vue') },
   { path: '/collections', component: () => import('@/views/blog/CollectionManageView.vue'), meta: { requiresAuth: true } },
   { path: '/collection/:id', component: () => import('@/views/blog/CollectionView.vue') },
   { path: '/editor/:id?', component: () => import('@/views/blog/PostEditorView.vue'), meta: { requiresAuth: true } },
-  { path: '/blog/explore', component: () => import('@/views/blog/ExploreView.vue') },
-  { path: '/explore', component: () => import('@/views/blog/ExploreView.vue') },
   { path: '/post/:id', component: () => import('@/views/blog/PostDetailView.vue') },
   {
     path: '/post/new',

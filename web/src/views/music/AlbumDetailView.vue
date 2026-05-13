@@ -9,14 +9,20 @@ const player = usePlayerStore();
 const authStore = useAuthStore();
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
-// Get album and artist names from route params (for display/lookup)
-const albumName = decodeURIComponent(route.params.albumId as string);
+// Get album id (UUID or name) and optional artist name from route params
+const albumParam = decodeURIComponent(route.params.albumId as string);
 const artistName = route.params.artistName ? decodeURIComponent(route.params.artistName as string) : null;
 
-// Find album UUID by matching songs
+// UUID pattern check
+const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(albumParam);
+
+// Find album UUID by matching songs — support both UUID (album_id) and name (album title)
 const albumUuid = computed(() => {
   const matchingSong = player.songs.find(song => {
-    const albumMatch = song.album.toLowerCase() === albumName.toLowerCase();
+    if (isUuid) {
+      return String(song.album_id) === albumParam;
+    }
+    const albumMatch = song.album.toLowerCase() === albumParam.toLowerCase();
     if (artistName) {
       return albumMatch && song.artist.toLowerCase() === artistName.toLowerCase();
     }
@@ -114,7 +120,38 @@ onMounted(async () => {
   await player.fetchSongs();
   fetchProtection();
   fetchDiscussionCount();
+  fetchAlbumDetails();
 });
+
+// Fetch full album details (entry_status, album_type)
+const albumDetails = ref<any>(null)
+const fetchAlbumDetails = async () => {
+  if (!albumUuid.value) return
+  try {
+    const res = await fetch(`${API_URL}/albums/${albumUuid.value}`, {
+      headers: authStore.token ? { Authorization: `Bearer ${authStore.token}` } : {}
+    })
+    if (res.ok) {
+      const data = await res.json()
+      albumDetails.value = data
+    }
+  } catch (e) { /* ignore */ }
+}
+
+const changeEntryStatus = async (status: string) => {
+  if (!albumUuid.value) return
+  try {
+    await fetch(`${API_URL}/albums/${albumUuid.value}/status`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authStore.token}`,
+      },
+      body: JSON.stringify({ status }),
+    })
+    if (albumDetails.value) albumDetails.value.entry_status = status
+  } catch (e) { console.error('Failed to change status:', e) }
+}
 </script>
 
 <template>
@@ -136,9 +173,19 @@ onMounted(async () => {
             <span class="pending-badge" :class="albumInfo.status === 'closed' ? 'closed-badge' : 'open-badge'">
               {{ albumInfo.status === 'closed' ? '关闭' : '开放' }}
             </span>
+            <span v-if="albumDetails?.album_type" class="type-badge">{{ albumDetails.album_type.toUpperCase() }}</span>
+            <span v-if="albumDetails?.entry_status === 'confirmed'" class="entry-badge entry-confirmed">已确认</span>
+            <span v-else-if="albumDetails?.entry_status === 'disputed'" class="entry-badge entry-disputed">争议</span>
           </h1>
           <p class="album-artist">{{ albumInfo.artist }}</p>
           <p class="album-tracks">{{ albumInfo.trackCount }} {{ albumInfo.trackCount === 1 ? 'track' : 'tracks' }}</p>
+
+          <!-- Admin status actions -->
+          <div v-if="authStore.user?.role === 'admin' && albumDetails" class="admin-entry-actions">
+            <button v-if="albumDetails.entry_status !== 'confirmed'" @click="changeEntryStatus('confirmed')" class="entry-action-btn entry-confirm">确认条目</button>
+            <button v-if="albumDetails.entry_status === 'confirmed'" @click="changeEntryStatus('disputed')" class="entry-action-btn entry-dispute">设为争议</button>
+            <button v-if="albumDetails.entry_status === 'disputed'" @click="changeEntryStatus('open')" class="entry-action-btn entry-open">重新开放</button>
+          </div>
 
           <div class="album-actions">
             <button @click="player.playSong(albumSongs[0])" class="btn-play-album">
@@ -146,7 +193,7 @@ onMounted(async () => {
             </button>
             <RouterLink
               v-if="authStore.isAuthenticated && albumInfo?.artist"
-              :to="`/music/artists/${encodeURIComponent(albumInfo.artist)}/albums/${encodeURIComponent(albumName)}/edit`"
+              :to="`/music/artists/${encodeURIComponent(albumInfo.artist)}/albums/${encodeURIComponent(albumInfo.title)}/edit`"
               class="btn-edit-album"
             >
               编辑专辑
@@ -540,4 +587,43 @@ onMounted(async () => {
   .track-num { width: 2rem; font-size: 1rem; }
   .track-title h3 { font-size: 1rem; }
 }
+
+.type-badge {
+  font-size: 0.625rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  border: 1px solid #000;
+  padding: 0.125rem 0.5rem;
+  vertical-align: middle;
+  margin-left: 0.5rem;
+}
+.entry-badge {
+  font-size: 0.625rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  padding: 0.125rem 0.5rem;
+  border: 1px solid;
+  vertical-align: middle;
+  margin-left: 0.375rem;
+}
+.entry-confirmed { border-color: #166534; color: #166534; }
+.entry-disputed { border-color: #991b1b; color: #991b1b; }
+.admin-entry-actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap; }
+.entry-action-btn {
+  border: 2px solid;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.625rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  background: transparent;
+  transition: all 0.15s;
+}
+.entry-confirm { border-color: #166534; color: #166534; }
+.entry-confirm:hover { background: #166534; color: #fff; }
+.entry-dispute { border-color: #991b1b; color: #991b1b; }
+.entry-dispute:hover { background: #991b1b; color: #fff; }
+.entry-open { border-color: #000; color: #000; }
+.entry-open:hover { background: #000; color: #fff; }
 </style>

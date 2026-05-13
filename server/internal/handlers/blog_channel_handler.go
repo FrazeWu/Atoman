@@ -21,6 +21,8 @@ func SetupBlogChannelRoutes(router *gin.Engine, db *gorm.DB) {
 		blog.GET("/channels", middleware.OptionalAuthMiddleware(), GetChannels(db))
 		blog.GET("/channels/:id", middleware.OptionalAuthMiddleware(), GetChannel(db))
 		blog.GET("/channels/:id/collections", middleware.OptionalAuthMiddleware(), GetChannelCollections(db))
+		blog.GET("/channels/slug/:slug", middleware.OptionalAuthMiddleware(), GetChannelBySlug(db))
+		blog.GET("/channels/slug/:slug/collections", middleware.OptionalAuthMiddleware(), GetChannelCollectionsBySlug(db))
 		blog.GET("/collections", middleware.OptionalAuthMiddleware(), GetUserCollections(db))
 		blog.GET("/collections/:id", middleware.OptionalAuthMiddleware(), GetCollection(db))
 
@@ -43,6 +45,7 @@ func SetupBlogChannelRoutes(router *gin.Engine, db *gorm.DB) {
 // ChannelInput represents the request body for creating/updating a channel
 type ChannelInput struct {
 	Name        string `json:"name" binding:"required"`
+	Slug        string `json:"slug"`
 	Description string `json:"description"`
 	CoverURL    string `json:"cover_url"`
 }
@@ -116,6 +119,21 @@ func GetChannel(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+// GetChannelBySlug returns a specific channel by slug
+func GetChannelBySlug(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		slug := strings.TrimSpace(c.Param("slug"))
+		var channel model.Channel
+
+		if err := db.Preload("User").First(&channel, "slug = ?", slug).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Channel not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"data": channel, "message": "ok"})
+	}
+}
+
 // CreateChannel creates a new channel for the authenticated user
 func CreateChannel(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -145,9 +163,20 @@ func CreateChannel(db *gorm.DB) gin.HandlerFunc {
 		userIDVal, _ := c.Get("user_id")
 		userID := userIDVal.(uuid.UUID)
 
+		slugSource := input.Slug
+		if strings.TrimSpace(slugSource) == "" {
+			slugSource = input.Name
+		}
+		slug, err := uniqueChannelSlug(db, slugSource, nil)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate channel slug"})
+			return
+		}
+
 		channel := model.Channel{
 			UserID:      userID,
 			Name:        input.Name,
+			Slug:        slug,
 			Description: input.Description,
 			CoverURL:    input.CoverURL,
 		}
@@ -208,8 +237,19 @@ func UpdateChannel(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		slugSource := input.Slug
+		if strings.TrimSpace(slugSource) == "" {
+			slugSource = input.Name
+		}
+		slug, err := uniqueChannelSlug(db, slugSource, &excludeID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate channel slug"})
+			return
+		}
+
 		if err := db.Model(&channel).Updates(model.Channel{
 			Name:        input.Name,
+			Slug:        slug,
 			Description: input.Description,
 			CoverURL:    input.CoverURL,
 		}).Error; err != nil {
@@ -328,6 +368,10 @@ func DeleteChannel(db *gorm.DB) gin.HandlerFunc {
 					}
 					seenPosts[relation.PostID] = true
 
+					if err := tx.Model(&model.Post{}).Where("id = ?", relation.PostID).Update("channel_id", targetChannel.ID).Error; err != nil {
+						return err
+					}
+
 					postCollection := model.PostCollection{
 						PostID:       relation.PostID,
 						CollectionID: defaultCollection.ID,
@@ -337,6 +381,14 @@ func DeleteChannel(db *gorm.DB) gin.HandlerFunc {
 						FirstOrCreate(&postCollection).Error; err != nil {
 						return err
 					}
+				}
+			} else if input.MoveContent && targetChannel != nil {
+				if err := tx.Model(&model.Post{}).Where("channel_id = ?", channel.ID).Update("channel_id", targetChannel.ID).Error; err != nil {
+					return err
+				}
+			} else {
+				if err := tx.Model(&model.Post{}).Where("channel_id = ?", channel.ID).Update("channel_id", nil).Error; err != nil {
+					return err
 				}
 			}
 
@@ -387,6 +439,26 @@ func GetChannelCollections(db *gorm.DB) gin.HandlerFunc {
 		var collections []model.Collection
 
 		if err := db.Where("channel_id = ?", channelID).Find(&collections).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch collections"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"data": collections, "message": "ok"})
+	}
+}
+
+// GetChannelCollectionsBySlug returns all collections for a specific channel slug
+func GetChannelCollectionsBySlug(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		slug := strings.TrimSpace(c.Param("slug"))
+		var channel model.Channel
+		if err := db.First(&channel, "slug = ?", slug).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Channel not found"})
+			return
+		}
+
+		var collections []model.Collection
+		if err := db.Where("channel_id = ?", channel.ID).Find(&collections).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch collections"})
 			return
 		}

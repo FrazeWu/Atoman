@@ -51,7 +51,7 @@
       <ABtn v-if="canReply" size="sm" outline @click="$emit('reference', argument.id, '')">
         引用辩题
       </ABtn>
-      <ABtn v-if="canDelete" size="sm" outline @click="$emit('delete', argument)" style="color:#dc2626;border-color:#dc2626">
+      <ABtn v-if="canDelete" size="sm" variant="danger" @click="$emit('delete', argument)">
         删除
       </ABtn>
     </div>

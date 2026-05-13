@@ -37,7 +37,7 @@
 
       <div class="dropdown-section">
         <div class="dropdown-divider" />
-        <RouterLink to="/music/artists/new" class="add-artist-link" @mousedown.prevent>
+        <RouterLink :to="`/music/artists/add${query.trim() ? `?name=${encodeURIComponent(query.trim())}` : ''}`" class="add-artist-link" @mousedown.prevent>
           没找到艺术家？前往新增页面
         </RouterLink>
       </div>

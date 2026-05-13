@@ -9,8 +9,8 @@
       <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem;flex-wrap:wrap">
         <RouterLink
           to="/forum"
-          style="font-weight:900;font-size:.75rem;text-transform:uppercase;letter-spacing:.1em;text-decoration:none;color:#6b7280;border-bottom:1px solid transparent;transition:border-color .2s"
-          @mouseenter="($event.currentTarget as HTMLElement).style.borderBottomColor='#6b7280'"
+          style="font-weight:900;font-size:.75rem;text-transform:uppercase;letter-spacing:.1em;text-decoration:none;color:var(--a-color-muted);border-bottom:1px solid transparent;transition:border-color .2s"
+          @mouseenter="($event.currentTarget as HTMLElement).style.borderBottomColor='var(--a-color-muted)'"
           @mouseleave="($event.currentTarget as HTMLElement).style.borderBottomColor='transparent'"
         >论坛</RouterLink>
         <span style="color:#d1d5db">/</span>
@@ -155,12 +155,13 @@
                 >清除</button>
               </div>
 
-              <!-- MarkdownEditor for reply -->
+              <!-- AEditor for reply -->
               <div class="reply-editor-wrap">
-                <MarkdownEditor
+                <AEditor
                   v-model="replyContent"
-                  :hide-title="true"
-                  placeholder="写下你的回复...（支持 Markdown，@用户名 可以 @人）"
+                  mode="sv"
+                  :enable-mentions="true"
+                  placeholder="写下你的回复…（支持 Markdown，@ 提及用户）"
                 />
               </div>
 
@@ -215,7 +216,7 @@ import { useMarkdownRenderer } from '@/composables/useMarkdownRenderer'
 import type { ForumReply } from '@/types'
 import ABtn from '@/components/ui/ABtn.vue'
 import AEmpty from '@/components/ui/AEmpty.vue'
-import MarkdownEditor from '@/components/blog/MarkdownEditor.vue'
+import AEditor from '@/components/shared/AEditor.vue'
 import ForumReplyNode from '@/components/forum/ForumReplyNode.vue'
 
 const route = useRoute()

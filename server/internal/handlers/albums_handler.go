@@ -126,19 +126,29 @@ func CreateAlbumHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 			safeAlbum := storage.SanitizeName(input.Title)
 			coverKey := "music/" + safeArtist + "/" + safeAlbum + "/cover_" + coverHeader.Filename
 
-			_, err = s3Client.PutObject(&s3.PutObjectInput{
-				Bucket: aws.String(os.Getenv("S3_BUCKET")),
-				Key:    aws.String(coverKey),
-				Body:   coverFile,
-				ACL:    aws.String("public-read"),
-			})
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload cover to S3"})
-				return
-			}
+			if s3Client != nil && os.Getenv("STORAGE_TYPE") == "s3" {
+				_, err = s3Client.PutObject(&s3.PutObjectInput{
+					Bucket: aws.String(os.Getenv("S3_BUCKET")),
+					Key:    aws.String(coverKey),
+					Body:   coverFile,
+					ACL:    aws.String("public-read"),
+				})
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload cover to S3"})
+					return
+				}
 
-			coverURL = os.Getenv("S3_URL_PREFIX") + "/" + coverKey
-			coverSource = "s3"
+				coverURL = os.Getenv("S3_URL_PREFIX") + "/" + coverKey
+				coverSource = "s3"
+			} else {
+				_, localURL, err := storage.SaveFileLocally(coverFile, "cover_"+coverHeader.Filename, safeArtist, input.Title)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save cover locally"})
+					return
+				}
+				coverURL = localURL
+				coverSource = "local"
+			}
 		}
 
 		tx := db.Begin()
@@ -272,7 +282,7 @@ func UpdateAlbumHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 				safeAlbum = "Unknown Album"
 			}
 
-			if userRole == "admin" {
+			if s3Client != nil && os.Getenv("STORAGE_TYPE") == "s3" {
 				coverKey := "music/" + safeArtist + "/" + safeAlbum + "/cover_" + coverHeader.Filename
 
 				_, err = s3Client.PutObject(&s3.PutObjectInput{

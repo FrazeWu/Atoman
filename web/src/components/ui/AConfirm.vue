@@ -1,15 +1,10 @@
 <template>
-  <AModal v-if="show" @close="cancel" size="sm">
-    <h3 class="a-subtitle" style="margin-bottom:.75rem">{{ title }}</h3>
-    <p style="font-size:.9rem;color:#374151;line-height:1.6;margin-bottom:1.25rem;white-space:pre-wrap">
-      {{ message }}
-    </p>
-    <div style="display:flex;gap:.6rem;justify-content:flex-end">
-      <ABtn outline @click="cancel">{{ cancelText }}</ABtn>
-      <ABtn :style="danger ? 'background:#dc2626;border-color:#dc2626;color:#fff' : ''" @click="confirm">
-        {{ confirmText }}
-      </ABtn>
-    </div>
+  <AModal v-if="show" @close="cancel" size="sm" :title="title">
+    <p style="font-size:.9rem;color:#374151;line-height:1.6;white-space:pre-wrap">{{ message }}</p>
+    <template #footer>
+      <ABtn variant="secondary" @click="cancel">{{ cancelText }}</ABtn>
+      <ABtn :variant="danger ? 'danger' : 'primary'" @click="confirm">{{ confirmText }}</ABtn>
+    </template>
   </AModal>
 </template>
 
@@ -32,11 +27,7 @@ withDefaults(defineProps<{
   danger: false,
 })
 
-const emit = defineEmits<{
-  confirm: []
-  cancel: []
-}>()
-
+const emit = defineEmits<{ confirm: []; cancel: [] }>()
 const confirm = () => emit('confirm')
 const cancel = () => emit('cancel')
 </script>

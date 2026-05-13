@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/google/uuid"
@@ -15,8 +16,44 @@ import (
 
 const defaultCollectionName = "默认专栏"
 
+var slugInvalidChars = regexp.MustCompile(`[^a-z0-9一-龥]+`)
+
 func normalizeName(name string) string {
 	return strings.TrimSpace(name)
+}
+
+func slugify(value string) string {
+	slug := strings.ToLower(strings.TrimSpace(value))
+	slug = slugInvalidChars.ReplaceAllString(slug, "-")
+	slug = strings.Trim(slug, "-")
+	if slug == "" {
+		return "channel"
+	}
+	return slug
+}
+
+func uniqueChannelSlug(db *gorm.DB, base string, excludeID *uuid.UUID) (string, error) {
+	baseSlug := slugify(base)
+	candidate := baseSlug
+	counter := 2
+
+	for {
+		query := db.Model(&model.Channel{}).Where("slug = ?", candidate)
+		if excludeID != nil {
+			query = query.Where("id <> ?", *excludeID)
+		}
+
+		var count int64
+		if err := query.Count(&count).Error; err != nil {
+			return "", err
+		}
+		if count == 0 {
+			return candidate, nil
+		}
+
+		candidate = fmt.Sprintf("%s-%d", baseSlug, counter)
+		counter++
+	}
 }
 
 func channelNameExists(db *gorm.DB, name string, excludeID *uuid.UUID) (bool, error) {
@@ -127,9 +164,15 @@ func EnsureDefaultChannelForUser(db *gorm.DB, userID uuid.UUID, username string)
 
 	// Create a new default channel
 	defaultChannelName := fmt.Sprintf("%s 的合集", username)
+	channelSlug, err := uniqueChannelSlug(db, defaultChannelName, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	channel = model.Channel{
 		UserID:      userID,
 		Name:        defaultChannelName,
+		Slug:        channelSlug,
 		Description: "默认合集",
 		IsDefault:   true,
 	}

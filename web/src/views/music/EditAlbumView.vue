@@ -143,7 +143,7 @@
       </div>
 
       <!-- Action buttons -->
-      <div class="flex gap-4">
+      <div class="flex flex-col gap-4 sm:flex-row">
         <button
           type="button"
           @click="handleSubmit"
@@ -163,6 +163,10 @@
           取消
         </button>
       </div>
+
+      <p v-if="saveMessage" class="text-sm font-bold" :class="saveError ? 'text-red-600' : 'text-green-600'">
+        {{ saveMessage }}
+      </p>
     </form>
 
     <AConfirm
@@ -244,6 +248,8 @@ const isLoading = ref(true);
 const isSaving = ref(false);
 const currentTrackIndex = ref(0);
 const totalTracks = ref(0);
+const saveMessage = ref('');
+const saveError = ref(false);
 const showDeleteConfirm = ref(false);
 const deleteConfirmTitle = ref('请确认删除');
 const deleteConfirmMessage = ref('该操作不可撤销，是否继续？');
@@ -395,8 +401,12 @@ const onDrop = (dropIndex: number) => {
 };
 
 const handleSubmit = async () => {
+  saveMessage.value = '';
+  saveError.value = false;
+
   if (tracks.value.length === 0) {
-    alert('至少需要保留一首歌曲');
+    saveMessage.value = '至少需要保留一首歌曲';
+    saveError.value = true;
     return;
   }
 
@@ -420,7 +430,8 @@ const handleSubmit = async () => {
   const albumId = firstSong?.album_id;
 
   if (!albumId) {
-    alert('无法获取专辑 ID，请刷新页面重试');
+    saveMessage.value = '无法获取专辑 ID，请刷新页面重试';
+    saveError.value = true;
     isSaving.value = false;
     return;
   }
@@ -508,15 +519,14 @@ const handleSubmit = async () => {
   totalTracks.value = 0;
 
   if (successCount > 0) {
-    let message = '提交完成！';
-    message += `\n成功: ${successCount} 项`;
-    if (failCount > 0) message += `\n失败: ${failCount} 项`;
-    message += '\n已立即生效。';
-
-    alert(message);
-    if (failCount === 0) router.push('/');
+    saveError.value = failCount > 0;
+    saveMessage.value = failCount > 0
+      ? `提交完成，成功 ${successCount} 项，失败 ${failCount} 项。`
+      : `提交完成，成功 ${successCount} 项。`;
+    if (failCount === 0) router.push('/music');
   } else {
-    alert('提交失败，请重试。');
+    saveMessage.value = '提交失败，请重试。';
+    saveError.value = true;
   }
 };
 

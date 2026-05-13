@@ -8,11 +8,18 @@ import (
 
 type Artist struct {
 	Base
-	Name     string  `json:"name" gorm:"unique;not null"`
-	Bio      string  `json:"bio" gorm:"type:text"`
-	ImageURL string  `json:"image_url"`
-	Albums   []Album `json:"albums,omitempty" gorm:"many2many:album_artists;"`
-	Songs    []Song  `json:"songs,omitempty" gorm:"many2many:song_artists;"`
+	Name        string     `json:"name" gorm:"unique;not null"`
+	Bio         string     `json:"bio" gorm:"type:text"`
+	ImageURL    string     `json:"image_url"`
+	Nationality string     `json:"nationality"`
+	BirthYear   int        `json:"birth_year"`
+	DeathYear   int        `json:"death_year"`
+	Members     string     `json:"members" gorm:"type:text"`
+	EntryStatus string     `json:"entry_status" gorm:"default:'open'"`
+	RedirectTo  *uuid.UUID `json:"redirect_to,omitempty" gorm:"type:uuid"`
+	Albums      []Album    `json:"albums,omitempty" gorm:"many2many:album_artists;"`
+	Songs       []Song     `json:"songs,omitempty" gorm:"many2many:song_artists;"`
+	Aliases     []ArtistAlias `json:"aliases,omitempty" gorm:"foreignKey:ArtistID"`
 }
 
 func (Artist) TableName() string {
@@ -27,6 +34,8 @@ type Album struct {
 	CoverURL    string     `json:"cover_url"`
 	CoverSource string     `json:"cover_source" gorm:"default:'local'"`
 	Status      string     `json:"status" gorm:"default:'open'"`
+	AlbumType   string     `json:"album_type" gorm:"default:'album'"`
+	EntryStatus string     `json:"entry_status" gorm:"default:'open'"`
 	UploadedBy  *uuid.UUID `json:"uploaded_by" gorm:"type:uuid"`
 	User        *User      `json:"user,omitempty" gorm:"foreignKey:UploadedBy;references:UUID"`
 	Artists     []Artist   `json:"artists,omitempty" gorm:"many2many:album_artists;"`
@@ -139,4 +148,46 @@ type SongCorrection struct {
 
 func (SongCorrection) TableName() string {
 	return "song_corrections"
+}
+
+// ArtistAlias represents an alternative name for an artist
+type ArtistAlias struct {
+	Base
+	ArtistID   uuid.UUID `json:"artist_id" gorm:"type:uuid;index;not null"`
+	Artist     *Artist   `json:"artist,omitempty" gorm:"foreignKey:ArtistID"`
+	Alias      string    `json:"alias" gorm:"not null"`
+	IsMainName bool      `json:"is_main_name" gorm:"default:false"`
+}
+
+func (ArtistAlias) TableName() string {
+	return "artist_aliases"
+}
+
+// ArtistMerge records when one artist was merged into another
+type ArtistMerge struct {
+	Base
+	SourceArtistID uuid.UUID `json:"source_artist_id" gorm:"type:uuid;not null;index"`
+	TargetArtistID uuid.UUID `json:"target_artist_id" gorm:"type:uuid;not null;index"`
+	MergedBy       uuid.UUID `json:"merged_by" gorm:"type:uuid;not null"`
+	MergedByUser   *User     `json:"merged_by_user,omitempty" gorm:"foreignKey:MergedBy;references:UUID"`
+	MergedAt       time.Time `json:"merged_at"`
+}
+
+func (ArtistMerge) TableName() string {
+	return "artist_merges"
+}
+
+// LyricAnnotation is a user annotation on a specific line of song lyrics
+type LyricAnnotation struct {
+	Base
+	SongID     uuid.UUID `json:"song_id" gorm:"type:uuid;index;not null"`
+	Song       *Song     `json:"song,omitempty" gorm:"foreignKey:SongID"`
+	LineNumber int       `json:"line_number" gorm:"not null"`
+	Content    string    `json:"content" gorm:"type:text;not null"`
+	UserID     uuid.UUID `json:"user_id" gorm:"type:uuid;not null"`
+	User       *User     `json:"user,omitempty" gorm:"foreignKey:UserID;references:UUID"`
+}
+
+func (LyricAnnotation) TableName() string {
+	return "lyric_annotations"
 }

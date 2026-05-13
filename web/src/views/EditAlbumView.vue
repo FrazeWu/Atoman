@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/auth';
 import { usePlayerStore } from '@/stores/player';
 import ArtistSelect from '@/components/ArtistSelect.vue';
 import AConfirm from '@/components/ui/AConfirm.vue';
+import type { Artist } from '@/types';
 interface TrackItem {
   id: string;
   title: string;
@@ -26,7 +27,7 @@ const singerName = decodeURIComponent(route.params.artist as string).replace(/_/
 const albumName = decodeURIComponent(route.params.album as string).replace(/_/g, ' ');
 
 const formData = reactive({
-  artist: '',
+  artist: [] as Artist[],
   album: '',
   releaseDate: '',
 });
@@ -40,7 +41,7 @@ const originalCoverUrl = ref<string>('');
 const draggingIndex = ref<number | null>(null);
 
 const originalFormData = reactive({
-  artist: '',
+  artist: [] as Artist[],
   album: '',
   releaseDate: '',
 });
@@ -75,11 +76,12 @@ onMounted(async () => {
   }
 
   const firstSong = albumSongs.value[0];
-  formData.artist = firstSong.artist;
+  const artistObj: Artist = { id: 0, name: firstSong.artist }
+  formData.artist = [artistObj];
   formData.album = firstSong.album;
   formData.releaseDate = firstSong.release_date;
 
-  originalFormData.artist = firstSong.artist;
+  originalFormData.artist = [artistObj];
   originalFormData.album = firstSong.album;
   originalFormData.releaseDate = firstSong.release_date;
   
@@ -241,7 +243,7 @@ const handleSubmit = async () => {
   }
 
   const hasMetadataChanges =
-    formData.artist !== originalFormData.artist ||
+    formData.artist.map(a => a.name).join(', ') !== originalFormData.artist.map(a => a.name).join(', ') ||
     formData.album !== originalFormData.album ||
     formData.releaseDate !== originalFormData.releaseDate;
 
@@ -321,8 +323,8 @@ const handleSubmit = async () => {
       }
 
       // 如果艺术家/专辑名/发行日期有变化，添加到表单
-      if (formData.artist) {
-        albumData.append('artist', formData.artist);
+      if (formData.artist.length) {
+        albumData.append('artist', formData.artist.map(a => a.name).join(', '));
       }
       if (formData.album) {
         albumData.append('title', formData.album);
@@ -377,7 +379,7 @@ const handleSubmit = async () => {
 
     const data = new FormData();
     data.append('title', track.title);
-    data.append('artist', formData.artist);
+    data.append('artist', formData.artist.map(a => a.name).join(', '));
     data.append('album', formData.album);
     data.append('release_date', formData.releaseDate);
     data.append('track_number', (i + 1).toString());

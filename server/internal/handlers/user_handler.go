@@ -20,6 +20,7 @@ func SetupUserRoutes(router *gin.Engine, db *gorm.DB) {
 	users := router.Group("/api/users")
 	{
 		// Public routes — lookup by username (must come before /:id routes)
+		users.GET("/search", SearchUsers(db))
 		users.GET("/by-username/:username", GetUserByUsername(db))
 		users.GET("/:id/profile", GetUserProfile(db))
 		users.GET("/:id/followers", GetUserFollowers(db))
@@ -402,5 +403,45 @@ func GetUserFollowing(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"data": users, "message": "ok"})
+	}
+}
+
+// SearchUsers returns users matching the query string (for @mention autocomplete)
+// GET /api/users/search?q=<query>&limit=<n>
+func SearchUsers(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		q := c.Query("q")
+		limit := 5
+		if l, err := strconv.Atoi(c.Query("limit")); err == nil && l > 0 && l <= 20 {
+			limit = l
+		}
+
+		type UserResult struct {
+			UUID        string `json:"uuid"`
+			Username    string `json:"username"`
+			DisplayName string `json:"display_name"`
+			AvatarURL   string `json:"avatar_url"`
+		}
+
+		var results []UserResult
+		query := db.Model(&model.User{}).
+			Select("uuid, username, display_name, avatar_url").
+			Where("is_active = ?", true).
+			Limit(limit)
+
+		if q != "" {
+			like := "%" + q + "%"
+			query = query.Where("username ILIKE ? OR display_name ILIKE ?", like, like)
+		}
+
+		if err := query.Scan(&results).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "search failed"})
+			return
+		}
+
+		if results == nil {
+			results = []UserResult{}
+		}
+		c.JSON(http.StatusOK, gin.H{"data": results})
 	}
 }

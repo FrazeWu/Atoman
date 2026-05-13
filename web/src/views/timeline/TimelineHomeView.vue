@@ -309,7 +309,7 @@
       <template #footer>
         <div class="a-modal-footer" v-if="canEdit(detailEvent)">
           <ABtn outline @click="openEdit(detailEvent)">编辑</ABtn>
-          <ABtn style="background:#dc2626;border-color:#dc2626;color:#fff" @click="confirmDelete(detailEvent)">删除</ABtn>
+          <ABtn variant="danger" @click="confirmDelete(detailEvent)">删除</ABtn>
         </div>
       </template>
     </AModal>

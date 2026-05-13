@@ -30,3 +30,14 @@ web/.env.prod
 web/playwright-report/
 web/test-results/
 web/tests/e2e/.auth/
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+
+
+.vscode/

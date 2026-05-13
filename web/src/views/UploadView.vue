@@ -6,6 +6,7 @@ import { useApi } from '@/composables/useApi';
 import { useAuthStore } from '@/stores/auth';
 import ArtistSelect from '@/components/ArtistSelect.vue';
 import AConfirm from '@/components/ui/AConfirm.vue';
+import type { Artist } from '@/types';
 interface TrackFile {
   id: string;
   file: File;
@@ -17,7 +18,7 @@ const authStore = useAuthStore();
 const api = useApi();
 
 const formData = reactive({
-  artist: 'Atoman',
+  artist: [] as Artist[],
   album: '',
   releaseDate: new Date().toISOString().split('T')[0],
   source: '',
@@ -182,7 +183,7 @@ const handleSubmit = async () => {
 
     const data = new FormData();
      data.append('title', track.title);
-     data.append('artist', formData.artist);
+     data.append('artist', formData.artist.map(a => a.name).join(', '));
      data.append('album', formData.album);
      data.append('release_date', formData.releaseDate);
      data.append('source', formData.source);

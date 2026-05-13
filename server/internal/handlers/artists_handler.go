@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -26,14 +27,21 @@ func SetupArtistRoutes(router *gin.Engine, db *gorm.DB) {
 func GetArtistsHandler(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		q := c.Query("q")
-		query := db.Order("name ASC")
-		if q != "" {
-			query = query.Where("LOWER(name) LIKE LOWER(?)", "%"+q+"%")
-		}
 		var artists []model.Artist
-		if err := query.Find(&artists).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch artists"})
-			return
+		if q != "" {
+			like := "%" + strings.ToLower(q) + "%"
+			if err := db.Raw(`SELECT DISTINCT "Artists".* FROM "Artists"
+				LEFT JOIN artist_aliases ON artist_aliases.artist_id = "Artists".id
+				WHERE LOWER("Artists".name) LIKE ? OR LOWER(artist_aliases.alias) LIKE ?
+				ORDER BY "Artists".name ASC`, like, like).Scan(&artists).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch artists"})
+				return
+			}
+		} else {
+			if err := db.Order("name ASC").Find(&artists).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch artists"})
+				return
+			}
 		}
 		c.JSON(http.StatusOK, artists)
 	}

@@ -85,7 +85,7 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('user', JSON.stringify(data.user))
   }
 
-  const register = async (username: string, email: string, password: string, passwordConfirm: string, verificationCode: string) => {
+  const register = async (username: string, email: string, password: string, passwordConfirm?: string, verificationCode?: string) => {
     const response = await fetch(`${API_URL}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

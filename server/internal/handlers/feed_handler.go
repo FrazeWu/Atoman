@@ -408,6 +408,9 @@ func GetTimeline(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		if len(channelIDs) > 0 {
+			orConditions = append(orConditions, "channel_id IN ?")
+			orArgs = append(orArgs, channelIDs)
+
 			var channelCollections []model.Collection
 			db.Where("channel_id IN ?", channelIDs).Find(&channelCollections)
 			for _, col := range channelCollections {

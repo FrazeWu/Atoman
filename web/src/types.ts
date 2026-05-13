@@ -1,8 +1,31 @@
+export interface ArtistAlias {
+  id: string
+  artist_id: string
+  alias: string
+  is_main_name: boolean
+  created_at: string
+}
+
+export interface LyricAnnotation {
+  id: string
+  song_id: string
+  line_number: number
+  content: string
+  user?: User
+  created_at: string
+}
+
 export interface Artist {
   id: number;
   name: string;
   bio?: string;
   image_url?: string;
+  nationality?: string;
+  birth_year?: number;
+  death_year?: number;
+  members?: string;
+  entry_status?: string;
+  aliases?: ArtistAlias[];
   created_at?: string;
   updated_at?: string;
 }
@@ -15,6 +38,8 @@ export interface Album {
   cover_url?: string;
   cover_source?: 'local' | 's3';
   status: 'open' | 'closed' | 'pending' | 'approved' | 'rejected';
+  album_type?: string;
+  entry_status?: string;
   uploaded_by?: number;
   artists?: Artist[];
   created_at?: string;
@@ -107,8 +132,10 @@ export interface Channel {
   user_id: string
   user?: User
   name: string
+  slug: string
   description?: string
   cover_url?: string
+  is_default?: boolean
   created_at: string
   updated_at: string
 }
@@ -129,6 +156,8 @@ export interface Post {
   id: string
   user_id: string
   user?: User
+  channel_id?: string
+  channel?: Channel
   title: string
   content: string
   summary?: string
@@ -139,6 +168,22 @@ export interface Post {
   collections?: Collection[]
   likes_count?: number
   comments_count?: number
+  created_at: string
+  updated_at: string
+}
+
+export interface BlogDraft {
+  id: string
+  user_id: string
+  context_key: string
+  source_post_id?: string
+  title: string
+  content: string
+  summary?: string
+  cover_url?: string
+  allow_comments: boolean
+  channel_id?: string
+  collection_ids: string[]
   created_at: string
   updated_at: string
 }

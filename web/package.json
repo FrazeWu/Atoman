@@ -13,19 +13,16 @@
     "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.10.3",
     "@codemirror/lang-markdown": "^6.5.0",
+    "@codemirror/language": "^6.12.3",
     "@codemirror/language-data": "^6.5.2",
-    "@milkdown/core": "^7.20.0",
-    "@milkdown/ctx": "^7.20.0",
-    "@milkdown/plugin-listener": "^7.20.0",
-    "@milkdown/preset-commonmark": "^7.20.0",
-    "@milkdown/preset-gfm": "^7.20.0",
-    "@milkdown/transformer": "^7.20.0",
-    "@milkdown/vue": "^7.20.0",
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/theme-one-dark": "^6.1.3",
+    "@codemirror/view": "^6.42.1",
     "@tailwindcss/vite": "^4.2.2",
     "@types/dompurify": "^3.2.0",
     "chart.js": "^4.5.1",
-    "codemirror": "^6.0.2",
     "dompurify": "^3.3.3",
     "highlight.js": "^11.11.1",
     "katex": "^0.16.38",
@@ -39,7 +36,10 @@
     "tailwindcss": "^4.2.2",
     "turndown": "^7.2.4",
     "vue": "3.4.21",
-    "vue-router": "4.3.0"
+    "vue-router": "4.3.0",
+    "y-codemirror.next": "^0.3.5",
+    "y-websocket": "^3.0.0",
+    "yjs": "^13.6.30"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
