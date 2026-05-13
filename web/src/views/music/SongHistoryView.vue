@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import ASelect from '@/components/ui/ASelect.vue'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -15,6 +16,10 @@ const total = ref(0)
 const compareFrom = ref<number | null>(null)
 const compareTo = ref<number | null>(null)
 const diff = ref<Record<string, any> | null>(null)
+const revisionOptions = computed(() => [
+  { label: '选择版本...', value: null },
+  ...revisions.value.map(rev => ({ label: `版本 #${rev.version_number}`, value: rev.version_number }))
+])
 
 const canRevert = computed(() => authStore.user?.role === 'admin')
 
@@ -104,19 +109,9 @@ onMounted(fetchRevisions)
     </header>
 
     <section v-if="revisions.length > 1" class="diff-selector">
-      <select v-model="compareFrom" class="select">
-        <option :value="null">选择版本...</option>
-        <option v-for="rev in revisions" :key="`from-${rev.version_number}`" :value="rev.version_number">
-          版本 #{{ rev.version_number }}
-        </option>
-      </select>
+      <ASelect v-model="compareFrom" :options="revisionOptions" class="select" />
       <span class="diff-label">对比</span>
-      <select v-model="compareTo" class="select">
-        <option :value="null">选择版本...</option>
-        <option v-for="rev in revisions" :key="`to-${rev.version_number}`" :value="rev.version_number">
-          版本 #{{ rev.version_number }}
-        </option>
-      </select>
+      <ASelect v-model="compareTo" :options="revisionOptions" class="select" />
       <button @click="fetchDiff" class="btn" :disabled="!compareFrom || !compareTo">对比</button>
     </section>
 

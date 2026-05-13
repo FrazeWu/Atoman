@@ -109,7 +109,7 @@
                 :class="{ 'dropdown-item-active': activeCategoryId === cat.id }"
                 @click="selectCategory(cat.id); catDropdownOpen = false"
               >
-                <span class="dropdown-cat-dot" :style="{ background: cat.color || '#000' }" />
+                <span class="dropdown-cat-dot" :style="{ background: cat.color || 'var(--a-color-fg)' }" />
                 {{ cat.name }}
               </div>
             </div>

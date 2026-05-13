@@ -113,8 +113,8 @@ const seek = (e: MouseEvent) => {
   bottom: 0;
   width: 100%;
   z-index: 50;
-  background: #fff;
-  border-top: 2px solid #000;
+  background: var(--a-color-bg);
+  border-top: 2px solid var(--a-color-fg);
 }
 .player-inner {
   max-width: 1152px;
@@ -135,7 +135,7 @@ const seek = (e: MouseEvent) => {
 .player-cover {
   width: 44px;
   height: 44px;
-  border: 2px solid #000;
+  border: 2px solid var(--a-color-fg);
   object-fit: cover;
   filter: grayscale(1);
   flex-shrink: 0;
@@ -151,7 +151,7 @@ const seek = (e: MouseEvent) => {
 }
 .player-artist {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--a-color-muted);
   font-weight: 500;
   margin: 0;
   overflow: hidden;
@@ -165,7 +165,7 @@ const seek = (e: MouseEvent) => {
 }
 .ctrl-btn {
   background: none;
-  border: 1px solid #000;
+  border: 1px solid var(--a-color-fg);
   cursor: pointer;
   padding: 0.35rem 0.6rem;
   font-size: 0.75rem;
@@ -174,16 +174,16 @@ const seek = (e: MouseEvent) => {
   line-height: 1.5;
   white-space: nowrap;
 }
-.ctrl-btn:hover { background: #000; color: #fff; }
-.ctrl-btn.active { background: #000; color: #fff; }
+.ctrl-btn:hover { background: var(--a-color-fg); color: var(--a-color-bg); }
+.ctrl-btn.active { background: var(--a-color-fg); color: var(--a-color-bg); }
 .play-btn {
   padding: 0.35rem 1rem;
-  background: #000;
-  color: #fff;
-  border: 2px solid #000;
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
+  border: 2px solid var(--a-color-fg);
   font-size: 0.8rem;
 }
-.play-btn:hover { background: #fff; color: #000; }
+.play-btn:hover { background: var(--a-color-bg); color: var(--a-color-fg); }
 .player-right {
   display: flex;
   flex-direction: column;
@@ -195,17 +195,17 @@ const seek = (e: MouseEvent) => {
   align-items: center;
   gap: 0.5rem;
 }
-.player-time { font-size: 0.7rem; color: #9ca3af; font-weight: 700; flex-shrink: 0; }
+.player-time { font-size: 0.7rem; color: var(--a-color-muted-soft); font-weight: 700; flex-shrink: 0; }
 .progress-bar {
   flex: 1;
   height: 4px;
-  background: #e5e7eb;
+  background: var(--a-color-disabled-border);
   cursor: pointer;
   position: relative;
 }
 .progress-fill {
   height: 100%;
-  background: #000;
+  background: var(--a-color-fg);
   transition: width 0.1s linear;
 }
 .volume-wrap {
@@ -216,12 +216,12 @@ const seek = (e: MouseEvent) => {
 }
 .vol-label {
   font-size: 0.7rem;
-  color: #6b7280;
+  color: var(--a-color-muted);
   font-weight: 800;
 }
 .vol-slider {
   width: 80px;
-  accent-color: #000;
+  accent-color: var(--a-color-fg);
   cursor: pointer;
 }
 </style>

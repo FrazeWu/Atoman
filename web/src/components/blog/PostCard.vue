@@ -57,8 +57,8 @@ const formatDate = (dateStr: string) => {
 <style scoped>
 .post-card-link { display: block; text-decoration: none; color: inherit; }
 .post-card {
-  background: #fff;
-  border: 2px solid #000;
+  background: var(--a-color-bg);
+  border: 2px solid var(--a-color-fg);
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -66,7 +66,7 @@ const formatDate = (dateStr: string) => {
 }
 .post-card:hover { box-shadow: 10px 10px 0px 0px rgba(0,0,0,1); }
 .post-cover {
-  border-bottom: 2px solid #000;
+  border-bottom: 2px solid var(--a-color-fg);
   overflow: hidden;
 }
 .post-cover-img {
@@ -93,7 +93,7 @@ const formatDate = (dateStr: string) => {
 .post-card:hover .post-title { text-decoration: underline; }
 .post-summary {
   font-size: 0.875rem;
-  color: #4b5563;
+  color: var(--a-color-muted);
   font-weight: 500;
   line-height: 1.6;
   margin: 0 0 1rem;
@@ -106,15 +106,15 @@ const formatDate = (dateStr: string) => {
   justify-content: space-between;
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--a-color-disabled-border);
 }
 .post-author { display: flex; align-items: center; gap: 0.5rem; }
 .author-avatar {
   width: 24px;
   height: 24px;
   border-radius: 9999px;
-  background: #000;
-  color: #fff;
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
   font-size: 0.7rem;
   font-weight: 900;
   display: flex;
@@ -122,8 +122,8 @@ const formatDate = (dateStr: string) => {
   justify-content: center;
   flex-shrink: 0;
 }
-.author-name { font-size: 0.75rem; font-weight: 700; color: #374151; }
-.channel-link { color: #374151; text-decoration: none; font-weight: 700; }
+.author-name { font-size: 0.75rem; font-weight: 700; color: var(--a-color-muted); }
+.channel-link { color: var(--a-color-muted); text-decoration: none; font-weight: 700; }
 .channel-link:hover { text-decoration: underline; }
 .post-stats {
   display: flex;

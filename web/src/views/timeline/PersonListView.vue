@@ -54,42 +54,34 @@
     </div>
 
     <!-- Create/Edit Person Modal -->
-    <AModal v-if="showForm" size="md" @close="closeForm">
-      <div class="a-modal-header">
-        <h2 class="a-modal-title">{{ editingPerson ? '编辑人物' : '新建人物' }}</h2>
-        <button class="a-modal-close" @click="closeForm">✕</button>
+    <AModal v-if="showForm" size="md" :title="editingPerson ? '编辑人物' : '新建人物'" @close="closeForm">
+      <div class="form-group">
+        <label class="form-label">姓名 *</label>
+        <AInput v-model="form.name" placeholder="历史人物姓名" />
       </div>
-      <div class="a-modal-body">
-        <div class="form-group">
-          <label class="form-label">姓名 *</label>
-          <AInput v-model="form.name" placeholder="历史人物姓名" />
+      <div class="form-row">
+        <div class="form-group" style="flex:1">
+          <label class="form-label">出生日期</label>
+          <AInput v-model="form.birth_date" placeholder="YYYY-MM-DD" />
         </div>
-        <div class="form-row">
-          <div class="form-group" style="flex:1">
-            <label class="form-label">出生日期</label>
-            <AInput v-model="form.birth_date" placeholder="YYYY-MM-DD" />
-          </div>
-          <div class="form-group" style="flex:1">
-            <label class="form-label">去世日期</label>
-            <AInput v-model="form.death_date" placeholder="YYYY-MM-DD" />
-          </div>
+        <div class="form-group" style="flex:1">
+          <label class="form-label">去世日期</label>
+          <AInput v-model="form.death_date" placeholder="YYYY-MM-DD" />
         </div>
-        <div class="form-group">
-          <label class="form-label">简介</label>
-          <ATextarea v-model="form.bio" :rows="4" placeholder="人物生平简介" />
-        </div>
-        <div class="form-group">
-          <label class="form-label">标签 (逗号分隔)</label>
-          <AInput v-model="tagsInput" placeholder="政治家, 军事家, 哲学家" />
-        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">简介</label>
+        <ATextarea v-model="form.bio" :rows="4" placeholder="人物生平简介" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">标签 (逗号分隔)</label>
+        <AInput v-model="tagsInput" placeholder="政治家, 军事家, 哲学家" />
       </div>
       <template #footer>
-        <div class="a-modal-footer">
-          <ABtn outline @click="closeForm">取消</ABtn>
-          <ABtn :disabled="submitting" @click="submitForm">
-            {{ submitting ? '保存中...' : (editingPerson ? '保存' : '创建') }}
-          </ABtn>
-        </div>
+        <ABtn outline @click="closeForm">取消</ABtn>
+        <ABtn :disabled="submitting" @click="submitForm">
+          {{ submitting ? '保存中...' : (editingPerson ? '保存' : '创建') }}
+        </ABtn>
       </template>
     </AModal>
 
@@ -211,23 +203,23 @@ onMounted(() => {
   border: none;
   cursor: pointer;
   font-size: 0.8rem;
-  color: #9ca3af;
+  color: var(--a-color-muted-soft);
   padding: 2px 5px;
   transition: color 0.15s;
   line-height: 1;
 }
-.card-action-btn:hover { color: #000; }
+.card-action-btn:hover { color: var(--a-color-fg); }
 .card-action-danger:hover { color: #ef4444; }
 
 .person-dates {
   font-size: 0.75rem;
   font-weight: 700;
-  color: #6b7280;
+  color: var(--a-color-muted);
   margin-bottom: 0.5rem;
 }
 .person-bio {
   font-size: 0.8rem;
-  color: #6b7280;
+  color: var(--a-color-muted);
   line-height: 1.5;
   margin-bottom: 0.75rem;
   overflow: hidden;
@@ -245,10 +237,10 @@ onMounted(() => {
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #6b7280;
+  color: var(--a-color-muted);
 }
 .a-card:hover .person-link {
-  color: #000;
+  color: var(--a-color-fg);
 }
 
 .form-group { margin-bottom: 1rem; }
@@ -260,22 +252,5 @@ onMounted(() => {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin-bottom: 0.4rem;
-}
-.a-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1.25rem 1.5rem;
-  border-bottom: 2px solid #000;
-}
-.a-modal-title { font-size: 1.25rem; font-weight: 900; letter-spacing: -0.03em; }
-.a-modal-close {
-  background: none; border: none; font-size: 1rem; font-weight: 900;
-  cursor: pointer; padding: 0.25rem 0.5rem; color: #000;
-}
-.a-modal-body { padding: 1.5rem; overflow-y: auto; max-height: 60vh; }
-.a-modal-footer {
-  display: flex; justify-content: flex-end; gap: 0.75rem;
-  padding: 1rem 1.5rem; border-top: 2px solid #000;
 }
 </style>

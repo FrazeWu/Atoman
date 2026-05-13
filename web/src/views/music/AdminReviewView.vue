@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useApi } from '@/composables/useApi';
+import ASelect from '@/components/ui/ASelect.vue';
 import type { Song, User } from '@/types';
 
 // 统一的审核项接口
@@ -414,6 +415,17 @@ const entriesTotal = ref(0);
 const entriesLoading = ref(false);
 const entriesTypeFilter = ref('all');
 const entriesStatusFilter = ref('all');
+const entriesTypeOptions = [
+  { label: '全部类型', value: 'all' },
+  { label: '专辑', value: 'album' },
+  { label: '艺术家', value: 'artist' },
+];
+const entriesStatusOptions = [
+  { label: '全部状态', value: 'all' },
+  { label: '开放', value: 'open' },
+  { label: '已确认', value: 'confirmed' },
+  { label: '争议', value: 'disputed' },
+];
 
 const fetchEntries = async () => {
   entriesLoading.value = true;
@@ -442,6 +454,10 @@ const entryStatusLabel = (s: string) => {
   return '开放';
 };
 
+watch([entriesTypeFilter, entriesStatusFilter], () => {
+  if (activeTab.value === 'entries') fetchEntries();
+});
+
 </script>
 
 <template>
@@ -462,17 +478,8 @@ const entryStatusLabel = (s: string) => {
     <!-- ===== Entries Tab ===== -->
     <div v-if="activeTab === 'entries'">
       <div class="entries-filters">
-        <select v-model="entriesTypeFilter" @change="fetchEntries" class="filter-select">
-          <option value="all">全部类型</option>
-          <option value="album">专辑</option>
-          <option value="artist">艺术家</option>
-        </select>
-        <select v-model="entriesStatusFilter" @change="fetchEntries" class="filter-select">
-          <option value="all">全部状态</option>
-          <option value="open">开放</option>
-          <option value="confirmed">已确认</option>
-          <option value="disputed">争议</option>
-        </select>
+        <ASelect v-model="entriesTypeFilter" :options="entriesTypeOptions" class="filter-select" />
+        <ASelect v-model="entriesStatusFilter" :options="entriesStatusOptions" class="filter-select" />
         <span class="entries-total">共 {{ entriesTotal }} 条</span>
       </div>
 
@@ -775,7 +782,7 @@ const entryStatusLabel = (s: string) => {
 </template>
 
 <style scoped>
-.admin-tabs { display: flex; gap: 0; border-bottom: 2px solid #000; margin-bottom: 1.5rem; }
+.admin-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--a-color-fg); margin-bottom: 1.5rem; }
 .admin-tab {
   padding: 0.5rem 1.5rem;
   font-size: 0.75rem;
@@ -789,24 +796,24 @@ const entryStatusLabel = (s: string) => {
   transition: all 0.15s;
 }
 .admin-tab:hover { background: #f3f4f6; }
-.admin-tab-active { border-color: #000; border-bottom-color: #fff; background: #fff; margin-bottom: -2px; }
+.admin-tab-active { border-color: var(--a-color-fg); border-bottom-color: var(--a-color-bg); background: var(--a-color-bg); margin-bottom: -2px; }
 .entries-filters { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1rem; }
 .filter-select {
-  border: 2px solid #000;
+  border: 2px solid var(--a-color-fg);
   padding: 0.375rem 0.75rem;
   font-size: 0.75rem;
   font-weight: 700;
-  background: #fff;
+  background: var(--a-color-bg);
   cursor: pointer;
 }
-.entries-total { font-size: 0.75rem; color: #6b7280; font-weight: 600; margin-left: auto; }
+.entries-total { font-size: 0.75rem; color: var(--a-color-muted); font-weight: 600; margin-left: auto; }
 .entries-list { display: flex; flex-direction: column; gap: 0; }
 .entry-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0.875rem 1rem;
-  border: 2px solid #000;
+  border: 2px solid var(--a-color-fg);
   border-bottom-width: 0;
   transition: background 0.1s;
 }
@@ -817,7 +824,7 @@ const entryStatusLabel = (s: string) => {
   font-size: 0.9375rem;
   font-weight: 700;
   text-decoration: none;
-  color: #000;
+  color: var(--a-color-fg);
 }
 .entry-name:hover { text-decoration: underline; }
 .entry-type {
@@ -825,15 +832,15 @@ const entryStatusLabel = (s: string) => {
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  border: 1px solid #000;
+  border: 1px solid var(--a-color-fg);
   padding: 0.125rem 0.375rem;
 }
 .entry-album-type {
   font-size: 0.5rem;
   font-weight: 900;
   letter-spacing: 0.1em;
-  border: 1px solid #9ca3af;
-  color: #6b7280;
+  border: 1px solid var(--a-color-muted-soft);
+  color: var(--a-color-muted);
   padding: 0.125rem 0.375rem;
 }
 .entry-meta { display: flex; align-items: center; gap: 0.75rem; }
@@ -847,8 +854,8 @@ const entryStatusLabel = (s: string) => {
 }
 .entry-status-confirmed { border-color: #166534; color: #166534; }
 .entry-status-disputed { border-color: #991b1b; color: #991b1b; }
-.entry-status-open { border-color: #9ca3af; color: #6b7280; }
-.entry-disc { font-size: 0.75rem; color: #6b7280; }
-.entry-editor { font-size: 0.75rem; color: #9ca3af; }
-.entry-date { font-size: 0.75rem; color: #9ca3af; }
+.entry-status-open { border-color: var(--a-color-muted-soft); color: var(--a-color-muted); }
+.entry-disc { font-size: 0.75rem; color: var(--a-color-muted); }
+.entry-editor { font-size: 0.75rem; color: var(--a-color-muted-soft); }
+.entry-date { font-size: 0.75rem; color: var(--a-color-muted-soft); }
 </style>

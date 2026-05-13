@@ -202,17 +202,10 @@
         <form @submit.prevent="handleCreateArgument" class="space-y-4">
           <div class="a-field">
             <label class="a-field-label">论点类型</label>
-            <select
+            <ASelect
               v-model="newArgument.argument_type"
-              class="a-select"
-            >
-              <option value="support">支持</option>
-              <option value="oppose">反对</option>
-              <option value="neutral">中立</option>
-              <option value="evidence">证据</option>
-              <option value="question">提问</option>
-              <option value="counter">反驳</option>
-            </select>
+              :options="argumentTypeOptions"
+            />
           </div>
           <div class="a-field">
             <label class="a-field-label">论点内容</label>
@@ -237,14 +230,7 @@
         <form @submit.prevent="handleEditArgumentSubmit" class="space-y-4">
           <div class="a-field">
             <label class="a-field-label">论点类型</label>
-            <select v-model="editArgumentForm.argument_type" class="a-select">
-              <option value="support">支持</option>
-              <option value="oppose">反对</option>
-              <option value="neutral">中立</option>
-              <option value="evidence">证据</option>
-              <option value="question">提问</option>
-              <option value="counter">反驳</option>
-            </select>
+            <ASelect v-model="editArgumentForm.argument_type" :options="argumentTypeOptions" />
           </div>
           <div class="a-field">
             <label class="a-field-label">论点内容</label>
@@ -387,6 +373,7 @@ import AEmpty from '@/components/ui/AEmpty.vue'
 import ArgumentNode from '@/components/debate/ArgumentNode.vue'
 import { useMarkdownRenderer } from '@/composables/useMarkdownRenderer'
 import AEditor from '@/components/shared/AEditor.vue'
+import ASelect from '@/components/ui/ASelect.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -432,22 +419,31 @@ const conclusionLabels: Record<string, string> = {
 }
 
 const conclusionOptions = [
-  { value: 'yes', label: '是', style: { color: '#16a34a', borderColor: '#16a34a' } },
-  { value: 'no', label: '否', style: { color: '#dc2626', borderColor: '#dc2626' } },
-  { value: 'inconclusive', label: '无定论', style: { color: '#6b7280', borderColor: '#6b7280' } },
+  { value: 'yes', label: '是', style: { color: 'var(--a-color-success)', borderColor: 'var(--a-color-success)' } },
+  { value: 'no', label: '否', style: { color: 'var(--a-color-danger)', borderColor: 'var(--a-color-danger)' } },
+  { value: 'inconclusive', label: '无定论', style: { color: 'var(--a-color-muted)', borderColor: 'var(--a-color-muted)' } },
 ]
 
 const conclusionBannerStyles: Record<string, any> = {
-  yes: { backgroundColor: '#f0fdf4', borderColor: '#16a34a' },
-  no: { backgroundColor: '#fef2f2', borderColor: '#dc2626' },
-  inconclusive: { backgroundColor: '#f9fafb', borderColor: '#6b7280' },
+  yes: { backgroundColor: 'var(--a-color-success-bg)', borderColor: 'var(--a-color-success)' },
+  no: { backgroundColor: '#fef2f2', borderColor: 'var(--a-color-danger)' },
+  inconclusive: { backgroundColor: 'var(--a-color-surface)', borderColor: 'var(--a-color-muted)' },
 }
 
 const conclusionBadgeStyles: Record<string, any> = {
-  yes: { color: '#16a34a', borderColor: '#16a34a' },
-  no: { color: '#dc2626', borderColor: '#dc2626' },
-  inconclusive: { color: '#6b7280', borderColor: '#6b7280' },
+  yes: { color: 'var(--a-color-success)', borderColor: 'var(--a-color-success)' },
+  no: { color: 'var(--a-color-danger)', borderColor: 'var(--a-color-danger)' },
+  inconclusive: { color: 'var(--a-color-muted)', borderColor: 'var(--a-color-muted)' },
 }
+
+const argumentTypeOptions = [
+  { label: '支持', value: 'support' },
+  { label: '反对', value: 'oppose' },
+  { label: '中立', value: 'neutral' },
+  { label: '证据', value: 'evidence' },
+  { label: '提问', value: 'question' },
+  { label: '反驳', value: 'counter' },
+]
 
 // Edit Debate modal
 const showEditModal = ref(false)

@@ -285,13 +285,13 @@ const buildPointStyle = (active = false) =>
   new Style({
     image: new CircleStyle({
       radius: active ? 10 : 7,
-      fill: new Fill({ color: active ? '#000' : '#fff' }),
-      stroke: new Stroke({ color: '#000', width: 2 }),
+      fill: new Fill({ color: active ? 'var(--a-color-fg)' : 'var(--a-color-bg)' }),
+      stroke: new Stroke({ color: 'var(--a-color-fg)', width: 2 }),
     }),
   })
 
 const lineStyle = new Style({
-  stroke: new Stroke({ color: '#000', width: 2, lineDash: [4, 4] }),
+  stroke: new Stroke({ color: 'var(--a-color-fg)', width: 2, lineDash: [4, 4] }),
 })
 
 const renderMap = () => {
@@ -586,7 +586,7 @@ onUnmounted(() => {
 .person-panel {
   width: 320px;
   flex-shrink: 0;
-  border-right: 2px solid #000;
+  border-right: 2px solid var(--a-color-fg);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -594,7 +594,7 @@ onUnmounted(() => {
 
 .panel-header {
   padding: 1.25rem;
-  border-bottom: 2px solid #000;
+  border-bottom: 2px solid var(--a-color-fg);
   flex-shrink: 0;
 }
 
@@ -603,12 +603,12 @@ onUnmounted(() => {
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #6b7280;
+  color: var(--a-color-muted);
   text-decoration: none;
   display: block;
   margin-bottom: 0.75rem;
 }
-.back-link:hover { color: #000; text-decoration: underline; }
+.back-link:hover { color: var(--a-color-fg); text-decoration: underline; }
 
 .person-name {
   font-size: 1.5rem;
@@ -621,7 +621,7 @@ onUnmounted(() => {
 .person-years {
   font-size: 0.75rem;
   font-weight: 700;
-  color: #6b7280;
+  color: var(--a-color-muted);
   margin-bottom: 0.5rem;
 }
 
@@ -681,14 +681,14 @@ onUnmounted(() => {
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: #6b7280;
+  color: var(--a-color-muted);
 }
 
 .locations-empty {
   padding: 2rem;
   text-align: center;
   font-size: 0.8rem;
-  color: #9ca3af;
+  color: var(--a-color-muted-soft);
 }
 
 .location-item {
@@ -701,13 +701,13 @@ onUnmounted(() => {
   transition: background 0.1s;
 }
 .location-item:hover { background: #f9fafb; }
-.location-item.active { background: #f0f0f0; border-left: 3px solid #000; }
+.location-item.active { background: #f0f0f0; border-left: 3px solid var(--a-color-fg); }
 
 .loc-index {
   flex-shrink: 0;
   width: 20px;
   height: 20px;
-  border: 2px solid #000;
+  border: 2px solid var(--a-color-fg);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -718,16 +718,16 @@ onUnmounted(() => {
 }
 
 .location-item.active .loc-index {
-  background: #000;
-  color: #fff;
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
 }
 
 .loc-info { flex: 1; min-width: 0; }
 .loc-name { font-size: 0.875rem; font-weight: 700; margin-bottom: 2px; }
-.loc-date { font-size: 0.7rem; color: #6b7280; font-weight: 600; }
+.loc-date { font-size: 0.7rem; color: var(--a-color-muted); font-weight: 600; }
 .loc-source {
   font-size: 0.65rem;
-  color: #9ca3af;
+  color: var(--a-color-muted-soft);
   margin-top: 1px;
   font-style: italic;
   overflow: hidden;
@@ -736,7 +736,7 @@ onUnmounted(() => {
 }
 .loc-note {
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: var(--a-color-muted-soft);
   margin-top: 2px;
   overflow: hidden;
   white-space: nowrap;
@@ -754,11 +754,11 @@ onUnmounted(() => {
   border: none;
   cursor: pointer;
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--a-color-muted);
   padding: 2px 4px;
   transition: color 0.15s;
 }
-.icon-btn:hover { color: #000; }
+.icon-btn:hover { color: var(--a-color-fg); }
 .icon-btn.danger:hover { color: #ef4444; }
 
 /* Map */
@@ -784,8 +784,8 @@ onUnmounted(() => {
   left: 50%;
   transform: translateX(-50%);
   z-index: 20;
-  background: #000;
-  color: #fff;
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
   padding: 8px 16px;
   font-size: 0.8rem;
   font-weight: 900;
@@ -801,7 +801,7 @@ onUnmounted(() => {
 .pick-cancel-btn {
   background: none;
   border: 1px solid rgba(255,255,255,0.5);
-  color: #fff;
+  color: var(--a-color-bg);
   font-size: 0.7rem;
   font-weight: 900;
   text-transform: uppercase;
@@ -828,8 +828,8 @@ onUnmounted(() => {
 }
 
 .popup-content {
-  background: #fff;
-  border: 2px solid #000;
+  background: var(--a-color-bg);
+  border: 2px solid var(--a-color-fg);
   box-shadow: 4px 4px 0px 0px rgba(0,0,0,1);
   padding: 0.75rem 1rem;
   min-width: 160px;
@@ -845,14 +845,14 @@ onUnmounted(() => {
   border: none;
   font-size: 0.75rem;
   cursor: pointer;
-  color: #9ca3af;
+  color: var(--a-color-muted-soft);
   line-height: 1;
 }
-.popup-close:hover { color: #000; }
+.popup-close:hover { color: var(--a-color-fg); }
 
 .popup-name { font-size: 0.875rem; font-weight: 900; margin-bottom: 3px; padding-right: 16px; }
-.popup-date { font-size: 0.7rem; color: #6b7280; font-weight: 600; }
-.popup-source { font-size: 0.65rem; color: #9ca3af; margin-top: 2px; font-style: italic; }
+.popup-date { font-size: 0.7rem; color: var(--a-color-muted); font-weight: 600; }
+.popup-source { font-size: 0.65rem; color: var(--a-color-muted-soft); margin-top: 2px; font-style: italic; }
 .popup-note { font-size: 0.75rem; color: #4b5563; margin-top: 4px; }
 
 /* Location form */
@@ -887,7 +887,7 @@ onUnmounted(() => {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   background: none;
-  border: 2px solid #000;
+  border: 2px solid var(--a-color-fg);
   cursor: pointer;
   padding: 3px 10px;
   transition: background 0.1s, color 0.1s;
@@ -895,8 +895,8 @@ onUnmounted(() => {
 }
 .pick-map-btn:hover,
 .pick-map-btn.active {
-  background: #000;
-  color: #fff;
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
 }
 
 .picked-coords-hint {
@@ -909,23 +909,23 @@ onUnmounted(() => {
 
 .a-modal-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 1.25rem 1.5rem; border-bottom: 2px solid #000;
+  padding: 1.25rem 1.5rem; border-bottom: 2px solid var(--a-color-fg);
 }
 .a-modal-title { font-size: 1.25rem; font-weight: 900; letter-spacing: -0.03em; }
 .a-modal-close {
   background: none; border: none; font-size: 1rem; font-weight: 900;
-  cursor: pointer; padding: 0.25rem 0.5rem; color: #000;
+  cursor: pointer; padding: 0.25rem 0.5rem; color: var(--a-color-fg);
 }
 .a-modal-body { padding: 1.5rem; overflow-y: auto; max-height: 65vh; }
 .a-modal-footer {
   display: flex; justify-content: flex-end; gap: 0.75rem;
-  padding: 1rem 1.5rem; border-top: 2px solid #000;
+  padding: 1rem 1.5rem; border-top: 2px solid var(--a-color-fg);
 }
 
 /* Mobile: stack layout */
 @media (max-width: 767px) {
   .person-map-page { flex-direction: column; height: auto; overflow: auto; }
-  .person-panel { width: 100%; border-right: none; border-bottom: 2px solid #000; max-height: 50vh; overflow-y: auto; }
+  .person-panel { width: 100%; border-right: none; border-bottom: 2px solid var(--a-color-fg); max-height: 50vh; overflow-y: auto; }
   .map-container { height: 60vw; min-height: 300px; }
 }
 </style>

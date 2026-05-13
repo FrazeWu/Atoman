@@ -88,10 +88,7 @@
             </div>
             <div>
               <label style="display:block;font-weight:bold;margin-bottom:0.5rem">所属合集 *</label>
-              <select v-model="collectionFormData.channel_id" style="width:100%;padding:0.75rem;border:2px solid black;font-family:inherit;font-size:1rem;background:white;outline:none;transition:all 0.2s">
-                <option value="" disabled>选择合集</option>
-                <option v-for="ch in channels" :key="ch.id" :value="ch.id">{{ ch.name }}</option>
-              </select>
+              <ASelect v-model="collectionFormData.channel_id" :options="channelOptions" placeholder="选择合集" />
             </div>
             <div>
               <label style="display:block;font-weight:bold;margin-bottom:0.5rem">描述</label>
@@ -140,6 +137,7 @@ import ABtn from '@/components/ui/ABtn.vue'
 import AModal from '@/components/ui/AModal.vue'
 import AInput from '@/components/ui/AInput.vue'
 import ATextarea from '@/components/ui/ATextarea.vue'
+import ASelect from '@/components/ui/ASelect.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useApi } from '@/composables/useApi'
 
@@ -165,6 +163,7 @@ const router = useRouter()
 
 const loadingChannels = ref(false)
 const channels = ref<Channel[]>([])
+const channelOptions = computed(() => channels.value.map(ch => ({ label: ch.name, value: ch.id })))
 
 // Create channel modal state
 const createModalVisible = ref(false)

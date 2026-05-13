@@ -62,7 +62,7 @@
             </div>
             <div style="display:flex;gap:.5rem;flex-shrink:0">
               <button class="a-btn-outline-sm" @click="openCollectionModal(col)">编辑</button>
-              <button v-if="!col.is_default" class="a-btn-outline-sm" style="color:#ef4444;border-color:#ef4444" @click="confirmDeleteCollection(col)">删除</button>
+              <button v-if="!col.is_default" class="a-btn-outline-sm" style="color:var(--a-color-danger);border-color:var(--a-color-danger)" @click="confirmDeleteCollection(col)">删除</button>
             </div>
           </div>
         </div>
@@ -96,8 +96,8 @@
 
       <!-- Danger zone -->
       <section v-if="activeTab === 'danger'" class="manage-section">
-        <h3 class="a-subtitle" style="margin-bottom:1.5rem;color:#ef4444">危险操作</h3>
-        <div class="a-card" style="border-color:#ef4444">
+        <h3 class="a-subtitle" style="margin-bottom:1.5rem;color:var(--a-color-danger)">危险操作</h3>
+        <div class="a-card" style="border-color:var(--a-color-danger)">
           <h4 style="font-weight:900;margin-bottom:.5rem">删除频道</h4>
           <p class="a-muted" style="margin-bottom:1rem;font-size:.875rem">删除后所有内容将被永久删除，此操作不可恢复。</p>
           <ABtn variant="danger" @click="showDeleteChannel = true">删除频道</ABtn>
@@ -130,7 +130,7 @@
         <ABtn
           :disabled="deleteConfirmName !== channel?.name || deleting"
           @click="deleteChannel"
-          style="background:#ef4444;border-color:#ef4444;color:#fff"
+          style="background:var(--a-color-danger);border-color:var(--a-color-danger);color:#fff"
         >{{ deleting ? '删除中...' : '确认删除' }}</ABtn>
       </div>
     </AModal>
@@ -291,7 +291,7 @@ onMounted(async () => {
 .manage-tabs {
   display: flex;
   gap: 0;
-  border-bottom: 2px solid #000;
+  border-bottom: 2px solid var(--a-color-fg);
   margin-bottom: 2rem;
   overflow-x: auto;
 }
@@ -309,6 +309,6 @@ onMounted(async () => {
   white-space: nowrap;
 }
 .manage-tab:hover { background: #f5f5f5; }
-.manage-tab.active { border-bottom-color: #000; }
+.manage-tab.active { border-bottom-color: var(--a-color-fg); }
 .manage-section { padding-bottom: 2rem; }
 </style>

@@ -103,16 +103,43 @@
 - [x] 再实现 ADropdown / APopover
 
 ### 阶段 4：页面迁移顺序
-- [ ] 登录 / 注册页
-- [ ] 顶栏用户菜单 / 下拉菜单
-- [ ] 各种确认弹窗
-- [ ] 常见表单页
-- [ ] 管理页筛选与操作区
+- [x] 登录 / 注册页
+- [x] 顶栏用户菜单 / 下拉菜单
+- [x] 各种确认弹窗
+- [x] 常见表单页（登录 / 注册与部分内容表单）
+- [x] 管理页筛选与操作区（已完成第一轮 token 化与常用表单组件替换）
+- [x] 第一批页面（Feed / PostDetail / ForumHome / ForumTopic）样式统一
+- [x] 第二批页面（music/Home / music/AlbumDetail / music/Upload / debate/Home / debate/Topic）基础色值统一
+- [x] 第三批页面（TimelineHome / BlogHome / PostEditor / PostCard / AudioPlayer）基础色值统一
+
+## 剩余收尾计划
+
+### 阶段 5：替换剩余原生控件
+- [x] 替换高频页面中的原生 `<select>`（Upload / Debate / AdminReview / CollectionManage）
+- [ ] 替换历史对比页中的原生 `<select>`（AlbumHistory / SongHistory）
+- [ ] 替换 BlogManage 中残留的原生 `<select>`
+- [ ] 评估 `DatetimePicker.vue` 内部原生 `<select>` 是否也要纳入统一组件体系
+
+### 阶段 6：统一 Modal 壳层用法
+- [ ] 移除页面中重复书写的 `.a-modal-header / .a-modal-footer`
+- [ ] 统一改回使用 `AModal` 自带 title / footer slot
+- [ ] 清理手写关闭按钮和重复 padding 结构
+
+### 阶段 7：清理高频 inline layout style
+- [ ] Feed 相关页面（FeedView / FeedStats / FeedStarred / FeedReadingList / FeedItemDetail）
+- [ ] Blog 管理相关页面（BlogManage / ChannelManageDetail / Profile / CollectionView / BookmarkView）
+- [ ] Timeline 相关页面（TimelineHome / PersonMap / PersonList）
+- [ ] Debate / Forum 剩余页面的布局类抽离
+
+### 阶段 8：统一语义按钮与状态块
+- [ ] 把旧 `outline` / 内联红色按钮写法进一步收口到 `variant`
+- [ ] 把常见状态标签 / badge / chip 统一到 token 体系
+- [ ] 区分“内容语义色”和“UI 结构色”，避免误清理代码高亮/warning 语义色
 
 ## 当前推荐的下一步
-1. 开始把现有页面里的内联样式和散落的原生 `<select>` / 下拉菜单逐步迁移到新基础组件
-2. 优先替换：登录 / 注册 → 顶栏菜单 → 确认弹窗 → 表单页 → 管理页筛选区
-3. 在页面迁移过程中，逐步把旧的 `outline` / 内联红色按钮写法收口到统一 `variant`
+1. 先清理剩余原生 `<select>`
+2. 再统一页面里重复的 modal header/footer 壳层
+3. 最后集中处理高频 inline layout style 页面
 
 ## 遇到的错误
 | 错误 | 尝试次数 | 解决方案 |

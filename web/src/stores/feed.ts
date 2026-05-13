@@ -197,22 +197,6 @@ export const useFeedStore = defineStore('feed', () => {
 
   // --- Notification Actions (integrated here) ---
 
-  const fetchUnreadCount = async () => {
-    const authStore = useAuthStore()
-    if (!authStore.isAuthenticated) return
-    try {
-      const res = await fetch(api.notifications.unreadCount, {
-        headers: { Authorization: `Bearer ${authStore.token}` },
-      })
-      if (res.ok) {
-        const data = await res.json()
-        unreadCount.value = data.unread_count ?? 0
-      }
-    } catch (e) {
-      console.error('Failed to fetch unread count', e)
-    }
-  }
-
   const fetchNotifications = async () => {
     const authStore = useAuthStore()
     if (!authStore.isAuthenticated) return
@@ -266,9 +250,9 @@ export const useFeedStore = defineStore('feed', () => {
   const startPolling = () => {
     const authStore = useAuthStore()
     if (!authStore.isAuthenticated) return
-    fetchUnreadCount()
+    fetchNotifications()
     if (!pollInterval) {
-      pollInterval = setInterval(fetchUnreadCount, 60_000)
+      pollInterval = setInterval(fetchNotifications, 60_000)
     }
   }
 
@@ -645,7 +629,6 @@ export const useFeedStore = defineStore('feed', () => {
     notifications,
     unreadCount,
     fetchNotifications,
-    fetchUnreadCount,
     markRead,
     markAllRead: markAllNotificationsRead,
     startPolling,

@@ -56,13 +56,9 @@
       <!-- Time row (only when showTime) -->
       <div v-if="showTime" class="dtp-time-row">
         <span class="dtp-time-label">时间</span>
-        <select class="dtp-select" :value="selHour" @change="selHour = Number(($event.target as HTMLSelectElement).value)">
-          <option v-for="h in 24" :key="h - 1" :value="h - 1">{{ String(h - 1).padStart(2, '0') }}</option>
-        </select>
+        <ASelect v-model="selHour" :options="hourSelectOptions" class="dtp-select-wrap" />
         <span class="dtp-colon">:</span>
-        <select class="dtp-select" :value="selMinute" @change="selMinute = Number(($event.target as HTMLSelectElement).value)">
-          <option v-for="m in minuteOptions" :key="m" :value="m">{{ String(m).padStart(2, '0') }}</option>
-        </select>
+        <ASelect v-model="selMinute" :options="minuteSelectOptions" class="dtp-select-wrap" />
       </div>
 
       <!-- Action row -->
@@ -76,6 +72,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import ASelect from '@/components/ui/ASelect.vue'
 
 const props = withDefaults(defineProps<{
   modelValue?: string
@@ -108,6 +105,14 @@ const yearInputDraft = ref<string>('')
 
 const weekDays = ['日', '一', '二', '三', '四', '五', '六']
 const minuteOptions = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]
+const hourSelectOptions = Array.from({ length: 24 }, (_, h) => ({
+  label: String(h).padStart(2, '0'),
+  value: h,
+}))
+const minuteSelectOptions = minuteOptions.map((m) => ({
+  label: String(m).padStart(2, '0'),
+  value: m,
+}))
 
 // ── Computed ───────────────────────────────────────────
 const daysInMonth = computed(() => {
@@ -421,17 +426,9 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   flex-shrink: 0;
 }
 
-.dtp-select {
-  border: 2px solid #000;
-  background: #fff;
-  font-size: 0.875rem;
-  font-weight: 700;
-  padding: 2px 4px;
-  cursor: pointer;
-  outline: none;
-  font-family: inherit;
+.dtp-select-wrap {
+  width: 84px;
 }
-.dtp-select:focus { box-shadow: 2px 2px 0 0 rgba(0,0,0,0.3); }
 
 .dtp-colon { font-weight: 900; font-size: 1rem; }
 

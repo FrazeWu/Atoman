@@ -7,25 +7,19 @@
     </APageHeader>
 
     <!-- Filters -->
-    <div style="display:flex;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap">
-      <select
+    <div class="debate-filters">
+      <ASelect
         v-model="filterStatus"
-        @change="loadDebates"
-        class="a-select"
-        style="max-width:200px"
-      >
-        <option value="">全部状态</option>
-        <option value="open">进行中</option>
-        <option value="concluded">已结题</option>
-        <option value="archived">已归档</option>
-      </select>
+        :options="filterStatusOptions"
+        placeholder="全部状态"
+        class="debate-filter-status"
+      />
 
-      <input
+      <AInput
         v-model="filterTag"
         @keyup.enter="loadDebates"
         placeholder="标签筛选"
-        class="a-input"
-        style="max-width:300px"
+        class="debate-filter-tag"
       />
 
       <ABtn outline @click="loadDebates">筛选</ABtn>
@@ -63,9 +57,9 @@
                 'a-badge-fill': debate.status === 'open',
               }"
               :style="{
-                backgroundColor: debate.status === 'open' ? '#16a34a' : undefined,
-                borderColor: debate.status === 'open' ? '#16a34a' : undefined,
-                color: debate.status === 'open' ? '#fff' : undefined,
+                backgroundColor: debate.status === 'open' ? 'var(--a-color-success)' : undefined,
+                borderColor: debate.status === 'open' ? 'var(--a-color-success)' : undefined,
+                color: debate.status === 'open' ? 'var(--a-color-bg)' : undefined,
               }"
             >
               {{ statusLabels[debate.status] }}
@@ -115,46 +109,12 @@
         <h3 class="a-title-sm mb-6">发起辩论</h3>
 
         <form @submit.prevent="handleCreate" class="space-y-4">
-          <div class="a-field">
-            <label class="a-field-label">标题</label>
-            <input
-              v-model="createForm.title"
-              required
-              class="a-input"
-              placeholder="辩论主题"
-            />
-          </div>
+          <AInput v-model="createForm.title" label="标题" placeholder="辩论主题" />
+          <AInput v-model="createForm.description" label="描述" placeholder="简短描述" />
+          <ATextarea v-model="createForm.content" label="背景内容" :rows="4" placeholder="详细说明..." />
+          <AInput v-model="tagsInput" label="标签（逗号分隔）" placeholder="例如：科技，社会，哲学" />
 
-          <div class="a-field">
-            <label class="a-field-label">描述</label>
-            <input
-              v-model="createForm.description"
-              required
-              class="a-input"
-              placeholder="简短描述"
-            />
-          </div>
-
-          <div class="a-field">
-            <label class="a-field-label">背景内容</label>
-            <textarea
-              v-model="createForm.content"
-              rows="4"
-              class="a-textarea"
-              placeholder="详细说明..."
-            ></textarea>
-          </div>
-
-          <div class="a-field">
-            <label class="a-field-label">标签（逗号分隔）</label>
-            <input
-              v-model="tagsInput"
-              class="a-input"
-              placeholder="例如：科技，社会，哲学"
-            />
-          </div>
-
-          <div class="flex justify-end gap-4 mt-6">
+          <div class="debate-modal-actions">
             <ABtn outline type="button" @click="showCreateModal = false">取消</ABtn>
             <ABtn type="submit" :disabled="creating">
               {{ creating ? '创建中...' : '创建' }}
@@ -175,6 +135,9 @@ import type { Debate } from '@/types'
 import ABtn from '@/components/ui/ABtn.vue'
 import AModal from '@/components/ui/AModal.vue'
 import AEmpty from '@/components/ui/AEmpty.vue'
+import AInput from '@/components/ui/AInput.vue'
+import ATextarea from '@/components/ui/ATextarea.vue'
+import ASelect from '@/components/ui/ASelect.vue'
 import APageHeader from '@/components/ui/APageHeader.vue'
 
 const router = useRouter()
@@ -189,6 +152,13 @@ const filterStatus = ref('')
 const filterTag = ref('')
 const currentPage = ref(1)
 const limit = 12
+
+const filterStatusOptions = [
+  { label: '全部状态', value: '' },
+  { label: '进行中', value: 'open' },
+  { label: '已结题', value: 'concluded' },
+  { label: '已归档', value: 'archived' },
+]
 
 const showCreateModal = ref(false)
 const creating = ref(false)
@@ -212,9 +182,9 @@ const conclusionLabels: Record<string, string> = {
 }
 
 const conclusionBadgeStyles: Record<string, any> = {
-  yes: { color: '#16a34a', borderColor: '#16a34a' },
-  no: { color: '#dc2626', borderColor: '#dc2626' },
-  inconclusive: { color: '#6b7280', borderColor: '#6b7280' },
+  yes: { color: 'var(--a-color-success)', borderColor: 'var(--a-color-success)' },
+  no: { color: 'var(--a-color-danger)', borderColor: 'var(--a-color-danger)' },
+  inconclusive: { color: 'var(--a-color-muted)', borderColor: 'var(--a-color-muted)' },
 }
 
 const loadDebates = async () => {
@@ -276,3 +246,24 @@ onMounted(() => {
   loadDebates()
 })
 </script>
+
+<style scoped>
+.debate-filters {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+.debate-filter-status {
+  max-width: 200px;
+}
+.debate-filter-tag {
+  max-width: 300px;
+}
+.debate-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+</style>

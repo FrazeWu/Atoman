@@ -280,7 +280,7 @@ const changeEntryStatus = async (status: string) => {
   margin-bottom: 2rem;
   font-weight: 700;
   text-decoration: none;
-  color: #000;
+  color: var(--a-color-fg);
   transition: opacity 0.2s;
 }
 .back-link:hover { text-decoration: underline; }
@@ -300,7 +300,7 @@ const changeEntryStatus = async (status: string) => {
 .album-cover {
   width: 16rem;
   height: 16rem;
-  border: 4px solid #000;
+  border: 4px solid var(--a-color-fg);
   object-fit: cover;
   flex-shrink: 0;
   box-shadow: 15px 15px 0px 0px rgba(0,0,0,1);
@@ -342,13 +342,13 @@ const changeEntryStatus = async (status: string) => {
 .album-artist {
   font-size: 1.25rem;
   font-weight: 700;
-  color: #4b5563;
+  color: var(--a-color-muted);
   margin: 0 0 0.25rem 0;
 }
 
 .album-tracks {
   font-size: 1.125rem;
-  color: #6b7280;
+  color: var(--a-color-muted);
   margin: 0 0 1.5rem 0;
 }
 
@@ -369,9 +369,9 @@ const changeEntryStatus = async (status: string) => {
   align-items: center;
   gap: 0.25rem;
   padding: 0.5rem 1rem;
-  border: 2px solid #000;
-  background: #fff;
-  color: #000;
+  border: 2px solid var(--a-color-fg);
+  background: var(--a-color-bg);
+  color: var(--a-color-fg);
   font-weight: 700;
   font-size: 0.75rem;
   text-decoration: none;
@@ -380,8 +380,8 @@ const changeEntryStatus = async (status: string) => {
 }
 
 .wiki-link:hover {
-  background: #000;
-  color: #fff;
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
 }
 
 .wiki-meta {
@@ -389,8 +389,8 @@ const changeEntryStatus = async (status: string) => {
   gap: 0.75rem;
   flex-wrap: wrap;
   padding: 1rem;
-  background: #f9fafb;
-  border: 2px solid #000;
+  background: var(--a-color-surface);
+  border: 2px solid var(--a-color-fg);
 }
 
 .protection-badge,
@@ -405,46 +405,46 @@ const changeEntryStatus = async (status: string) => {
 }
 
 .protection-full {
-  background: #dc2626;
-  color: #fff;
+  background: var(--a-color-danger);
+  color: var(--a-color-bg);
 }
 
 .protection-semi {
   background: #facc15;
-  color: #000;
+  color: var(--a-color-fg);
 }
 
 .status-verified {
-  background: #16a34a;
-  color: #fff;
+  background: var(--a-color-success);
+  color: var(--a-color-bg);
 }
 
 .status-pending {
   background: #facc15;
-  color: #000;
+  color: var(--a-color-fg);
 }
 
 .status-draft {
-  background: #6b7280;
-  color: #fff;
+  background: var(--a-color-muted);
+  color: var(--a-color-bg);
 }
 
 .btn-play-album {
-  background: #fff;
-  color: #000;
+  background: var(--a-color-bg);
+  color: var(--a-color-fg);
   padding: 1rem 2rem;
   font-weight: 900;
   font-size: 0.875rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  border: 4px solid #000;
+  border: 4px solid var(--a-color-fg);
   cursor: pointer;
   box-shadow: 8px 8px 0px 0px rgba(0,0,0,1);
   transition: all 0.2s;
 }
 .btn-play-album:hover {
-  background: #000;
-  color: #fff;
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
   box-shadow: none;
 }
 
@@ -457,26 +457,26 @@ const changeEntryStatus = async (status: string) => {
   font-size: 0.875rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  border: 4px solid #000;
-  color: #000;
+  border: 4px solid var(--a-color-fg);
+  color: var(--a-color-fg);
   box-shadow: 8px 8px 0px 0px rgba(0,0,0,1);
   transition: all 0.2s;
 }
 .btn-edit-album:hover {
-  background: #000;
-  color: #fff;
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
   box-shadow: none;
 }
 
 /* Track list */
 .tracklist-container {
-  border: 2px solid #000;
-  background: #fff;
+  border: 2px solid var(--a-color-fg);
+  background: var(--a-color-bg);
 }
 
 .tracklist-header {
-  border-bottom: 2px solid #000;
-  background: #f9fafb;
+  border-bottom: 2px solid var(--a-color-fg);
+  background: var(--a-color-surface);
   padding: 0.75rem 1.5rem;
 }
 
@@ -495,16 +495,16 @@ const changeEntryStatus = async (status: string) => {
   align-items: center;
   gap: 1.5rem;
   padding: 1rem 1.5rem;
-  border-bottom: 2px solid #f3f4f6;
+  border-bottom: 2px solid var(--a-color-disabled-bg);
   transition: background 0.2s;
 }
 .track-row:last-child { border-bottom: none; }
-.track-row:hover { background: #f9fafb; }
+.track-row:hover { background: var(--a-color-surface); }
 
 .track-num {
   font-size: 1.25rem;
   font-weight: 900;
-  color: #9ca3af;
+  color: var(--a-color-muted-soft);
   width: 3rem;
   text-align: right;
   flex-shrink: 0;
@@ -531,27 +531,27 @@ const changeEntryStatus = async (status: string) => {
   text-decoration: none;
 }
 .track-wiki-links a:hover {
-  color: #000;
+  color: var(--a-color-fg);
   text-decoration: underline;
 }
 
 .btn-track-play {
-  border: 2px solid #000;
+  border: 2px solid var(--a-color-fg);
   padding: 0.5rem 1.25rem;
   font-weight: 900;
   font-size: 0.875rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  background: #fff;
-  color: #000;
+  background: var(--a-color-bg);
+  color: var(--a-color-fg);
   cursor: pointer;
   transition: all 0.2s;
   flex-shrink: 0;
 }
 .btn-track-play:hover,
 .btn-track-play.btn-track-active {
-  background: #000;
-  color: #fff;
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
 }
 
 .not-found {
@@ -559,7 +559,7 @@ const changeEntryStatus = async (status: string) => {
   padding: 5rem 0;
   font-size: 1.5rem;
   font-weight: 900;
-  color: #9ca3af;
+  color: var(--a-color-muted-soft);
 }
 
 .discussion-count-badge {
@@ -567,7 +567,7 @@ const changeEntryStatus = async (status: string) => {
   align-items: center;
   justify-content: center;
   background: #3b82f6;
-  color: #fff;
+  color: var(--a-color-bg);
   font-size: 0.625rem;
   font-weight: 700;
   min-width: 1.25rem;
@@ -592,7 +592,7 @@ const changeEntryStatus = async (status: string) => {
   font-size: 0.625rem;
   font-weight: 900;
   letter-spacing: 0.1em;
-  border: 1px solid #000;
+  border: 1px solid var(--a-color-fg);
   padding: 0.125rem 0.5rem;
   vertical-align: middle;
   margin-left: 0.5rem;
@@ -621,9 +621,9 @@ const changeEntryStatus = async (status: string) => {
   transition: all 0.15s;
 }
 .entry-confirm { border-color: #166534; color: #166534; }
-.entry-confirm:hover { background: #166534; color: #fff; }
+.entry-confirm:hover { background: #166534; color: var(--a-color-bg); }
 .entry-dispute { border-color: #991b1b; color: #991b1b; }
-.entry-dispute:hover { background: #991b1b; color: #fff; }
-.entry-open { border-color: #000; color: #000; }
-.entry-open:hover { background: #000; color: #fff; }
+.entry-dispute:hover { background: #991b1b; color: var(--a-color-bg); }
+.entry-open { border-color: var(--a-color-fg); color: var(--a-color-fg); }
+.entry-open:hover { background: var(--a-color-fg); color: var(--a-color-bg); }
 </style>

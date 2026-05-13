@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router';
 import { useApi } from '@/composables/useApi';
 import { useAuthStore } from '@/stores/auth';
 import ArtistSelect from '@/components/ArtistSelect.vue';
+import ASelect from '@/components/ui/ASelect.vue';
 import type { Artist } from '@/types';
 interface TrackFile {
   id: string;
@@ -36,6 +37,11 @@ const isUploading = ref(false);
 const currentTrackIndex = ref(0);
 const totalTracks = ref(0);
 const isAdmin = computed(() => authStore.user?.role === 'admin');
+const albumTypeOptions = [
+  { label: 'Single（单曲）', value: 'single' },
+  { label: 'EP', value: 'ep' },
+  { label: 'Album（专辑）', value: 'album' },
+];
 
 onMounted(() => {
   if (!authStore.isAuthenticated) {
@@ -333,11 +339,7 @@ const handleCreateAlbumOnly = async () => {
 
       <div class="upload-card">
         <label class="music-label">专辑类型</label>
-        <select v-model="formData.albumType" class="music-input">
-          <option value="single">Single（单曲）</option>
-          <option value="ep">EP</option>
-          <option value="album">Album（专辑）</option>
-        </select>
+        <ASelect v-model="formData.albumType" :options="albumTypeOptions" />
         <p class="field-hint">根据曲目数量自动建议，可手动修改</p>
       </div>
 
@@ -494,7 +496,7 @@ const handleCreateAlbumOnly = async () => {
 .music-form-desc {
   margin: 0;
   max-width: 42rem;
-  color: #6b7280;
+  color: var(--a-color-muted);
   line-height: 1.7;
 }
 
@@ -529,8 +531,8 @@ const handleCreateAlbumOnly = async () => {
 
 .music-input {
   width: 100%;
-  border: 2px solid #000;
-  background: #fff;
+  border: 2px solid var(--a-color-fg);
+  background: var(--a-color-bg);
   padding: 1rem;
   font-size: 0.95rem;
   outline: none;
@@ -552,8 +554,8 @@ const handleCreateAlbumOnly = async () => {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  border: 2px solid #000;
-  background: #f3f4f6;
+  border: 2px solid var(--a-color-fg);
+  background: var(--a-color-disabled-bg);
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
   font-weight: 800;
@@ -563,7 +565,7 @@ const handleCreateAlbumOnly = async () => {
   border: none;
   background: transparent;
   padding: 0;
-  color: #dc2626;
+  color: var(--a-color-danger);
   font-size: 1rem;
   font-weight: 900;
   cursor: pointer;
@@ -572,13 +574,13 @@ const handleCreateAlbumOnly = async () => {
 .upload-card,
 .track-section,
 .progress-panel {
-  border: 2px solid #000;
-  background: #fff;
+  border: 2px solid var(--a-color-fg);
+  background: var(--a-color-bg);
   padding: 1.25rem;
 }
 
 .dropzone {
-  border: 2px dashed #000;
+  border: 2px dashed var(--a-color-fg);
   padding: 3rem 1rem;
   text-align: center;
   cursor: pointer;
@@ -586,7 +588,7 @@ const handleCreateAlbumOnly = async () => {
 }
 
 .dropzone:hover {
-  background: #f9fafb;
+  background: var(--a-color-surface);
 }
 
 .dropzone-title {
@@ -596,14 +598,14 @@ const handleCreateAlbumOnly = async () => {
 
 .dropzone-desc {
   margin: 0.5rem 0 0;
-  color: #6b7280;
+  color: var(--a-color-muted);
   font-size: 0.875rem;
 }
 
 .cover-preview-wrap {
   position: relative;
   display: inline-block;
-  border: 2px solid #000;
+  border: 2px solid var(--a-color-fg);
 }
 
 .cover-preview {
@@ -618,9 +620,9 @@ const handleCreateAlbumOnly = async () => {
   position: absolute;
   right: 0.5rem;
   bottom: 0.5rem;
-  border: 2px solid #000;
-  background: #fff;
-  color: #000;
+  border: 2px solid var(--a-color-fg);
+  background: var(--a-color-bg);
+  color: var(--a-color-fg);
   padding: 0.35rem 0.6rem;
   font-size: 0.75rem;
   font-weight: 900;
@@ -628,8 +630,8 @@ const handleCreateAlbumOnly = async () => {
 }
 
 .cover-action:hover {
-  background: #000;
-  color: #fff;
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
 }
 
 .danger-action {
@@ -638,8 +640,8 @@ const handleCreateAlbumOnly = async () => {
 }
 
 .danger-action:hover {
-  background: #dc2626;
-  border-color: #dc2626;
+  background: var(--a-color-danger);
+  border-color: var(--a-color-danger);
 }
 
 .track-header,
@@ -661,8 +663,8 @@ const handleCreateAlbumOnly = async () => {
   display: flex;
   align-items: center;
   gap: 1rem;
-  border: 2px solid #000;
-  background: #f9fafb;
+  border: 2px solid var(--a-color-fg);
+  background: var(--a-color-surface);
   padding: 1rem;
   cursor: move;
 }
@@ -679,7 +681,7 @@ const handleCreateAlbumOnly = async () => {
   width: 2rem;
   flex-shrink: 0;
   text-align: center;
-  color: #9ca3af;
+  color: var(--a-color-muted-soft);
   font-weight: 900;
 }
 
@@ -700,7 +702,7 @@ const handleCreateAlbumOnly = async () => {
 .track-meta,
 .progress-text {
   margin: 0.35rem 0 0;
-  color: #6b7280;
+  color: var(--a-color-muted);
   font-size: 0.8rem;
 }
 
@@ -708,7 +710,7 @@ const handleCreateAlbumOnly = async () => {
 .mini-action,
 .secondary-action,
 .primary-action {
-  border: 2px solid #000;
+  border: 2px solid var(--a-color-fg);
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -719,28 +721,28 @@ const handleCreateAlbumOnly = async () => {
 .track-remove,
 .mini-action {
   padding: 0.5rem 0.75rem;
-  background: #fff;
-  color: #000;
+  background: var(--a-color-bg);
+  color: var(--a-color-fg);
   font-size: 0.75rem;
 }
 
 .track-remove:hover,
 .mini-action:hover,
 .secondary-action:hover {
-  background: #000;
-  color: #fff;
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
 }
 
 .progress-bar {
   margin-top: 0.75rem;
   width: 100%;
   height: 0.5rem;
-  background: #e5e7eb;
+  background: var(--a-color-disabled-border);
 }
 
 .progress-bar-fill {
   height: 100%;
-  background: #000;
+  background: var(--a-color-fg);
   transition: width 0.3s;
 }
 
@@ -761,18 +763,18 @@ const handleCreateAlbumOnly = async () => {
 }
 
 .primary-action {
-  background: #000;
-  color: #fff;
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
 }
 
 .primary-action:hover {
-  background: #fff;
-  color: #000;
+  background: var(--a-color-bg);
+  color: var(--a-color-fg);
 }
 
 .secondary-action {
-  background: #fff;
-  color: #000;
+  background: var(--a-color-bg);
+  color: var(--a-color-fg);
 }
 
 .is-disabled {
@@ -805,10 +807,10 @@ const handleCreateAlbumOnly = async () => {
 
 .field-hint {
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: var(--a-color-muted-soft);
   margin-top: 0.25rem;
 }
 .required {
-  color: #dc2626;
+  color: var(--a-color-danger);
 }
 </style>

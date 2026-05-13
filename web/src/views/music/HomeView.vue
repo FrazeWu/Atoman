@@ -360,16 +360,16 @@ const shouldShowYear = (index: number) =>
   font-weight: 900;
   font-style: italic;
   letter-spacing: -0.05em;
-  border-left: 8px solid #000;
+  border-left: 8px solid var(--a-color-fg);
   padding-left: 1.5rem;
   line-height: 1.1;
   margin: 0 0 0.75rem;
 }
-.home-subtitle { color: #6b7280; max-width: 32rem; font-size: 0.875rem; margin: 0 0 1.5rem; }
+.home-subtitle { color: var(--a-color-muted); max-width: 32rem; font-size: 0.875rem; margin: 0 0 1.5rem; }
 .search-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
 .search-wrap { position: relative; }
 .search-input {
-  border: 2px solid #000;
+  border: 2px solid var(--a-color-fg);
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
   font-weight: 500;
@@ -384,8 +384,8 @@ const shouldShowYear = (index: number) =>
   left: 0;
   z-index: 50;
   width: 240px;
-  background: #fff;
-  border: 2px solid #000;
+  background: var(--a-color-bg);
+  border: 2px solid var(--a-color-fg);
   border-top: none;
   max-height: 208px;
   overflow-y: auto;
@@ -397,40 +397,40 @@ const shouldShowYear = (index: number) =>
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
   font-weight: 500;
-  background: #fff;
+  background: var(--a-color-bg);
   border: none;
   cursor: pointer;
   transition: all 0.1s;
 }
-.search-item:hover, .search-item.active { background: #000; color: #fff; }
+.search-item:hover, .search-item.active { background: var(--a-color-fg); color: var(--a-color-bg); }
 .btn-random, .btn-all {
-  border: 2px solid #000;
+  border: 2px solid var(--a-color-fg);
   padding: 0.5rem 1rem;
   font-size: 0.75rem;
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  background: #fff;
+  background: var(--a-color-bg);
   cursor: pointer;
   transition: all 0.2s;
 }
-.btn-random:hover, .btn-all:hover { background: #000; color: #fff; }
-.btn-all { border-width: 1px; color: #6b7280; }
+.btn-random:hover, .btn-all:hover { background: var(--a-color-fg); color: var(--a-color-bg); }
+.btn-all { border-width: 1px; color: var(--a-color-muted); }
 .btn-contribute {
-  border: 2px solid #000;
+  border: 2px solid var(--a-color-fg);
   padding: 0.5rem 1rem;
   font-size: 0.75rem;
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  background: #000;
-  color: #fff;
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
   cursor: pointer;
   transition: all 0.2s;
   text-decoration: none;
   display: inline-block;
 }
-.btn-contribute:hover { background: #fff; color: #000; }
+.btn-contribute:hover { background: var(--a-color-bg); color: var(--a-color-fg); }
 .album-status {
   font-size: 0.75rem;
   font-weight: 800;
@@ -438,8 +438,8 @@ const shouldShowYear = (index: number) =>
   text-transform: uppercase;
   margin: 0.25rem 0 0.75rem;
 }
-.album-status-open { color: #166534; }
-.album-status-closed { color: #991b1b; }
+.album-status-open { color: var(--a-color-success); }
+.album-status-closed { color: var(--a-color-danger); }
 .search-item-new {
   display: block;
   width: 100%;
@@ -447,14 +447,14 @@ const shouldShowYear = (index: number) =>
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
   font-weight: 900;
-  background: #f9fafb;
-  border-top: 1px solid #e5e7eb;
-  color: #000;
+  background: var(--a-color-surface);
+  border-top: 1px solid var(--a-color-disabled-border);
+  color: var(--a-color-fg);
   text-decoration: none;
   cursor: pointer;
   transition: all 0.1s;
 }
-.search-item-new:hover { background: #000; color: #fff; }
+.search-item-new:hover { background: var(--a-color-fg); color: var(--a-color-bg); }
 
 /* Timeline */
 .timeline-wrap {
@@ -469,7 +469,7 @@ const shouldShowYear = (index: number) =>
   top: 0;
   bottom: 0;
   width: 4px;
-  background: #000;
+  background: var(--a-color-fg);
   z-index: 0;
 }
 .timeline-empty {
@@ -477,7 +477,7 @@ const shouldShowYear = (index: number) =>
   z-index: 10;
   margin-left: calc(33.333% + 2rem);
   padding-top: 4rem;
-  color: #9ca3af;
+  color: var(--a-color-muted-soft);
   font-weight: 500;
 }
 .albums-list { display: flex; flex-direction: column; gap: 6rem; position: relative; z-index: 10; }
@@ -490,8 +490,8 @@ const shouldShowYear = (index: number) =>
   z-index: 20;
 }
 .year-badge {
-  background: #000;
-  color: #fff;
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
   padding: 0.25rem 1rem;
   font-size: 0.875rem;
   font-weight: 700;
@@ -504,8 +504,8 @@ const shouldShowYear = (index: number) =>
   width: 24px;
   height: 24px;
   border-radius: 9999px;
-  border: 4px solid #fff;
-  background: #000;
+  border: 4px solid var(--a-color-bg);
+  background: var(--a-color-fg);
   z-index: 20;
   transition: transform 0.2s;
 }
@@ -515,8 +515,8 @@ const shouldShowYear = (index: number) =>
   width: calc(66.666% - 2rem);
 }
 .album-card {
-  background: #fff;
-  border: 2px solid #000;
+  background: var(--a-color-bg);
+  border: 2px solid var(--a-color-fg);
   padding: 1.5rem;
   transition: box-shadow 0.3s;
 }
@@ -525,7 +525,7 @@ const shouldShowYear = (index: number) =>
 .album-cover {
   width: 128px;
   height: 128px;
-  border: 2px solid #000;
+  border: 2px solid var(--a-color-fg);
   object-fit: cover;
   flex-shrink: 0;
 }
@@ -538,24 +538,24 @@ const shouldShowYear = (index: number) =>
   margin: 0 0 0.25rem;
 }
 .album-artist { font-size: 0.875rem; font-weight: 700; color: #4b5563; margin: 0 0 0.25rem; }
-.album-date { font-size: 0.75rem; color: #6b7280; margin: 0 0 0.25rem; }
-.album-tracks { font-size: 0.75rem; color: #9ca3af; margin: 0; }
+.album-date { font-size: 0.75rem; color: var(--a-color-muted); margin: 0 0 0.25rem; }
+.album-tracks { font-size: 0.75rem; color: var(--a-color-muted-soft); margin: 0; }
 .album-actions { display: flex; gap: 0.75rem; margin-top: 1rem; }
 .btn-play, .btn-detail {
-  border: 2px solid #000;
+  border: 2px solid var(--a-color-fg);
   padding: 0.5rem 1rem;
   font-size: 0.75rem;
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  background: #fff;
+  background: var(--a-color-bg);
   cursor: pointer;
   transition: all 0.2s;
   text-decoration: none;
-  color: #000;
+  color: var(--a-color-fg);
   display: inline-block;
 }
-.btn-play:hover, .btn-detail:hover { background: #000; color: #fff; }
+.btn-play:hover, .btn-detail:hover { background: var(--a-color-fg); color: var(--a-color-bg); }
 
 /* Protection badge */
 .album-protection {
@@ -577,12 +577,12 @@ const shouldShowYear = (index: number) =>
 
 .protection-full {
   background: #dc2626;
-  color: #fff;
+  color: var(--a-color-bg);
 }
 
 .protection-semi {
   background: #facc15;
-  color: #000;
+  color: var(--a-color-fg);
 }
 .artist-title-link {
   color: inherit;
@@ -601,7 +601,7 @@ const shouldShowYear = (index: number) =>
   font-size: 0.5rem;
   font-weight: 900;
   letter-spacing: 0.1em;
-  border: 1px solid #000;
+  border: 1px solid var(--a-color-fg);
   padding: 0.125rem 0.375rem;
 }
 .entry-badge {
@@ -611,6 +611,6 @@ const shouldShowYear = (index: number) =>
   padding: 0.125rem 0.375rem;
   border: 1px solid;
 }
-.entry-confirmed { border-color: #166534; color: #166534; }
-.entry-disputed { border-color: #991b1b; color: #991b1b; }
+.entry-confirmed { border-color: var(--a-color-success); color: var(--a-color-success); }
+.entry-disputed { border-color: var(--a-color-danger); color: var(--a-color-danger); }
 </style>

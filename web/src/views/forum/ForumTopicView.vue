@@ -13,7 +13,7 @@
           @mouseenter="($event.currentTarget as HTMLElement).style.borderBottomColor='var(--a-color-muted)'"
           @mouseleave="($event.currentTarget as HTMLElement).style.borderBottomColor='transparent'"
         >论坛</RouterLink>
-        <span style="color:#d1d5db">/</span>
+        <span style="color:var(--a-color-disabled-border)">/</span>
         <span
           v-if="forumStore.currentTopic.category"
           style="font-size:.65rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;padding:.15rem .5rem;border:1.5px solid;cursor:pointer"
@@ -35,7 +35,7 @@
           <span
             v-for="tag in forumStore.currentTopic.tags"
             :key="tag"
-            style="font-size:.65rem;font-weight:700;padding:.1rem .5rem;border:1.5px solid #d1d5db;color:#6b7280"
+            style="font-size:.65rem;font-weight:700;padding:.1rem .5rem;border:1.5px solid var(--a-color-disabled-border);color:var(--a-color-muted)"
           >{{ tag }}</span>
         </div>
 
@@ -71,23 +71,23 @@
           <!-- Topic content (Markdown rendered) -->
           <div
             class="markdown-body"
-            style="border:2px solid #000;padding:2rem;margin-bottom:2.5rem;background:#fff"
+            style="border:var(--a-border);padding:2rem;margin-bottom:2.5rem;background:var(--a-color-bg)"
             v-html="renderMarkdown(forumStore.currentTopic.content)"
             ref="contentRef"
           />
 
           <!-- Reply sort -->
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">
-            <h2 style="font-weight:900;font-size:.75rem;text-transform:uppercase;letter-spacing:.15em;margin:0;padding-bottom:.75rem;border-bottom:2px solid #000;flex:1">
+            <h2 style="font-weight:900;font-size:.75rem;text-transform:uppercase;letter-spacing:.15em;margin:0;padding-bottom:.75rem;border-bottom:var(--a-border);flex:1">
               {{ forumStore.currentTopic.reply_count }} 条回复
             </h2>
-            <div style="display:flex;gap:0;border:2px solid #000;margin-left:1rem">
+            <div style="display:flex;gap:0;border:var(--a-border);margin-left:1rem">
               <button
                 v-for="(label, s) in replySortOptions"
                 :key="s"
                 class="a-tab-btn"
                 :class="{ 'a-tab-btn-active': replySort === s }"
-                style="padding:.35rem .875rem;font-size:.7rem;border-right:2px solid #000"
+                style="padding:.35rem .875rem;font-size:.7rem;border-right:var(--a-border)"
                 :style="s === 'best' ? 'border-right:none' : ''"
                 @click="setReplySort(s as 'oldest' | 'best')"
               >{{ label }}</button>
@@ -129,11 +129,11 @@
               <!-- Quote indicator -->
               <div
                 v-if="quotedReply"
-                style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:.8rem 1rem;background:#f3f4f6;border-left:3px solid #000;margin-bottom:1rem;font-size:.8rem;font-weight:700"
+                style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:.8rem 1rem;background:var(--a-color-disabled-bg);border-left:3px solid var(--a-color-fg);margin-bottom:1rem;font-size:.8rem;font-weight:700"
               >
                 <div>
                   <div>引用 #{{ quotedReply.floor_number }} @{{ getReplyAuthor(quotedReply) }} 的回复</div>
-                  <div style="margin-top:.35rem;font-size:.75rem;font-weight:500;color:#6b7280;line-height:1.6">
+                  <div style="margin-top:.35rem;font-size:.75rem;font-weight:500;color:var(--a-color-muted);line-height:1.6">
                     {{ getReplyPreview(quotedReply.content) }}
                   </div>
                 </div>
@@ -169,7 +169,7 @@
                 <button
                   v-if="replyContent"
                   type="button"
-                  style="font-size:.7rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;background:none;border:none;cursor:pointer;color:#9ca3af"
+                  style="font-size:.7rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;background:none;border:none;cursor:pointer;color:var(--a-color-muted-soft)"
                   @click="clearReplyDraft"
                 >清除草稿</button>
                 <ABtn @click="submitReply" :loading="submitting" :disabled="!replyContent.trim()">提交回复</ABtn>
@@ -180,7 +180,7 @@
 
         <!-- Table of Contents sidebar (desktop only) -->
         <aside v-if="tocItems.length > 0" class="topic-toc">
-          <div style="font-size:.65rem;font-weight:900;text-transform:uppercase;letter-spacing:.12em;margin-bottom:.75rem;color:#9ca3af">目录</div>
+          <div style="font-size:.65rem;font-weight:900;text-transform:uppercase;letter-spacing:.12em;margin-bottom:.75rem;color:var(--a-color-muted-soft)">目录</div>
           <nav>
             <a
               v-for="item in tocItems"
@@ -194,7 +194,7 @@
       </div>
     </template>
 
-    <div v-else-if="!forumStore.loading" style="padding:4rem 0;text-align:center;font-weight:900;font-size:.8rem;text-transform:uppercase;letter-spacing:.1em;color:#9ca3af">
+    <div v-else-if="!forumStore.loading" style="padding:4rem 0;text-align:center;font-weight:900;font-size:.8rem;text-transform:uppercase;letter-spacing:.1em;color:var(--a-color-muted-soft)">
       话题不存在
     </div>
 
@@ -402,7 +402,7 @@ watch(
   text-transform: uppercase;
   letter-spacing: 0.1em;
   padding: 0.15rem 0.4rem;
-  border: 1.5px solid #000;
+  border: 1.5px solid var(--a-color-fg);
   margin-right: 0.6rem;
   vertical-align: middle;
 }
@@ -413,8 +413,8 @@ watch(
   text-transform: uppercase;
   letter-spacing: 0.1em;
   padding: 0.15rem 0.4rem;
-  border: 1.5px solid #9ca3af;
-  color: #9ca3af;
+  border: 1.5px solid var(--a-color-muted-soft);
+  color: var(--a-color-muted-soft);
   margin-right: 0.6rem;
   vertical-align: middle;
 }
@@ -425,7 +425,7 @@ watch(
   gap: 1.5rem;
   font-size: 0.8rem;
   font-weight: 700;
-  color: #6b7280;
+  color: var(--a-color-muted);
   flex-wrap: wrap;
 }
 
@@ -435,26 +435,26 @@ watch(
   text-transform: uppercase;
   letter-spacing: 0.08em;
   padding: 0.35rem 0.75rem;
-  border: 1.5px solid #000;
+  border: 1.5px solid var(--a-color-fg);
   cursor: pointer;
   transition: all 0.15s;
-  background: #fff;
-  color: #000;
+  background: var(--a-color-bg);
+  color: var(--a-color-fg);
 }
 
 .action-btn:hover {
-  background: #000;
-  color: #fff;
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
 }
 
 .action-btn-active {
-  background: #000;
-  color: #fff;
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
 }
 
 .action-btn-active:hover {
-  background: #fff;
-  color: #000;
+  background: var(--a-color-bg);
+  color: var(--a-color-fg);
 }
 
 /* ── Layout ───────────────────────────────────────────────────────────────── */
@@ -475,9 +475,9 @@ watch(
   flex-shrink: 0;
   position: sticky;
   top: 5rem;
-  border: 2px solid #000;
+  border: var(--a-border);
   padding: 1rem 1.25rem;
-  background: #fff;
+  background: var(--a-color-bg);
   max-height: 70vh;
   overflow-y: auto;
 }
@@ -486,10 +486,10 @@ watch(
   display: block;
   font-size: 0.75rem;
   font-weight: 700;
-  color: #6b7280;
+  color: var(--a-color-muted);
   text-decoration: none;
   padding: 0.25rem 0;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--a-color-disabled-bg);
   transition: color 0.15s;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -497,7 +497,7 @@ watch(
 }
 
 .toc-item:hover {
-  color: #000;
+  color: var(--a-color-fg);
 }
 
 @media (max-width: 1024px) {
@@ -508,25 +508,369 @@ watch(
 
 /* ── Reply form ───────────────────────────────────────────────────────────── */
 .reply-closed-notice {
-  border: 2px solid #9ca3af;
+  border: 2px solid var(--a-color-muted-soft);
   padding: 1.25rem 1.5rem;
   text-align: center;
   font-weight: 900;
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: #6b7280;
+  color: var(--a-color-muted);
 }
 
 .reply-login-notice {
-  border: 2px solid #000;
+  border: var(--a-border);
   padding: 1.25rem 1.5rem;
   text-align: center;
 }
 
 .reply-form-wrap {
-  border: 2px solid #000;
+  border: var(--a-border);
   padding: 1.5rem;
+}
+
+.reply-login-text {
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin: 0 0 1rem;
+}
+
+.reply-form-title {
+  font-weight: 900;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  margin: 0 0 1rem;
+}
+
+.reply-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.75rem;
+  gap: 0.75rem;
+}
+
+.reply-draft-clear {
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--a-color-muted-soft);
+}
+
+.reply-draft-clear:hover {
+  text-decoration: underline;
+}
+
+.topic-not-found {
+  padding: 4rem 0;
+  text-align: center;
+  font-weight: 900;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--a-color-muted-soft);
+}
+
+.topic-divider {
+  color: var(--a-color-disabled-border);
+}
+
+.topic-content-card {
+  border: var(--a-border);
+  padding: 2rem;
+  margin-bottom: 2.5rem;
+  background: var(--a-color-bg);
+}
+
+.reply-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+
+.reply-count-title {
+  font-weight: 900;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  margin: 0;
+  padding-bottom: 0.75rem;
+  border-bottom: var(--a-border);
+  flex: 1;
+}
+
+.reply-sort-tabs {
+  display: flex;
+  gap: 0;
+  border: var(--a-border);
+  margin-left: 1rem;
+}
+
+.reply-sort-tab {
+  padding: 0.35rem 0.875rem;
+  font-size: 0.7rem;
+  border-right: var(--a-border);
+}
+
+.reply-sort-tab:last-child {
+  border-right: none;
+}
+
+.reply-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.quote-box {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 1rem;
+  background: var(--a-color-disabled-bg);
+  border-left: 3px solid var(--a-color-fg);
+  margin-bottom: 1rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.quote-preview {
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--a-color-muted);
+  line-height: 1.6;
+}
+
+.clear-quote-btn {
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.draft-restored {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 1rem;
+  background: #fef3c7;
+  border: 1.5px solid #f59e0b;
+  margin-bottom: 1rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.clear-draft-btn {
+  background: none;
+  border: none;
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  color: #92400e;
+}
+
+.toc-title {
+  font-size: 0.65rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 0.75rem;
+  color: var(--a-color-muted-soft);
+}
+
+.loading-state {
+  padding: 4rem 0;
+  text-align: center;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.page-root {
+  padding-bottom: 8rem;
+}
+
+.topic-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.topic-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.reply-form-root {
+  margin-top: 2.5rem;
+}
+
+.back-link-muted {
+  font-weight: 900;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  text-decoration: none;
+  color: var(--a-color-muted);
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.back-link-muted:hover {
+  border-bottom-color: var(--a-color-muted);
+}
+
+.category-pill {
+  font-size: 0.65rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.15rem 0.5rem;
+  border: 1.5px solid;
+  cursor: pointer;
+}
+
+.tag-pill {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.1rem 0.5rem;
+  border: 1.5px solid var(--a-color-disabled-border);
+  color: var(--a-color-muted);
+}
+
+.reply-login-cta {
+  margin-top: 1rem;
+}
+
+.reply-form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.reply-sort-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+
+.reply-scroll-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.reply-content-note {
+  color: var(--a-color-muted);
+}
+
+.back-to-top {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  z-index: 50;
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 0.5rem 0.875rem;
+  border: var(--a-border);
+  background: var(--a-color-bg);
+  cursor: pointer;
+  transition: all 0.15s;
+  box-shadow: var(--a-shadow-button);
+}
+
+.back-to-top:hover {
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
+}
+
+.markdown-body :deep(pre) {
+  background: var(--a-color-disabled-bg);
+  border: var(--a-border);
+  padding: 1rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.markdown-body :deep(blockquote) {
+  border-left: 3px solid var(--a-color-fg);
+  padding-left: 1rem;
+  margin: 1rem 0;
+  color: var(--a-color-muted);
+}
+
+.markdown-body :deep(a) {
+  color: var(--a-color-fg);
+  text-decoration: underline;
+}
+
+.markdown-body :deep(th),
+.markdown-body :deep(td) {
+  border: var(--a-border);
+  padding: 0.5rem 0.75rem;
+}
+
+.markdown-body :deep(th) {
+  font-weight: 900;
+  background: var(--a-color-disabled-bg);
+}
+
+.markdown-body :deep(img) {
+  max-width: 100%;
+  filter: grayscale(100%);
+}
+
+.markdown-body :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1rem 0;
+}
+
+.markdown-body :deep(pre code) {
+  font-size: 0.875em;
+}
+
+.markdown-body :deep(code) {
+  font-family: monospace;
+  font-size: 0.875em;
+}
+
+.markdown-body :deep(h1),
+.markdown-body :deep(h2),
+.markdown-body :deep(h3) {
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  margin: 1.5em 0 0.75em;
+  scroll-margin-top: 5rem;
+}
+
+.markdown-body :deep(p) {
+  line-height: 1.75;
+  margin: 0.75em 0;
+}
+
+.markdown-body :deep(toc-item:hover) {
+  color: var(--a-color-fg);
 }
 
 .reply-editor-wrap {
@@ -549,8 +893,8 @@ watch(
   margin: 0.75em 0;
 }
 .markdown-body :deep(pre) {
-  background: #f3f4f6;
-  border: 2px solid #000;
+  background: var(--a-color-disabled-bg);
+  border: var(--a-border);
   padding: 1rem;
   overflow-x: auto;
   margin: 1rem 0;
@@ -563,13 +907,13 @@ watch(
   font-size: 0.875em;
 }
 .markdown-body :deep(blockquote) {
-  border-left: 3px solid #000;
+  border-left: 3px solid var(--a-color-fg);
   padding-left: 1rem;
   margin: 1rem 0;
-  color: #6b7280;
+  color: var(--a-color-muted);
 }
 .markdown-body :deep(a) {
-  color: #000;
+  color: var(--a-color-fg);
   text-decoration: underline;
 }
 .markdown-body :deep(img) {
@@ -583,12 +927,12 @@ watch(
 }
 .markdown-body :deep(th),
 .markdown-body :deep(td) {
-  border: 2px solid #000;
+  border: var(--a-border);
   padding: 0.5rem 0.75rem;
 }
 .markdown-body :deep(th) {
   font-weight: 900;
-  background: #f3f4f6;
+  background: var(--a-color-disabled-bg);
 }
 
 /* ── Back to top ──────────────────────────────────────────────────────────── */
@@ -602,15 +946,15 @@ watch(
   text-transform: uppercase;
   letter-spacing: 0.1em;
   padding: 0.5rem 0.875rem;
-  border: 2px solid #000;
-  background: #fff;
+  border: var(--a-border);
+  background: var(--a-color-bg);
   cursor: pointer;
   transition: all 0.15s;
-  box-shadow: 4px 4px 0px 0px rgba(0,0,0,1);
+  box-shadow: var(--a-shadow-button);
 }
 
 .back-to-top:hover {
-  background: #000;
-  color: #fff;
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
 }
 </style>

@@ -39,13 +39,7 @@
     </div>
 
     <!-- Floating Action Button -->
-    <button
-      class="a-fab"
-      style="position:fixed;bottom:2rem;right:2rem;width:4rem;height:4rem;border-radius:50%;background:black;color:white;font-size:2rem;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;box-shadow:5px 5px 0 rgba(0,0,0,1)"
-      @click="showCreateModal"
-    >
-      +
-    </button>
+    <button class="a-fab" @click="showCreateModal">+</button>
 
     <!-- Create/Edit Modal -->
     <AModal v-if="modalVisible" @close="closeModal" size="md">
@@ -56,10 +50,7 @@
         </div>
         <div>
           <label style="display:block;font-weight:bold;margin-bottom:0.5rem">所属合集 *</label>
-          <select v-model="formData.channel_id" style="width:100%;padding:0.75rem;border:2px solid black;font-family:inherit;font-size:1rem;background:white;outline:none;transition:all 0.2s">
-            <option value="" disabled>选择合集</option>
-            <option v-for="ch in channels" :key="ch.id" :value="ch.id">{{ ch.name }}</option>
-          </select>
+          <ASelect v-model="formData.channel_id" :options="channelOptions" placeholder="选择合集" />
         </div>
         <div>
           <label style="display:block;font-weight:bold;margin-bottom:0.5rem">描述</label>
@@ -89,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import APageHeader from '@/components/ui/APageHeader.vue'
 import AEmpty from '@/components/ui/AEmpty.vue'
@@ -97,6 +88,7 @@ import ABtn from '@/components/ui/ABtn.vue'
 import AModal from '@/components/ui/AModal.vue'
 import AInput from '@/components/ui/AInput.vue'
 import ATextarea from '@/components/ui/ATextarea.vue'
+import ASelect from '@/components/ui/ASelect.vue'
 import { useApi } from '@/composables/useApi'
 import { useAuthStore } from '@/stores/auth'
 
@@ -130,6 +122,8 @@ const submitting = ref(false)
 const deleteModalVisible = ref(false)
 const collectionToDelete = ref<Collection | null>(null)
 const deleting = ref(false)
+
+const channelOptions = computed(() => channels.value.map(ch => ({ label: ch.name, value: ch.id })))
 
 const loadChannels = async () => {
   try {
@@ -255,8 +249,25 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.a-fab {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  width: 4rem;
+  height: 4rem;
+  border-radius: 9999px;
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
+  font-size: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  box-shadow: var(--a-shadow-dropdown);
+}
 .a-fab:hover {
-  transform:scale(1.05);
-  box-shadow:7px 7px 0 rgba(0,0,0,1);
+  transform: scale(1.05);
+  box-shadow: 7px 7px 0 var(--a-color-fg);
 }
 </style>

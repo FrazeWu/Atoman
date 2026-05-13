@@ -72,18 +72,18 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink, useRouter, useRoute } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
-import { useApi } from '@/composables/useApi'
+import { useFeedStore } from '@/stores/feed'
 import type { Notification } from '@/types'
 
 const authStore = useAuthStore()
+const feedStore = useFeedStore()
 const router = useRouter()
-const api = useApi()
 
 const activeDropdown = ref<string | null>(null)
-const notifications = ref<Notification[]>([])
+const { notifications, unreadCount } = storeToRefs(feedStore)
 
-const unreadCount = computed(() => notifications.value.filter(n => !n.read_at).length)
 const recentNotifications = computed(() => notifications.value.slice(0, 5))
 const userInitial = computed(() => (authStore.user?.username || '?').charAt(0).toUpperCase())
 
@@ -112,23 +112,10 @@ const handleClickOutside = (e: MouseEvent) => {
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
-  if (authStore.isAuthenticated) fetchNotifications()
+  if (authStore.isAuthenticated) feedStore.fetchNotifications()
 })
 
 onUnmounted(() => document.removeEventListener('click', handleClickOutside))
-
-const fetchNotifications = async () => {
-  if (!authStore.token) return
-  try {
-    const res = await fetch('/api/notifications', {
-      headers: { Authorization: `Bearer ${authStore.token}` }
-    })
-    if (res.ok) {
-      const d = await res.json()
-      notifications.value = d.data || []
-    }
-  } catch (e) { console.error(e) }
-}
 
 const logout = () => {
   authStore.logout()
@@ -136,15 +123,10 @@ const logout = () => {
   router.push('/login')
 }
 
-const openNotification = (n: Notification) => {
+const openNotification = async (n: Notification) => {
   closeDropdown()
   if (!n.read_at) {
-    fetch(`/api/notifications/${n.id}/read`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${authStore.token}` },
-    }).catch(() => {})
-    const idx = notifications.value.findIndex(x => x.id === n.id)
-    if (idx !== -1) notifications.value[idx] = { ...notifications.value[idx], read_at: new Date().toISOString() }
+    await feedStore.markRead(Number(n.id))
   }
   if (n.target_type === 'post' && n.target_id) {
     router.push(`/post/${n.target_id}`)

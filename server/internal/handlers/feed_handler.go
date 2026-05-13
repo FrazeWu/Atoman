@@ -80,7 +80,6 @@ func SetupNotificationRoutes(router *gin.Engine, db *gorm.DB) {
 		notifications.GET("", GetNotifications(db))
 		notifications.PUT("/:id/read", MarkNotificationRead(db))
 		notifications.PUT("/read-all", MarkAllNotificationsRead(db))
-		notifications.GET("/unread-count", GetUnreadNotificationCount(db))
 	}
 }
 
@@ -1071,21 +1070,6 @@ func MarkAllNotificationsRead(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	}
-}
-
-func GetUnreadNotificationCount(db *gorm.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		userIDVal, _ := c.Get("user_id")
-		userID := userIDVal.(uuid.UUID)
-
-		var count int64
-		if err := db.Model(&model.Notification{}).Where("user_id = ? AND read_at IS NULL", userID).Count(&count).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get unread count"})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{"unread_count": count, "message": "ok"})
 	}
 }
 

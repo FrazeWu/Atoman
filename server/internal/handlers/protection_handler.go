@@ -59,22 +59,24 @@ func GetAlbumProtectionHandler(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		var protection model.ContentProtection
-		if err := db.Where("content_type = ? AND content_id = ?", "album", albumID).
+		result := db.Where("content_type = ? AND content_id = ?", "album", albumID).
 			Preload("ProtectedUser").
-			First(&protection).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				// Default: no protection
-				c.JSON(http.StatusOK, gin.H{
-					"data": gin.H{
-						"protection_level": "none",
-						"reason":           "",
-						"protected_by":     nil,
-						"expires_at":       nil,
-					},
-				})
-				return
-			}
+			Limit(1).
+			Find(&protection)
+		if result.Error != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch protection"})
+			return
+		}
+		if result.RowsAffected == 0 {
+			// Default: no protection
+			c.JSON(http.StatusOK, gin.H{
+				"data": gin.H{
+					"protection_level": "none",
+					"reason":           "",
+					"protected_by":     nil,
+					"expires_at":       nil,
+				},
+			})
 			return
 		}
 
@@ -101,19 +103,21 @@ func GetSongProtectionHandler(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		var protection model.ContentProtection
-		if err := db.Where("content_type = ? AND content_id = ?", "song", songID).
+		result := db.Where("content_type = ? AND content_id = ?", "song", songID).
 			Preload("ProtectedUser").
-			First(&protection).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				c.JSON(http.StatusOK, gin.H{
-					"data": gin.H{
-						"protection_level": "none",
-						"reason":           "",
-					},
-				})
-				return
-			}
+			Limit(1).
+			Find(&protection)
+		if result.Error != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch protection"})
+			return
+		}
+		if result.RowsAffected == 0 {
+			c.JSON(http.StatusOK, gin.H{
+				"data": gin.H{
+					"protection_level": "none",
+					"reason":           "",
+				},
+			})
 			return
 		}
 
@@ -131,18 +135,20 @@ func GetArtistProtectionHandler(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		var protection model.ContentProtection
-		if err := db.Where("content_type = ? AND content_id = ?", "artist", artistID).
+		result := db.Where("content_type = ? AND content_id = ?", "artist", artistID).
 			Preload("ProtectedUser").
-			First(&protection).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				c.JSON(http.StatusOK, gin.H{
-					"data": gin.H{
-						"protection_level": "none",
-					},
-				})
-				return
-			}
+			Limit(1).
+			Find(&protection)
+		if result.Error != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch protection"})
+			return
+		}
+		if result.RowsAffected == 0 {
+			c.JSON(http.StatusOK, gin.H{
+				"data": gin.H{
+					"protection_level": "none",
+				},
+			})
 			return
 		}
 
@@ -282,10 +288,11 @@ func removeProtectionHandler(db *gorm.DB, contentType string) gin.HandlerFunc {
 // Used by revision handlers to check permissions
 func GetProtectionStatus(db *gorm.DB, contentType string, contentID uuid.UUID) string {
 	var protection model.ContentProtection
-	err := db.Where("content_type = ? AND content_id = ?", contentType, contentID).
-		First(&protection).Error
+	result := db.Where("content_type = ? AND content_id = ?", contentType, contentID).
+		Limit(1).
+		Find(&protection)
 
-	if err != nil {
+	if result.Error != nil || result.RowsAffected == 0 {
 		return "none" // No protection = default
 	}
 

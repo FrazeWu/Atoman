@@ -76,7 +76,6 @@ export function useApi() {
       list: `${apiUrl}/notifications`,
       read: (id: number) => `${apiUrl}/notifications/${id}/read`,
       readAll: `${apiUrl}/notifications/read-all`,
-      unreadCount: `${apiUrl}/notifications/unread-count`,
     }
   };
 }
