@@ -30,9 +30,14 @@ func RunForumMigrations(db *gorm.DB) error {
 		db.Exec(`ALTER TABLE forum_replies ADD COLUMN IF NOT EXISTS path LTREE`)
 		db.Exec(`ALTER TABLE forum_replies ADD COLUMN IF NOT EXISTS floor_number INT DEFAULT 0`)
 
+		if err := ensureForumReplyPathIsLtree(db); err != nil {
+			return err
+		}
+
 		// Create GIST index for ltree path (fast subtree queries)
-		db.Exec(`CREATE INDEX IF NOT EXISTS idx_forum_replies_path ON forum_replies USING GIST(path)`)
-		db.Exec(`CREATE INDEX IF NOT EXISTS idx_forum_replies_path_btree ON forum_replies USING BTREE(path)`)
+		if err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_forum_replies_path ON forum_replies USING GIST(path)`).Error; err != nil {
+			return fmt.Errorf("create forum_replies path gist index: %w", err)
+		}
 	} else {
 		// SQLite fallback — path is plain TEXT, GIST not supported
 
@@ -58,6 +63,39 @@ func RunForumMigrations(db *gorm.DB) error {
 	runForumPathBackfill(db, dialect)
 
 	log.Println("Forum migrations completed")
+	return nil
+}
+
+func ensureForumReplyPathIsLtree(db *gorm.DB) error {
+	var dataType string
+	if err := db.Raw(`
+		SELECT data_type
+		FROM information_schema.columns
+		WHERE table_name = 'forum_replies' AND column_name = 'path'
+	`).Scan(&dataType).Error; err != nil {
+		return fmt.Errorf("check forum_replies.path type: %w", err)
+	}
+
+	if dataType == "USER-DEFINED" || dataType == "user-defined" {
+		return nil
+	}
+
+	if dataType == "" {
+		return fmt.Errorf("forum_replies.path column not found after migration")
+	}
+
+	if err := db.Exec(`DROP INDEX IF EXISTS idx_forum_replies_path`).Error; err != nil {
+		return fmt.Errorf("drop stale forum_replies path index: %w", err)
+	}
+
+	if err := db.Exec(`
+		ALTER TABLE forum_replies
+		ALTER COLUMN path TYPE LTREE
+		USING NULLIF(path, '')::ltree
+	`).Error; err != nil {
+		return fmt.Errorf("convert forum_replies.path to ltree: %w", err)
+	}
+
 	return nil
 }
 

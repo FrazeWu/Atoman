@@ -314,19 +314,6 @@ export interface OrbitItem {
   is_starred?: boolean
 }
 
-// ===== Notification Types =====
-
-export interface Notification {
-  id: number
-  user_id: string
-  type: 'comment' | 'like' | 'bookmark' | 'system' | 'forum_reply' | 'mention'
-  content: string
-  target_type?: string
-  target_id?: string | number
-  read_at?: string
-  created_at: string
-}
-
 // ===== Forum Types =====
 
 export interface ForumCategory {

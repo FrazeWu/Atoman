@@ -51,26 +51,11 @@ func (Follow) TableName() string {
 }
 
 type UserSettings struct {
-	UserID             uuid.UUID `json:"user_id" gorm:"type:uuid;primaryKey"`
-	EmailNotifications bool      `json:"email_notifications" gorm:"default:true"`
-	PrivateProfile     bool      `json:"private_profile" gorm:"default:false"`
+	UserID         uuid.UUID `json:"user_id" gorm:"type:uuid;primaryKey"`
+	PrivateProfile bool      `json:"private_profile" gorm:"default:false"`
 }
 
 func (UserSettings) TableName() string {
 	return "user_settings"
 }
 
-type Notification struct {
-	Base
-	UserID     uuid.UUID  `json:"user_id" gorm:"type:uuid;not null;index"` // 接收者
-	User       *User      `json:"user,omitempty" gorm:"foreignKey:UserID;references:UUID"`
-	Type       string     `json:"type" gorm:"not null"` // comment / like / bookmark / system
-	Content    string     `json:"content" gorm:"type:text;not null"`
-	TargetType string     `json:"target_type" gorm:"type:text"` // post / comment / nil
-	TargetID   *uuid.UUID `json:"target_id" gorm:"type:uuid"`
-	ReadAt     *time.Time `json:"read_at"`
-}
-
-func (Notification) TableName() string {
-	return "notifications"
-}

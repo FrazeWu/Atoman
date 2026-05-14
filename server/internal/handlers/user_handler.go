@@ -52,8 +52,7 @@ type UserProfileInput struct {
 
 // UserSettingsInput represents the request body for updating user settings
 type UserSettingsInput struct {
-	EmailNotifications *bool `json:"email_notifications"`
-	PrivateProfile     *bool `json:"private_profile"`
+	PrivateProfile *bool `json:"private_profile"`
 }
 
 // ExplorePostResponse represents a post in the explore feed
@@ -271,9 +270,6 @@ func UpdateUserSettings(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		updates := map[string]interface{}{}
-		if input.EmailNotifications != nil {
-			updates["email_notifications"] = *input.EmailNotifications
-		}
 		if input.PrivateProfile != nil {
 			updates["private_profile"] = *input.PrivateProfile
 		}
@@ -324,15 +320,6 @@ func FollowUser(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Create notification
-		notification := model.Notification{
-			UserID:     targetID,
-			Type:       "system",
-			Content:    "有人关注了你",
-			TargetType: "user",
-			TargetID:   &userID,
-		}
-		db.Create(&notification)
 
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
 	}

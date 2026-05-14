@@ -90,7 +90,7 @@ type ForumReply struct {
 	User          *User       `json:"user,omitempty" gorm:"foreignKey:UserID;references:UUID"`
 	ParentReplyID *uuid.UUID  `json:"parent_reply_id" gorm:"type:uuid;index"`
 	Content       string      `json:"content" gorm:"type:text;not null"` // raw Markdown
-	Path          string      `json:"path" gorm:"type:text"`             // ltree path (Postgres) / text prefix (SQLite)
+	Path          string      `json:"path" gorm:"type:ltree"`            // ltree path (Postgres) / text prefix (SQLite)
 	FloorNumber   int         `json:"floor_number" gorm:"default:0"`
 	LikeCount     int         `json:"like_count" gorm:"default:0"`
 	IsLiked       bool        `json:"is_liked" gorm:"-"` // computed per-user

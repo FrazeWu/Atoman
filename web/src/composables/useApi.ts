@@ -58,7 +58,7 @@ export function useApi() {
     users: {
       me: `${apiUrl}/users/me`,
       settings: `${apiUrl}/users/me`,          // profile update (display_name, bio, etc)
-      meSettings: `${apiUrl}/users/me/settings`, // app settings (notifications, privacy)
+      meSettings: `${apiUrl}/users/me/settings`,
       profile: (username: string) => `${apiUrl}/users/by-username/${username}`,
       follow: (userUuid: string) => `${apiUrl}/users/${userUuid}/follow`,
       followers: (userUuid: string) => `${apiUrl}/users/${userUuid}/followers`,
@@ -72,10 +72,5 @@ export function useApi() {
       rss: (username: string) => `${apiUrl}/feed/rss/${username}`,
     },
     
-    notifications: {
-      list: `${apiUrl}/notifications`,
-      read: (id: number) => `${apiUrl}/notifications/${id}/read`,
-      readAll: `${apiUrl}/notifications/read-all`,
-    }
   };
 }

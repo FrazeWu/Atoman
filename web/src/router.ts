@@ -92,11 +92,6 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/blog/BlogSettingsView.vue'),
     meta: { requiresAuth: true },
   },
-  {
-    path: '/blog/notifications',
-    component: () => import('@/views/blog/NotificationsView.vue'),
-    meta: { requiresAuth: true },
-  },
   { path: '/feed', component: () => import('@/views/feed/FeedView.vue'), meta: { requiresAuth: true } },
   { path: '/feed/stats', component: () => import('@/views/feed/FeedStatsView.vue'), meta: { requiresAuth: true } },
   { path: '/feed/item/:id', component: () => import('@/views/feed/FeedItemDetailView.vue'), meta: { requiresAuth: true } },

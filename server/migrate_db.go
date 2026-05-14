@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -22,70 +23,80 @@ import (
 // NOTE: Uses aws-sdk-go (v1) instead of v2 because that's what the project uses
 
 var sqliteSourceTables = map[string]string{
-	"Users":                   "Users",
-	"user_settings":           "user_settings",
-	"Artists":                 "Artists",
-	"Albums":                  "Albums",
-	"Songs":                   "Songs",
-	"channels":                "channels",
-	"collections":             "collections",
-	"posts":                   "posts",
-	"comments":                "comments",
-	"likes":                   "likes",
-	"bookmark_folders":        "bookmark_folders",
-	"bookmarks":               "bookmarks",
-	"feed_sources":            "feed_sources",
-	"feed_items":              "feed_items",
-	"feed_item_reads":         "feed_item_reads",
-	"feed_item_stars":         "feed_item_stars",
-	"reading_list_items":      "reading_list_items",
-	"subscription_groups":     "subscription_groups",
-	"subscriptions":           "subscriptions",
-	"notifications":           "notifications",
-	"forum_categories":        "forum_categories",
-	"forum_topics":            "forum_topics",
-	"forum_replies":           "forum_replies",
-	"forum_likes":             "forum_likes",
-	"forum_bookmarks":         "forum_bookmarks",
-	"forum_drafts":            "forum_drafts",
-	"activity_logs":           "activity_logs",
-	"debates":                 "debates",
-	"arguments":               "arguments",
-	"debate_votes":            "debate_votes",
-	"vote_histories":          "vote_histories",
-	"debate_conclude_votes":   "debate_conclude_votes",
+	"Users":                    "Users",
+	"user_settings":            "user_settings",
+	"Artists":                  "Artists",
+	"Albums":                   "Albums",
+	"Songs":                    "Songs",
+	"channels":                 "channels",
+	"collections":              "collections",
+	"posts":                    "posts",
+	"comments":                 "comments",
+	"likes":                    "likes",
+	"bookmark_folders":         "bookmark_folders",
+	"bookmarks":                "bookmarks",
+	"feed_sources":             "feed_sources",
+	"feed_items":               "feed_items",
+	"feed_item_reads":          "feed_item_reads",
+	"feed_item_stars":          "feed_item_stars",
+	"reading_list_items":       "reading_list_items",
+	"subscription_groups":      "subscription_groups",
+	"subscriptions":            "subscriptions",
+	"forum_categories":         "forum_categories",
+	"forum_topics":             "forum_topics",
+	"forum_replies":            "forum_replies",
+	"forum_likes":              "forum_likes",
+	"forum_bookmarks":          "forum_bookmarks",
+	"forum_drafts":             "forum_drafts",
+	"activity_logs":            "activity_logs",
+	"debates":                  "debates",
+	"arguments":                "arguments",
+	"debate_votes":             "debate_votes",
+	"vote_histories":           "vote_histories",
+	"debate_conclude_votes":    "debate_conclude_votes",
 	"email_verification_codes": "email_verification_codes",
-	"timeline_events":         "timeline_events",
-	"timeline_persons":        "timeline_persons",
-	"person_locations":        "person_locations",
-	"revisions":               "revisions",
-	"edit_conflicts":          "edit_conflicts",
-	"content_protections":     "content_protections",
-	"discussions":             "discussions",
-	"artist_aliases":          "artist_aliases",
-	"artist_merges":           "artist_merges",
-	"lyric_annotations":       "lyric_annotations",
-	"album_corrections":       "album_corrections",
-	"song_corrections":        "song_corrections",
-	"album_artists":           "album_artists",
-	"song_artists":            "song_artists",
-	"post_collections":        "post_collections",
+	"timeline_events":          "timeline_events",
+	"timeline_persons":         "timeline_persons",
+	"person_locations":         "person_locations",
+	"revisions":                "revisions",
+	"edit_conflicts":           "edit_conflicts",
+	"content_protections":      "content_protections",
+	"discussions":              "discussions",
+	"artist_aliases":           "artist_aliases",
+	"artist_merges":            "artist_merges",
+	"lyric_annotations":        "lyric_annotations",
+	"album_corrections":        "album_corrections",
+	"song_corrections":         "song_corrections",
+	"album_artists":            "album_artists",
+	"song_artists":             "song_artists",
+	"post_collections":         "post_collections",
 }
 
 var boolColumns = map[string]map[string]bool{
-	"Users":             {"is_active": true},
-	"user_settings":     {"email_notifications": true, "private_profile": true},
-	"channels":          {"is_default": true},
-	"collections":       {"is_default": true},
-	"posts":             {"allow_comments": true, "pinned": true},
-	"blog_drafts":       {"allow_comments": true},
-	"forum_topics":      {"pinned": true, "closed": true},
-	"arguments":         {"is_concluded": true},
-	"timeline_events":   {"is_public": true},
-	"timeline_persons":  {"is_public": true},
-	"artist_aliases":    {"is_main_name": true},
-	"revisions":         {"is_current": true},
+	"Users":                    {"is_active": true},
+	"user_settings":            {"private_profile": true},
+	"channels":                 {"is_default": true},
+	"collections":              {"is_default": true},
+	"posts":                    {"allow_comments": true, "pinned": true},
+	"blog_drafts":              {"allow_comments": true},
+	"forum_topics":             {"pinned": true, "closed": true},
+	"arguments":                {"is_concluded": true},
+	"timeline_events":          {"is_public": true},
+	"timeline_persons":         {"is_public": true},
+	"artist_aliases":           {"is_main_name": true},
+	"revisions":                {"is_current": true},
 	"email_verification_codes": {"used": true},
+}
+
+var criticalTables = map[string]bool{
+	"Users":               true,
+	"Artists":             true,
+	"Albums":              true,
+	"Songs":               true,
+	"feed_sources":        true,
+	"subscription_groups": true,
+	"subscriptions":       true,
+	"feed_items":          true,
 }
 
 var associationAllowedColumns = map[string]map[string]bool{
@@ -120,6 +131,10 @@ func normalizeBoolLike(v any) any {
 	}
 }
 
+func shouldNormalizeToS3(s3Prefix string) bool {
+	return strings.TrimSpace(s3Prefix) != ""
+}
+
 func normalizeRecord(tableName string, record map[string]any, s3Prefix string) map[string]any {
 	if cols, ok := boolColumns[tableName]; ok {
 		for col := range cols {
@@ -129,16 +144,16 @@ func normalizeRecord(tableName string, record map[string]any, s3Prefix string) m
 		}
 	}
 
-	if avatar, ok := record["avatar_url"].(string); ok && strings.HasPrefix(avatar, "/uploads/") {
+	if avatar, ok := record["avatar_url"].(string); ok && strings.HasPrefix(avatar, "/uploads/") && shouldNormalizeToS3(s3Prefix) {
 		record["avatar_url"] = s3Prefix + "/" + strings.TrimPrefix(avatar, "/uploads/")
 	}
-	if audio, ok := record["audio_url"].(string); ok && strings.HasPrefix(audio, "/uploads/") {
+	if audio, ok := record["audio_url"].(string); ok && strings.HasPrefix(audio, "/uploads/") && shouldNormalizeToS3(s3Prefix) {
 		record["audio_url"] = s3Prefix + "/" + strings.TrimPrefix(audio, "/uploads/")
 		if _, hasSource := record["audio_source"]; hasSource {
 			record["audio_source"] = "s3"
 		}
 	}
-	if cover, ok := record["cover_url"].(string); ok && strings.HasPrefix(cover, "/uploads/") {
+	if cover, ok := record["cover_url"].(string); ok && strings.HasPrefix(cover, "/uploads/") && shouldNormalizeToS3(s3Prefix) {
 		record["cover_url"] = s3Prefix + "/" + strings.TrimPrefix(cover, "/uploads/")
 		if _, hasSource := record["cover_source"]; hasSource {
 			record["cover_source"] = "s3"
@@ -161,20 +176,16 @@ func filterAssociationRecord(tableName string, record map[string]any) map[string
 func main() {
 	log.Println("Starting Migration: SQLite + Local Files -> PostgreSQL + MinIO")
 
-	// 1. Load config
-	err := godotenv.Load(".env.dev")
-	if err != nil {
+	if err := godotenv.Load(".env.dev"); err != nil {
 		log.Fatalf("Failed to load .env.dev: %v", err)
 	}
 
-	// 2. Connect to SQLite
 	sqliteDB, err := gorm.Open(sqlite.Open("dev.sqlite"), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Failed to connect to SQLite: %v", err)
 	}
 	log.Println("Connected to SQLite (dev.sqlite)")
 
-	// 3. Connect to PostgreSQL
 	pgURL := os.Getenv("DATABASE_URL")
 	if pgURL == "" {
 		log.Fatal("DATABASE_URL not found in .env.dev")
@@ -185,7 +196,6 @@ func main() {
 	}
 	log.Println("Connected to PostgreSQL")
 
-	// 4. Connect to MinIO (using aws-sdk-go v1)
 	s3Endpoint := os.Getenv("S3_ENDPOINT")
 	s3Region := os.Getenv("S3_REGION")
 	if s3Region == "" {
@@ -196,7 +206,7 @@ func main() {
 		Region:           aws.String(s3Region),
 		Endpoint:         aws.String(s3Endpoint),
 		Credentials:      credentials.NewStaticCredentials(os.Getenv("AWS_ACCESS_KEY_ID"), os.Getenv("AWS_SECRET_ACCESS_KEY"), ""),
-		S3ForcePathStyle: aws.Bool(true), // Required for MinIO
+		S3ForcePathStyle: aws.Bool(true),
 	})
 	if err != nil {
 		log.Fatalf("Unable to load AWS session: %v", err)
@@ -211,7 +221,6 @@ func main() {
 	}
 	log.Printf("Connected to MinIO (Bucket: %s)", bucketName)
 
-	// 5. Migrate Files to MinIO
 	log.Println("--- Starting File Uploads ---")
 	uploadCount := 0
 	uploadsDir := "uploads"
@@ -220,21 +229,16 @@ func main() {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() {
-			return nil
-		}
-		if strings.HasPrefix(info.Name(), ".") {
+		if info.IsDir() || strings.HasPrefix(info.Name(), ".") {
 			return nil
 		}
 
-		// Calculate S3 Key: uploads/music/file.mp3 -> music/file.mp3
 		relPath, err := filepath.Rel(uploadsDir, path)
 		if err != nil {
 			return err
 		}
-		s3Key := filepath.ToSlash(relPath) // Ensure forward slashes for S3
+		s3Key := filepath.ToSlash(relPath)
 
-		// Open file
 		file, err := os.Open(path)
 		if err != nil {
 			log.Printf("Failed to open file %s: %v", path, err)
@@ -242,7 +246,6 @@ func main() {
 		}
 		defer file.Close()
 
-		// Upload
 		_, err = s3Client.PutObject(&s3.PutObjectInput{
 			Bucket: aws.String(bucketName),
 			Key:    aws.String(s3Key),
@@ -268,10 +271,7 @@ func main() {
 		log.Printf("Successfully uploaded %d files to MinIO.", uploadCount)
 	}
 
-	// 6. Migrate Database Tables
 	log.Println("--- Starting Database Migration ---")
-
-	// Create all tables in Postgres first to ensure schema exists
 	log.Println("AutoMigrating PostgreSQL schema...")
 	if err := pgDB.AutoMigrate(
 		&model.User{}, &model.UserSettings{}, &model.Artist{}, &model.Album{},
@@ -280,7 +280,7 @@ func main() {
 		&model.Comment{}, &model.Like{}, &model.Bookmark{}, &model.BookmarkFolder{},
 		&model.FeedSource{}, &model.Subscription{}, &model.FeedItem{},
 		&model.FeedItemRead{}, &model.FeedItemStar{}, &model.ReadingListItem{},
-		&model.SubscriptionGroup{}, &model.Notification{}, &model.ForumCategory{},
+		&model.SubscriptionGroup{}, &model.ForumCategory{},
 		&model.ForumTopic{}, &model.ForumReply{}, &model.ForumLike{},
 		&model.ForumBookmark{}, &model.ForumDraft{}, &model.ActivityLog{},
 		&model.Debate{}, &model.Argument{}, &model.DebateVote{}, &model.VoteHistory{},
@@ -293,8 +293,7 @@ func main() {
 		log.Fatalf("Failed to automigrate PG schema: %v", err)
 	}
 
-	// Helper to migrate data using dynamic maps
-	migrateTable := func(targetTableName string) {
+	migrateTable := func(targetTableName string) error {
 		sourceTableName := sqliteSourceTables[targetTableName]
 		if sourceTableName == "" {
 			sourceTableName = targetTableName
@@ -303,13 +302,16 @@ func main() {
 
 		var records []map[string]any
 		if err := sqliteDB.Table(sourceTableName).Find(&records).Error; err != nil {
+			if criticalTables[targetTableName] {
+				return fmt.Errorf("load %s: %w", sourceTableName, err)
+			}
 			log.Printf("  Skipping %s: %v", sourceTableName, err)
-			return
+			return nil
 		}
 
 		if len(records) == 0 {
 			log.Printf("  0 records in %s", sourceTableName)
-			return
+			return nil
 		}
 
 		s3Prefix := os.Getenv("S3_URL_PREFIX")
@@ -324,20 +326,31 @@ func main() {
 
 		result := pgDB.Table(targetTableName).CreateInBatches(normalized, 100)
 		if result.Error != nil {
+			if criticalTables[targetTableName] {
+				return fmt.Errorf("insert %s: %w", targetTableName, result.Error)
+			}
 			log.Printf("  Error migrating %s: %v", targetTableName, result.Error)
-		} else {
-			log.Printf("  Successfully migrated %d records to %s", result.RowsAffected, targetTableName)
+			return nil
 		}
+
+		var targetCount int64
+		if err := pgDB.Table(targetTableName).Count(&targetCount).Error; err != nil {
+			if criticalTables[targetTableName] {
+				return fmt.Errorf("verify %s: %w", targetTableName, err)
+			}
+			log.Printf("  Failed to verify %s count: %v", targetTableName, err)
+		} else {
+			log.Printf("  Successfully migrated %d records to %s (target count: %d)", result.RowsAffected, targetTableName, targetCount)
+		}
+		return nil
 	}
 
-	// We MUST migrate tables in proper dependency order (parents before children)
 	tables := []string{
 		"Users", "user_settings",
 		"Artists", "Albums", "Songs",
 		"channels", "collections", "posts",
 		"bookmark_folders", "comments", "likes", "bookmarks",
 		"feed_sources", "subscription_groups", "feed_items", "subscriptions", "feed_item_reads", "feed_item_stars", "reading_list_items",
-		"notifications",
 		"forum_categories", "forum_topics", "forum_replies", "forum_likes", "forum_bookmarks", "forum_drafts", "activity_logs",
 		"debates", "arguments", "debate_votes", "vote_histories", "debate_conclude_votes",
 		"timeline_events", "timeline_persons", "person_locations",
@@ -347,12 +360,16 @@ func main() {
 	}
 
 	for _, table := range tables {
-		migrateTable(table)
+		if err := migrateTable(table); err != nil {
+			log.Fatalf("Critical migration failed for %s: %v", table, err)
+		}
 	}
 
 	assocTables := []string{"album_artists", "song_artists", "post_collections"}
 	for _, table := range assocTables {
-		migrateTable(table)
+		if err := migrateTable(table); err != nil {
+			log.Fatalf("Association migration failed for %s: %v", table, err)
+		}
 	}
 
 	log.Println("--- Migration Complete! ---")

@@ -122,18 +122,6 @@ func CreateComment(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Create notification for post owner (if not commenting on own post)
-		if post.UserID != userID {
-			notification := model.Notification{
-				UserID:     post.UserID,
-				Type:       "comment",
-				Content:    "有人评论了你的文章",
-				TargetType: "post",
-				TargetID:   &post.ID,
-			}
-			db.Create(&notification)
-		}
-
 		c.JSON(http.StatusCreated, gin.H{"data": comment, "message": "ok"})
 	}
 }
@@ -184,21 +172,18 @@ func ToggleLike(db *gorm.DB, isLike bool) gin.HandlerFunc {
 		userIDVal, _ := c.Get("user_id")
 		userID := userIDVal.(uuid.UUID)
 
-		var targetOwnerID uuid.UUID
 		if input.TargetType == "post" {
 			var post model.Post
 			if err := db.First(&post, input.TargetID).Error; err != nil {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Post not found"})
 				return
 			}
-			targetOwnerID = post.UserID
 		} else {
 			var comment model.Comment
 			if err := db.First(&comment, input.TargetID).Error; err != nil {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Comment not found"})
 				return
 			}
-			targetOwnerID = comment.UserID
 		}
 
 		if isLike {
@@ -214,22 +199,6 @@ func ToggleLike(db *gorm.DB, isLike bool) gin.HandlerFunc {
 				return
 			}
 
-			// Create notification if liking someone else's content
-			if targetOwnerID != userID {
-				notification := model.Notification{
-					UserID: targetOwnerID,
-					Type:   "like",
-					Content: "有人点赞了你的" + func() string {
-						if input.TargetType == "post" {
-							return "文章"
-						}
-						return "评论"
-					}(),
-					TargetType: input.TargetType,
-					TargetID:   &input.TargetID,
-				}
-				db.Create(&notification)
-			}
 		} else {
 			if err := db.Where("user_id = ? AND target_type = ? AND target_id = ?", userID, input.TargetType, input.TargetID).Delete(&model.Like{}).Error; err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to unlike"})
@@ -317,18 +286,6 @@ func CreateBookmark(db *gorm.DB) gin.HandlerFunc {
 		if err := db.Where(model.Bookmark{UserID: userID, PostID: input.PostID}).FirstOrCreate(&bookmark).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create bookmark"})
 			return
-		}
-
-		// Create notification if bookmarking someone else's post
-		if post.UserID != userID {
-			notification := model.Notification{
-				UserID:     post.UserID,
-				Type:       "bookmark",
-				Content:    "有人收藏了你的文章",
-				TargetType: "post",
-				TargetID:   &post.ID,
-			}
-			db.Create(&notification)
 		}
 
 		c.JSON(http.StatusCreated, gin.H{"data": bookmark, "message": "ok"})
