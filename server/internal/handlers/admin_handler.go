@@ -36,6 +36,10 @@ func SetupAdminRoutes(router *gin.Engine, db *gorm.DB, s3Client *s3.S3) {
 		admin.GET("/pending-album-corrections", GetPendingAlbumCorrectionsHandler(db))
 		admin.POST("/approve-album-correction/:id", ApproveAlbumCorrectionHandler(db))
 		admin.POST("/reject-album-correction/:id", RejectAlbumCorrectionHandler(db, s3Client))
+
+			admin.GET("/pending-artist-corrections", GetPendingArtistCorrectionsHandler(db))
+			admin.POST("/approve-artist-correction/:id", ApproveArtistCorrectionHandler(db))
+			admin.POST("/reject-artist-correction/:id", RejectArtistCorrectionHandler(db))
 	}
 }
 
@@ -428,5 +432,63 @@ func RejectAlbumCorrectionHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc 
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "Album correction rejected"})
+	}
+}
+
+func GetPendingArtistCorrectionsHandler(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var corrections []model.ArtistCorrection
+		if err := db.Where("status = ?", "pending").
+			Preload("Artist").
+			Preload("User").
+			Order("created_at asc").
+			Find(&corrections).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch pending artist corrections"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"data": corrections})
+	}
+}
+
+func ApproveArtistCorrectionHandler(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+		adminIDVal, _ := c.Get("user_id")
+		adminID := adminIDVal.(uuid.UUID)
+		now := time.Now()
+
+		var correction model.ArtistCorrection
+		if err := db.First(&correction, "id = ?", id).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Correction not found"})
+			return
+		}
+
+		if err := db.Model(&model.ArtistCorrection{}).Where("id = ?", id).Updates(map[string]interface{}{
+			"status":      "approved",
+			"approved_by": adminID,
+			"approved_at": now,
+		}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to approve correction"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "Artist correction approved"})
+	}
+}
+
+func RejectArtistCorrectionHandler(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+
+		var correction model.ArtistCorrection
+		if err := db.First(&correction, "id = ?", id).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Correction not found"})
+			return
+		}
+
+		if err := db.Model(&model.ArtistCorrection{}).Where("id = ?", id).Update("status", "rejected").Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reject correction"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "Artist correction rejected"})
 	}
 }
