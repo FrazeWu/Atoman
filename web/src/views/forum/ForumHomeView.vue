@@ -88,7 +88,7 @@
             + 发新话题
           </button>
           <button class="tab-btn" @click="catReqModalOpen = true" v-if="authStore.isAuthenticated">
-            + 申请新分区
+            申请分类
           </button>
         </div>
       </div>
@@ -244,14 +244,14 @@
     @click.self="catReqModalOpen = false"
   >
     <div style="background:var(--a-color-bg);border:var(--a-border);padding:1.5rem;width:min(480px,90vw);display:flex;flex-direction:column;gap:1rem">
-      <h3 style="margin:0;font-size:.9rem;font-weight:900;text-transform:uppercase">申请新分区</h3>
+      <h3 style="margin:0;font-size:.9rem;font-weight:900;text-transform:uppercase">申请新分类</h3>
       <div style="display:flex;flex-direction:column;gap:.5rem">
-        <label style="font-size:.75rem;font-weight:700">分区名称 *</label>
-        <input v-model="catReqForm.name" style="border:var(--a-border);padding:.5rem;background:var(--a-color-bg);font-size:.85rem" placeholder="分区名称" />
+        <label style="font-size:.75rem;font-weight:700">分类名称 *</label>
+        <input v-model="catReqForm.name" style="border:var(--a-border);padding:.5rem;background:var(--a-color-bg);font-size:.85rem" placeholder="分类名称" />
       </div>
       <div style="display:flex;flex-direction:column;gap:.5rem">
-        <label style="font-size:.75rem;font-weight:700">分区描述</label>
-        <textarea v-model="catReqForm.description" style="border:var(--a-border);padding:.5rem;background:var(--a-color-bg);font-size:.85rem;resize:vertical;min-height:60px" placeholder="分区用途说明" />
+        <label style="font-size:.75rem;font-weight:700">描述</label>
+        <textarea v-model="catReqForm.description" style="border:var(--a-border);padding:.5rem;background:var(--a-color-bg);font-size:.85rem;resize:vertical;min-height:60px" placeholder="分类用途说明" />
       </div>
       <div style="display:flex;flex-direction:column;gap:.5rem">
         <label style="font-size:.75rem;font-weight:700">申请理由 *</label>
@@ -296,7 +296,7 @@ const tabOptions: Record<TabKey, string> = {
   top: '最热',
   new: '未读',
   bookmarked: '已收藏',
-  featured: '精华',
+  featured: '精选',
 }
 
 const sortMap: Record<TabKey, 'latest' | 'top' | 'active' | 'featured'> = {
