@@ -26,6 +26,11 @@
           class="reply-btn reply-btn-danger"
           @click="$emit('delete', reply.id)"
         >删除</button>
+        <button
+          v-if="isAuthenticated && !isOwn"
+          class="reply-btn"
+          @click="$emit('report', reply.id)"
+        >举报</button>
       </div>
     </div>
 
@@ -61,6 +66,7 @@ defineEmits<{
   (e: 'quote', reply: ForumReply): void
   (e: 'delete', id: string): void
   (e: 'toggle-like', id: string): void
+  (e: 'report', id: string): void
 }>()
 
 const { renderMarkdown } = useMarkdownRenderer()

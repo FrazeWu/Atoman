@@ -67,7 +67,7 @@
           <!-- Report button (non-owner, authenticated) -->
           <button
             v-if="authStore.isAuthenticated && authStore.user?.uuid !== forumStore.currentTopic.user_id"
-            @click="reportModalOpen = true"
+            @click="openReportModal('topic', forumStore.currentTopic!.id)"
             class="action-btn"
           >举报</button>
 
@@ -123,6 +123,7 @@
               @quote="setQuote"
               @delete="handleDeleteReply"
               @toggle-like="forumStore.toggleReplyLike"
+              @report="(id) => openReportModal('reply', id)"
             />
           </div>
 
@@ -224,20 +225,23 @@
 
   <!-- Report Modal -->
   <div
-    v-if="reportModalOpen"
+    v-if="reportModal.show"
     style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center"
-    @click.self="reportModalOpen = false"
+    @click.self="reportModal.show = false"
   >
     <div style="background:var(--a-color-bg);border:var(--a-border);padding:1.5rem;width:min(420px,90vw);display:flex;flex-direction:column;gap:1rem">
       <h3 style="margin:0;font-size:.9rem;font-weight:900;text-transform:uppercase">举报内容</h3>
       <div style="display:flex;flex-direction:column;gap:.5rem">
+        <label style="font-size:.75rem;font-weight:700">举报类型</label>
+        <div style="font-size:.8rem;color:var(--a-color-muted);font-weight:700">{{ reportModal.targetType === 'topic' ? '帖子' : '回复' }}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:.5rem">
         <label style="font-size:.75rem;font-weight:700">举报原因 *</label>
         <select v-model="reportForm.reason" style="border:var(--a-border);padding:.5rem;background:var(--a-color-bg);font-size:.85rem">
           <option value="">请选择原因</option>
-          <option value="spam">垃圾广告</option>
-          <option value="harassment">骚扰攻击</option>
-          <option value="misinformation">虚假信息</option>
-          <option value="off-topic">偏离主题</option>
+          <option value="spam">垃圾内容</option>
+          <option value="off-topic">与主题无关</option>
+          <option value="harassment">骚扰或攻击</option>
           <option value="other">其他</option>
         </select>
       </div>
@@ -245,8 +249,9 @@
         <label style="font-size:.75rem;font-weight:700">补充说明</label>
         <textarea v-model="reportForm.note" style="border:var(--a-border);padding:.5rem;background:var(--a-color-bg);font-size:.85rem;resize:vertical;min-height:80px" placeholder="可选：详细说明" />
       </div>
+      <div v-if="reportFeedback" style="font-size:.8rem;font-weight:700;color:var(--a-color-muted)">{{ reportFeedback }}</div>
       <div style="display:flex;gap:.5rem;justify-content:flex-end">
-        <button @click="reportModalOpen = false" style="padding:.5rem 1rem;border:var(--a-border);background:none;cursor:pointer;font-size:.8rem">取消</button>
+        <button @click="reportModal.show = false" style="padding:.5rem 1rem;border:var(--a-border);background:none;cursor:pointer;font-size:.8rem">取消</button>
         <button @click="submitReport" style="padding:.5rem 1rem;border:none;background:var(--a-color-fg);color:var(--a-color-bg);cursor:pointer;font-size:.8rem;font-weight:700">提交举报</button>
       </div>
     </div>
@@ -429,8 +434,17 @@ watch(
 
 // Report & Featured
 const API_URL = import.meta.env.VITE_API_URL || '/api'
-const reportModalOpen = ref(false)
+const reportModal = ref<{ show: boolean; targetType: 'topic' | 'reply'; targetId: string }>(
+  { show: false, targetType: 'topic', targetId: '' },
+)
 const reportForm = ref({ reason: '', note: '' })
+const reportFeedback = ref('')
+
+const openReportModal = (targetType: 'topic' | 'reply', targetId: string) => {
+  reportModal.value = { show: true, targetType, targetId }
+  reportForm.value = { reason: '', note: '' }
+  reportFeedback.value = ''
+}
 
 const submitReport = async () => {
   if (!reportForm.value.reason.trim()) { alert('请选择举报原因'); return }
@@ -441,19 +455,20 @@ const submitReport = async () => {
       Authorization: `Bearer ${authStore.token}`,
     },
     body: JSON.stringify({
-      target_type: 'topic',
-      target_id: forumStore.currentTopic!.id,
+      target_type: reportModal.value.targetType,
+      target_id: reportModal.value.targetId,
       reason: reportForm.value.reason,
       note: reportForm.value.note,
     }),
   })
   if (res.ok) {
-    reportModalOpen.value = false
-    reportForm.value = { reason: '', note: '' }
-    alert('举报已提交')
+    reportFeedback.value = '举报已提交'
+    setTimeout(() => { reportModal.value.show = false; reportFeedback.value = '' }, 1200)
+  } else if (res.status === 409) {
+    reportFeedback.value = '您已举报过此内容'
   } else {
-    const d = await res.json()
-    alert(`举报失败: ${d.error || '未知错误'}`)
+    const d = await res.json().catch(() => ({}))
+    reportFeedback.value = `举报失败: ${(d as { error?: string }).error || '未知错误'}`
   }
 }
 
