@@ -114,7 +114,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { EditorView, keymap, scrollPastEnd, lineNumbers, highlightActiveLineGutter } from '@codemirror/view'
 import { Compartment, EditorState } from '@codemirror/state'
 import { defaultKeymap, historyKeymap, history, indentWithTab, undo, redo } from '@codemirror/commands'
@@ -432,6 +432,20 @@ async function handlePlainImageUploadFile(e: Event) {
 }
 
 async function uploadImagePlain(file: File) {
+  const placeholder = `![上传中]()`
+  const ta = plainTextareaRef.value
+  const insertStart = ta ? (ta.selectionStart ?? plainValue.value.length) : plainValue.value.length
+  const insertEnd = ta ? (ta.selectionEnd ?? insertStart) : insertStart
+
+  // 插入占位符
+  plainValue.value = plainValue.value.slice(0, insertStart) + placeholder + plainValue.value.slice(insertEnd)
+  emit('update:modelValue', plainValue.value)
+  await nextTick()
+  if (ta) {
+    ta.focus()
+    ta.selectionStart = ta.selectionEnd = insertStart + placeholder.length
+  }
+
   uploadingImage.value = true
   try {
     const formData = new FormData()
@@ -445,17 +459,30 @@ async function uploadImagePlain(file: File) {
     const data = await res.json()
     const url: string = data.url
     const md = `![图片](${url})`
-    const ta = plainTextareaRef.value
-    if (ta) {
-      const start = ta.selectionStart ?? plainValue.value.length
-      const end = ta.selectionEnd ?? start
-      plainValue.value = plainValue.value.slice(0, start) + md + plainValue.value.slice(end)
+
+    // 替换占位符
+    const idx = plainValue.value.indexOf(placeholder)
+    if (idx !== -1) {
+      plainValue.value = plainValue.value.slice(0, idx) + md + plainValue.value.slice(idx + placeholder.length)
     } else {
       plainValue.value += md
     }
     emit('update:modelValue', plainValue.value)
+    await nextTick()
+    const textarea = plainTextareaRef.value
+    if (textarea) {
+      textarea.focus()
+      const cursorPos = idx !== -1 ? idx + md.length : plainValue.value.length
+      textarea.selectionStart = textarea.selectionEnd = cursorPos
+    }
   } catch (err) {
     console.error('Image upload failed', err)
+    // 移除占位符
+    const idx = plainValue.value.indexOf(placeholder)
+    if (idx !== -1) {
+      plainValue.value = plainValue.value.slice(0, idx) + plainValue.value.slice(idx + placeholder.length)
+      emit('update:modelValue', plainValue.value)
+    }
   } finally {
     uploadingImage.value = false
   }

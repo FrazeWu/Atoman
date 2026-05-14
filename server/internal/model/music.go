@@ -150,6 +150,23 @@ func (SongCorrection) TableName() string {
 	return "song_corrections"
 }
 
+// ArtistCorrection is a proposed change to a confirmed Artist entry, submitted by users.
+// Status: pending | approved | rejected
+type ArtistCorrection struct {
+	Base
+	ArtistID    uuid.UUID  `json:"artist_id" gorm:"type:uuid;not null"`
+	Artist      *Artist    `json:"artist,omitempty" gorm:"foreignKey:ArtistID"`
+	UserID      *uuid.UUID `json:"user_id" gorm:"type:uuid"`
+	User        *User      `json:"user,omitempty" gorm:"foreignKey:UserID;references:UUID"`
+	Description string     `json:"description" gorm:"type:text;not null"` // 修改说明
+	Reason      string     `json:"reason" gorm:"type:text"`               // 修改理由
+	Status      string     `json:"status" gorm:"default:'pending'"`        // pending|approved|rejected
+	ApprovedBy  *uuid.UUID `json:"approved_by" gorm:"type:uuid"`
+	ApprovedAt  *time.Time `json:"approved_at"`
+}
+
+func (ArtistCorrection) TableName() string { return "artist_corrections" }
+
 // ArtistAlias represents an alternative name for an artist
 type ArtistAlias struct {
 	Base
