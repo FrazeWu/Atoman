@@ -213,6 +213,26 @@
                   style="font-weight:900;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;background:none;border:none;cursor:pointer;color:var(--a-color-muted);transition:color .2s"
                 >+ 新建分组</button>
               </div>
+
+              <!-- OPML Import / Export -->
+              <div style="border-top:var(--a-border);padding:.75rem 1.25rem;display:flex;gap:.5rem;flex-direction:column">
+                <p style="font-weight:900;font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--a-color-muted);margin:0 0 .25rem 0">OPML</p>
+                <label style="cursor:pointer;font-size:.75rem;font-weight:700;color:var(--a-color-fg)">
+                  <input
+                    type="file"
+                    accept=".opml,.xml"
+                    style="display:none"
+                    @change="handleOpmlImport"
+                  />
+                  导入订阅源
+                </label>
+                <a
+                  :href="`${API_URL}/feed/opml/export`"
+                  download="atoman-subscriptions.opml"
+                  style="font-size:.75rem;font-weight:700;color:var(--a-color-fg);text-decoration:none"
+                  @click.prevent="downloadOpml"
+                >导出订阅源</a>
+              </div>
             </template>
           </div>
         </div>
@@ -881,6 +901,41 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener('mousedown', onDocumentMousedown)
 })
+
+const handleOpmlImport = async (event: Event) => {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  const formData = new FormData()
+  formData.append('opml', file)
+  try {
+    const res = await fetch(`${API_URL}/feed/opml/import`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: formData,
+    })
+    if (res.ok) {
+      await fetchSubscriptions()
+      alert('OPML 导入成功')
+    } else {
+      const data = await res.json()
+      alert(`导入失败: ${data.error || '未知错误'}`)
+    }
+  } catch {
+    alert('导入失败，请检查网络')
+  }
+}
+
+const downloadOpml = async () => {
+  const res = await fetch(`${API_URL}/feed/opml/export`, { headers: authHeaders() })
+  if (!res.ok) { alert('导出失败'); return }
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'atoman-subscriptions.opml'
+  a.click()
+  URL.revokeObjectURL(url)
+}
 </script>
 
 <style scoped>
