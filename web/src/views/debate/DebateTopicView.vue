@@ -215,6 +215,21 @@
               placeholder="阐述你的观点…"
             />
           </div>
+          <!-- Evidence source fields - only shown for evidence type -->
+          <template v-if="newArgument.argument_type === 'evidence'">
+            <div class="a-field">
+              <label class="a-field-label">来源 URL</label>
+              <input v-model="newArgument.source_url" type="url" class="a-input" placeholder="https://..." />
+            </div>
+            <div class="a-field">
+              <label class="a-field-label">来源标题</label>
+              <input v-model="newArgument.source_title" type="text" class="a-input" placeholder="文章/报告标题" />
+            </div>
+            <div class="a-field">
+              <label class="a-field-label">来源摘要</label>
+              <textarea v-model="newArgument.source_excerpt" class="a-textarea" rows="2" placeholder="相关引文……" />
+            </div>
+          </template>
           <div class="flex justify-end gap-4 mt-6">
             <ABtn outline type="button" @click="handleCloseArgumentModal">取消</ABtn>
             <ABtn type="submit">添加</ABtn>
@@ -240,6 +255,21 @@
               placeholder="阐述你的观点…"
             />
           </div>
+          <!-- Evidence source fields for edit -->
+          <template v-if="editArgumentForm.argument_type === 'evidence'">
+            <div class="a-field">
+              <label class="a-field-label">来源 URL</label>
+              <input v-model="editArgumentForm.source_url" type="url" class="a-input" placeholder="https://..." />
+            </div>
+            <div class="a-field">
+              <label class="a-field-label">来源标题</label>
+              <input v-model="editArgumentForm.source_title" type="text" class="a-input" placeholder="文章/报告标题" />
+            </div>
+            <div class="a-field">
+              <label class="a-field-label">来源摘要</label>
+              <textarea v-model="editArgumentForm.source_excerpt" class="a-textarea" rows="2" placeholder="相关引文……" />
+            </div>
+          </template>
           <div class="flex justify-end gap-4 mt-6">
             <ABtn outline type="button" @click="showEditArgumentModal = false">取消</ABtn>
             <ABtn type="submit" :disabled="editArgumentSaving">
@@ -466,6 +496,9 @@ const showAddArgumentModal = ref(false)
 const newArgument = ref({
   content: '',
   argument_type: 'support' as ArgumentType,
+  source_url: '',
+  source_title: '',
+  source_excerpt: '',
 })
 
 const selectedParentContent = computed(() => {
@@ -482,7 +515,7 @@ const getQuotedArgument = (argument: Argument) => {
 // Edit Argument modal
 const showEditArgumentModal = ref(false)
 const editArgumentTarget = ref<Argument | null>(null)
-const editArgumentForm = ref({ content: '', argument_type: 'support' as ArgumentType })
+const editArgumentForm = ref({ content: '', argument_type: 'support' as ArgumentType, source_url: '', source_title: '', source_excerpt: '' })
 const editArgumentSaving = ref(false)
 
 const openEditArgumentModal = (arg: Argument) => {
@@ -490,6 +523,9 @@ const openEditArgumentModal = (arg: Argument) => {
   editArgumentForm.value = {
     content: arg.content,
     argument_type: arg.argument_type,
+    source_url: arg.source_url ?? '',
+    source_title: arg.source_title ?? '',
+    source_excerpt: arg.source_excerpt ?? '',
   }
   showEditArgumentModal.value = true
 }
@@ -584,6 +620,9 @@ const handleCreateArgument = async () => {
       content: newArgument.value.content,
       argument_type: newArgument.value.argument_type,
       parent_id: selectedParentId.value || undefined,
+      source_url: newArgument.value.source_url || undefined,
+      source_title: newArgument.value.source_title || undefined,
+      source_excerpt: newArgument.value.source_excerpt || undefined,
     }
 
     const result = await debateStore.createArgument(debate.value!.id, payload)
@@ -611,6 +650,9 @@ const handleReply = (parentArg: Argument) => {
   newArgument.value = {
     content: '',
     argument_type: 'support',
+    source_url: '',
+    source_title: '',
+    source_excerpt: '',
   }
   showAddArgumentModal.value = true
 }
@@ -621,6 +663,9 @@ const handleCloseArgumentModal = () => {
   newArgument.value = {
     content: '',
     argument_type: 'support',
+    source_url: '',
+    source_title: '',
+    source_excerpt: '',
   }
 }
 
@@ -630,6 +675,9 @@ const handleEditArgumentSubmit = async () => {
   const updated = await debateStore.updateArgument(editArgumentTarget.value.id, {
     content: editArgumentForm.value.content,
     argument_type: editArgumentForm.value.argument_type,
+    source_url: editArgumentForm.value.source_url || undefined,
+    source_title: editArgumentForm.value.source_title || undefined,
+    source_excerpt: editArgumentForm.value.source_excerpt || undefined,
   })
   editArgumentSaving.value = false
   if (updated) {

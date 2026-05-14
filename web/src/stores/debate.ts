@@ -320,6 +320,9 @@ export const useDebateStore = defineStore("debate", () => {
         | "evidence"
         | "question"
         | "counter";
+      source_url?: string;
+      source_title?: string;
+      source_excerpt?: string;
     },
   ): Promise<Argument | null> => {
     try {
