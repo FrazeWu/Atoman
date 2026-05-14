@@ -225,6 +225,7 @@ func main() {
 			&model.TimelineEvent{},
 			&model.TimelinePerson{},
 			&model.PersonLocation{},
+			&model.TimelineRevision{},
 			// Revision / wiki system
 			&model.Revision{},
 			&model.EditConflict{},

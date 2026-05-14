@@ -58,3 +58,22 @@ type PersonLocation struct {
 }
 
 func (PersonLocation) TableName() string { return "person_locations" }
+
+// TimelineRevision stores a snapshot of a TimelineEvent at a given point in time.
+type TimelineRevision struct {
+	Base
+	EventID     uuid.UUID `json:"event_id" gorm:"type:uuid;not null;index"`
+	EditorID    uuid.UUID `json:"editor_id" gorm:"type:uuid;not null"`
+	Editor      *User     `json:"editor,omitempty" gorm:"foreignKey:EditorID;references:UUID"`
+	Title       string    `json:"title"`
+	Description string    `json:"description" gorm:"type:text"`
+	Content     string    `json:"content" gorm:"type:text"`
+	EventDate   string    `json:"event_date"`
+	EndDate     string    `json:"end_date"`
+	Location    string    `json:"location"`
+	Source      string    `json:"source"`
+	Category    string    `json:"category"`
+	IsPublic    bool      `json:"is_public"`
+}
+
+func (TimelineRevision) TableName() string { return "timeline_revisions" }
