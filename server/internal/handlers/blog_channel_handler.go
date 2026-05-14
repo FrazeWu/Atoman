@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -25,6 +27,7 @@ func SetupBlogChannelRoutes(router *gin.Engine, db *gorm.DB) {
 		blog.GET("/channels/slug/:slug/collections", middleware.OptionalAuthMiddleware(), GetChannelCollectionsBySlug(db))
 		blog.GET("/collections", middleware.OptionalAuthMiddleware(), GetUserCollections(db))
 		blog.GET("/collections/:id", middleware.OptionalAuthMiddleware(), GetCollection(db))
+		blog.GET("/channels/slug/:slug/rss/article", GetChannelArticleRSS(db))
 
 		// Protected routes
 		protected := blog.Group("")
@@ -669,4 +672,74 @@ func DeleteCollection(db *gorm.DB) gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
 	}
+}
+
+// GetChannelArticleRSS outputs a standard RSS 2.0 feed for a channel's published articles.
+// Route: GET /api/blog/channels/slug/:slug/rss/article
+func GetChannelArticleRSS(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		slug := c.Param("slug")
+		var channel model.Channel
+		if err := db.Preload("User").Where("slug = ?", slug).First(&channel).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "channel not found"})
+			return
+		}
+
+		var posts []model.Post
+		db.Where("channel_id = ? AND status = ?", channel.ID, "published").
+			Preload("User").
+			Order("created_at DESC").
+			Limit(50).Find(&posts)
+
+		scheme := c.Request.Header.Get("X-Forwarded-Proto")
+		if scheme == "" {
+			scheme = "https"
+		}
+		siteURL := fmt.Sprintf("%s://%s", scheme, c.Request.Host)
+
+		c.Header("Content-Type", "application/rss+xml; charset=utf-8")
+		c.String(http.StatusOK, buildArticleRSS(channel, posts, siteURL))
+	}
+}
+
+func buildArticleRSS(ch model.Channel, posts []model.Post, siteURL string) string {
+	var items strings.Builder
+	for _, p := range posts {
+		pubDate := p.CreatedAt.Format(time.RFC1123Z)
+		summary := p.Summary
+		if summary == "" && len(p.Content) > 280 {
+			summary = p.Content[:280] + "…"
+		} else if summary == "" {
+			summary = p.Content
+		}
+		authorName := ""
+		if p.User != nil {
+			authorName = p.User.DisplayName
+			if authorName == "" {
+				authorName = p.User.Username
+			}
+		}
+		items.WriteString(fmt.Sprintf(`
+    <item>
+      <title><![CDATA[%s]]></title>
+      <link>%s/post/%s</link>
+      <guid isPermaLink="true">%s/post/%s</guid>
+      <pubDate>%s</pubDate>
+      <description><![CDATA[%s]]></description>
+      <author>%s</author>
+    </item>`, p.Title, siteURL, p.ID, siteURL, p.ID, pubDate, summary, authorName))
+	}
+
+	return fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title><![CDATA[%s]]></title>
+    <link>%s/channel/%s</link>
+    <description><![CDATA[%s]]></description>
+    <language>zh-cn</language>
+    <lastBuildDate>%s</lastBuildDate>
+    %s
+  </channel>
+</rss>`, ch.Name, siteURL, ch.Slug, ch.Description,
+		time.Now().Format(time.RFC1123Z), items.String())
 }
