@@ -43,9 +43,18 @@
 
         <!-- Nav actions -->
         <div class="artist-nav">
-          <RouterLink :to="`/music/artists/${artistId}/edit`" class="nav-btn">编辑</RouterLink>
+          <RouterLink v-if="canDirectEditArtist" :to="`/music/artists/${artistId}/edit`" class="nav-btn">编辑</RouterLink>
+          <button v-else-if="authStore.isAuthenticated && !canDirectEditArtist" class="nav-btn" @click="showArtistProposalModal = true">提交修改建议</button>
           <RouterLink :to="`/music/artists/${artistId}/history`" class="nav-btn">历史</RouterLink>
         </div>
+
+        <CorrectionProposalModal
+          :show="showArtistProposalModal"
+          type="artist"
+          :target-id="artistId"
+          @close="showArtistProposalModal = false"
+          @submitted="showArtistProposalModal = false"
+        />
 
         <!-- Admin status actions -->
         <div v-if="authStore.user?.role === 'admin'" class="admin-actions">
@@ -98,10 +107,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import type { Artist, MusicEntryStatus } from '@/types'
+import CorrectionProposalModal from '@/components/music/CorrectionProposalModal.vue'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -146,6 +156,12 @@ const changeStatus = async (status: MusicEntryStatus) => {
 }
 
 onMounted(fetchArtist)
+
+const canDirectEditArtist = computed(() =>
+  authStore.user?.role === 'admin' || artist.value?.entry_status !== 'confirmed'
+)
+
+const showArtistProposalModal = ref(false)
 </script>
 
 <style scoped>
