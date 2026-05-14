@@ -38,6 +38,7 @@ func ensureSoftDeleteColumns(db *gorm.DB) {
 		&model.AlbumCorrection{},
 		&model.SongCorrection{},
 		&model.ArtistCorrection{},
+		&model.PodcastEpisode{},
 	}
 
 	for _, m := range softDeleteModels {
@@ -233,6 +234,8 @@ func main() {
 			&model.ArtistAlias{},
 			&model.ArtistMerge{},
 			&model.LyricAnnotation{},
+			// Podcast
+			&model.PodcastEpisode{},
 		); err != nil {
 			log.Fatal("Failed to run migrations: ", err)
 		}
