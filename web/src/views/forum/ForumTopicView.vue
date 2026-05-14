@@ -159,7 +159,7 @@
               <div class="reply-editor-wrap">
                 <AEditor
                   v-model="replyContent"
-                  mode="sv"
+                  mode="plain"
                   :enable-mentions="true"
                   placeholder="写下你的回复…（支持 Markdown，@ 提及用户）"
                 />
