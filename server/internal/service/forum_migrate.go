@@ -25,6 +25,11 @@ func RunForumMigrations(db *gorm.DB) error {
 		// tags stored as JSON text array (compatible with StringSlice custom type)
 		db.Exec(`ALTER TABLE forum_topics ADD COLUMN IF NOT EXISTS tags TEXT DEFAULT '[]'`)
 		db.Exec(`ALTER TABLE forum_topics ADD COLUMN IF NOT EXISTS last_reply_at TIMESTAMPTZ`)
+		db.Exec(`ALTER TABLE forum_topics ADD COLUMN IF NOT EXISTS featured BOOLEAN DEFAULT FALSE`)
+		db.Exec(`ALTER TABLE forum_topics ADD COLUMN IF NOT EXISTS is_solved BOOLEAN DEFAULT FALSE`)
+		db.Exec(`ALTER TABLE forum_topics ADD COLUMN IF NOT EXISTS solved_reply_id UUID`)
+		db.Exec(`ALTER TABLE forum_replies ADD COLUMN IF NOT EXISTS depth INT DEFAULT 0`)
+		db.Exec(`ALTER TABLE forum_replies ADD COLUMN IF NOT EXISTS is_solved BOOLEAN DEFAULT FALSE`)
 
 		// Add path column as LTREE (requires extension) and floor_number
 		db.Exec(`ALTER TABLE forum_replies ADD COLUMN IF NOT EXISTS path LTREE`)

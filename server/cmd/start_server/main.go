@@ -236,10 +236,19 @@ func main() {
 			&model.LyricAnnotation{},
 			// Podcast
 			&model.PodcastEpisode{},
+			// Forum extensions
+			&model.ForumReport{},
+			&model.CategoryRequest{},
+			&model.SiteSetting{},
 		); err != nil {
 			log.Fatal("Failed to run migrations: ", err)
 		}
 		log.Println("Database migrations completed")
+
+		// Seed default site settings (idempotent)
+		db.Exec(`INSERT INTO site_settings (key, value, description, updated_at)
+VALUES ('forum.solved_auto_threshold', '10', '回复点赞数达到该值时自动标记为解决方案', NOW())
+ON CONFLICT (key) DO NOTHING`)
 
 		log.Println("Running blog channel field backfill...")
 		backfillBlogChannelFields(db)
