@@ -517,3 +517,18 @@ export interface PersonLocation {
   created_at: string
   updated_at: string
 }
+
+export interface PodcastEpisode {
+  id: string
+  post_id: string
+  post?: Post
+  channel_id: string
+  channel?: Channel
+  audio_url: string
+  duration_sec: number
+  episode_cover_url: string
+  season_number: number
+  episode_number: number
+  created_at: string
+  updated_at: string
+}
