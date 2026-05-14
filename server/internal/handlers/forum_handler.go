@@ -50,6 +50,12 @@ func SetupForumRoutes(router *gin.Engine, db *gorm.DB) {
 
 			// Admin
 			protected.POST("/categories", CreateForumCategory(db))
+			protected.POST("/topics/:id/feature", FeatureForumTopic(db))
+			protected.DELETE("/topics/:id/feature", UnfeatureForumTopic(db))
+			protected.POST("/report", ReportForumContent(db))
+			protected.POST("/category-requests", CreateCategoryRequest(db))
+			protected.GET("/category-requests", GetCategoryRequests(db))
+			protected.POST("/category-requests/:id/review", ReviewCategoryRequest(db))
 		}
 	}
 }
@@ -144,6 +150,9 @@ func GetForumTopics(db *gorm.DB) gin.HandlerFunc {
 			orderClause = "pinned DESC, like_count DESC, reply_count DESC"
 		} else if sort == "active" {
 			orderClause = "pinned DESC, COALESCE(last_reply_at, created_at) DESC"
+		} else if sort == "featured" {
+			query = query.Where("featured = ?", true)
+			orderClause = "created_at DESC"
 		}
 
 		var topics []model.ForumTopic
@@ -536,7 +545,6 @@ func CreateForumReply(db *gorm.DB) gin.HandlerFunc {
 
 		db.Preload("User").First(&reply, "id = ?", reply.ID)
 
-
 		// 3. Log activity
 		service.LogActivity(db, uid, "create_reply", "reply", reply.ID)
 
@@ -793,4 +801,196 @@ func getDisplayName(u *model.User) string {
 		return u.DisplayName
 	}
 	return u.Username
+}
+
+// isAdmin checks whether the authenticated user has the admin role.
+func isAdmin(c *gin.Context) bool {
+	role, _ := c.Get("role")
+	return role == "admin"
+}
+
+// FeatureForumTopic marks a topic as featured (admin only).
+// Route: POST /api/forum/topics/:id/feature
+func FeatureForumTopic(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !isAdmin(c) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "admin only"})
+			return
+		}
+		id := c.Param("id")
+		if err := db.Model(&model.ForumTopic{}).Where("id = ?", id).Update("featured", true).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "featured"})
+	}
+}
+
+// UnfeatureForumTopic removes featured status from a topic (admin only).
+// Route: DELETE /api/forum/topics/:id/feature
+func UnfeatureForumTopic(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !isAdmin(c) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "admin only"})
+			return
+		}
+		id := c.Param("id")
+		if err := db.Model(&model.ForumTopic{}).Where("id = ?", id).Update("featured", false).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "unfeatured"})
+	}
+}
+
+// ReportForumContent submits a report for a topic or reply.
+// Route: POST /api/forum/report
+// Side effect: if topic report count >= 10, auto-close the topic.
+func ReportForumContent(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := c.MustGet("userID").(uuid.UUID)
+
+		var req struct {
+			TargetType string `json:"target_type" binding:"required,oneof=topic reply"`
+			TargetID   string `json:"target_id" binding:"required"`
+			Reason     string `json:"reason" binding:"required,oneof=spam off-topic harassment other"`
+			Note       string `json:"note"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		targetUUID, err := uuid.Parse(req.TargetID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid target_id"})
+			return
+		}
+
+		// Prevent duplicate reports
+		var existing model.ForumReport
+		if db.Where("user_id = ? AND target_type = ? AND target_id = ?", userID, req.TargetType, targetUUID).First(&existing).Error == nil {
+			c.JSON(http.StatusConflict, gin.H{"error": "already reported"})
+			return
+		}
+
+		report := model.ForumReport{
+			UserID:     userID,
+			TargetType: req.TargetType,
+			TargetID:   targetUUID,
+			Reason:     req.Reason,
+			Note:       req.Note,
+		}
+		if err := db.Create(&report).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create report"})
+			return
+		}
+
+		// Auto-collapse topic at threshold
+		const threshold = 10
+		if req.TargetType == "topic" {
+			var count int64
+			db.Model(&model.ForumReport{}).Where("target_type = ? AND target_id = ?", "topic", targetUUID).Count(&count)
+			if count >= threshold {
+				db.Model(&model.ForumTopic{}).Where("id = ?", targetUUID).Update("closed", true)
+			}
+		}
+
+		c.JSON(http.StatusCreated, gin.H{"message": "reported"})
+	}
+}
+
+// CreateCategoryRequest submits a request to create a new forum category.
+// Route: POST /api/forum/category-requests
+func CreateCategoryRequest(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := c.MustGet("userID").(uuid.UUID)
+		var req struct {
+			Name        string `json:"name" binding:"required"`
+			Description string `json:"description"`
+			Reason      string `json:"reason"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		cr := model.CategoryRequest{
+			UserID:      userID,
+			Name:        req.Name,
+			Description: req.Description,
+			Reason:      req.Reason,
+			Status:      "pending",
+		}
+		if err := db.Create(&cr).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed"})
+			return
+		}
+		c.JSON(http.StatusCreated, gin.H{"data": cr})
+	}
+}
+
+// GetCategoryRequests lists pending category requests (admin only).
+// Route: GET /api/forum/category-requests
+func GetCategoryRequests(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !isAdmin(c) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "admin only"})
+			return
+		}
+		var requests []model.CategoryRequest
+		db.Where("status = ?", "pending").Preload("User").Order("created_at ASC").Find(&requests)
+		c.JSON(http.StatusOK, gin.H{"data": requests})
+	}
+}
+
+// ReviewCategoryRequest approves or rejects a category request (admin only).
+// Route: POST /api/forum/category-requests/:id/review
+func ReviewCategoryRequest(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !isAdmin(c) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "admin only"})
+			return
+		}
+		id := c.Param("id")
+		var req struct {
+			Action     string `json:"action" binding:"required,oneof=approve reject"`
+			ReviewNote string `json:"review_note"`
+			Color      string `json:"color"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		adminID := c.MustGet("userID").(uuid.UUID)
+		var cr model.CategoryRequest
+		if err := db.First(&cr, "id = ?", id).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			return
+		}
+
+		cr.Status = req.Action + "d" // "approved" | "rejected"
+		cr.ReviewedBy = &adminID
+		cr.ReviewNote = req.ReviewNote
+		db.Save(&cr)
+
+		if req.Action == "approve" {
+			color := req.Color
+			if color == "" {
+				color = "#6366f1"
+			}
+			cat := model.ForumCategory{
+				Name:        cr.Name,
+				Description: cr.Description,
+				Color:       color,
+			}
+			if err := db.Create(&cat).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "approved but failed to create category"})
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{"data": cr, "category": cat})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"data": cr})
+	}
 }

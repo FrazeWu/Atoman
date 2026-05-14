@@ -44,7 +44,7 @@ export const useForumStore = defineStore('forum', () => {
 
   const fetchTopics = async (params: {
     categoryId?: string
-    sort?: 'latest' | 'top' | 'active'
+    sort?: 'latest' | 'top' | 'active' | 'featured'
     tag?: string
     search?: string
     page?: number

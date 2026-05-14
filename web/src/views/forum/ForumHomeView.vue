@@ -87,6 +87,9 @@
           <button class="tab-btn" @click="router.push('/forum/new')" v-if="authStore.isAuthenticated">
             + 发新话题
           </button>
+          <button class="tab-btn" @click="catReqModalOpen = true" v-if="authStore.isAuthenticated">
+            + 申请新分区
+          </button>
         </div>
       </div>
 
@@ -233,6 +236,33 @@
       </div>
     </main>
   </div>
+
+  <!-- Category Request Modal -->
+  <div
+    v-if="catReqModalOpen"
+    style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center"
+    @click.self="catReqModalOpen = false"
+  >
+    <div style="background:var(--a-color-bg);border:var(--a-border);padding:1.5rem;width:min(480px,90vw);display:flex;flex-direction:column;gap:1rem">
+      <h3 style="margin:0;font-size:.9rem;font-weight:900;text-transform:uppercase">申请新分区</h3>
+      <div style="display:flex;flex-direction:column;gap:.5rem">
+        <label style="font-size:.75rem;font-weight:700">分区名称 *</label>
+        <input v-model="catReqForm.name" style="border:var(--a-border);padding:.5rem;background:var(--a-color-bg);font-size:.85rem" placeholder="分区名称" />
+      </div>
+      <div style="display:flex;flex-direction:column;gap:.5rem">
+        <label style="font-size:.75rem;font-weight:700">分区描述</label>
+        <textarea v-model="catReqForm.description" style="border:var(--a-border);padding:.5rem;background:var(--a-color-bg);font-size:.85rem;resize:vertical;min-height:60px" placeholder="分区用途说明" />
+      </div>
+      <div style="display:flex;flex-direction:column;gap:.5rem">
+        <label style="font-size:.75rem;font-weight:700">申请理由 *</label>
+        <textarea v-model="catReqForm.reason" style="border:var(--a-border);padding:.5rem;background:var(--a-color-bg);font-size:.85rem;resize:vertical;min-height:80px" placeholder="说明为什么需要此分区" />
+      </div>
+      <div style="display:flex;gap:.5rem;justify-content:flex-end">
+        <button @click="catReqModalOpen = false" style="padding:.5rem 1rem;border:var(--a-border);background:none;cursor:pointer;font-size:.8rem">取消</button>
+        <button @click="submitCategoryRequest" style="padding:.5rem 1rem;border:none;background:var(--a-color-fg);color:var(--a-color-bg);cursor:pointer;font-size:.8rem;font-weight:700">提交申请</button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -243,7 +273,7 @@ import { useAuthStore } from '@/stores/auth'
 import ABtn from '@/components/ui/ABtn.vue'
 import AEmpty from '@/components/ui/AEmpty.vue'
 
-type TabKey = 'latest' | 'top' | 'active' | 'new' | 'bookmarked'
+type TabKey = 'latest' | 'top' | 'active' | 'new' | 'bookmarked' | 'featured'
 
 const router = useRouter()
 const forumStore = useForumStore()
@@ -266,14 +296,16 @@ const tabOptions: Record<TabKey, string> = {
   top: '最热',
   new: '未读',
   bookmarked: '已收藏',
+  featured: '精华',
 }
 
-const sortMap: Record<TabKey, 'latest' | 'top' | 'active'> = {
+const sortMap: Record<TabKey, 'latest' | 'top' | 'active' | 'featured'> = {
   latest: 'latest',
   active: 'active',
   top: 'top',
   new: 'latest',
   bookmarked: 'latest',
+  featured: 'featured',
 }
 
 // Popular tags — derived from loaded topics
@@ -472,6 +504,34 @@ onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside)
   if (searchTimer) clearTimeout(searchTimer)
 })
+
+// Category Request
+const API_URL = import.meta.env.VITE_API_URL || '/api'
+const catReqModalOpen = ref(false)
+const catReqForm = ref({ name: '', description: '', reason: '' })
+
+const submitCategoryRequest = async () => {
+  if (!catReqForm.value.name.trim() || !catReqForm.value.reason.trim()) {
+    alert('请填写分区名称和申请理由')
+    return
+  }
+  const res = await fetch(`${API_URL}/forum/category-requests`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authStore.token}`,
+    },
+    body: JSON.stringify(catReqForm.value),
+  })
+  if (res.ok) {
+    catReqModalOpen.value = false
+    catReqForm.value = { name: '', description: '', reason: '' }
+    alert('申请已提交，请等待管理员审核')
+  } else {
+    const d = await res.json()
+    alert(`提交失败: ${d.error || '未知错误'}`)
+  }
+}
 </script>
 
 <style scoped>
