@@ -59,6 +59,13 @@ type Argument struct {
 	ReferencedDebates []Debate     `json:"referenced_debates,omitempty" gorm:"many2many:argument_debate_refs;joinForeignKey:ArgumentID;JoinReferences:DebateID"`
 	IsConcluded       bool         `json:"is_concluded" gorm:"default:false"`
 	Conclusion        string       `json:"conclusion,omitempty" gorm:"type:text"`
+	// Evidence source fields (only used when ArgumentType == "evidence")
+	SourceURL     string `json:"source_url" gorm:"type:varchar(2048);default:''"`
+	SourceTitle   string `json:"source_title" gorm:"type:varchar(512);default:''"`
+	SourceExcerpt string `json:"source_excerpt" gorm:"type:text;default:''"`
+	// Admin moderation
+	IsFolded bool   `json:"is_folded" gorm:"default:false"`
+	FoldNote  string `json:"fold_note" gorm:"type:text;default:''"` // admin note for why folded
 	CreatedAt         time.Time    `json:"created_at"`
 	UpdatedAt         time.Time    `json:"updated_at"`
 }
