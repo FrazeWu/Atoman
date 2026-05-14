@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -13,8 +14,37 @@ import (
 	"atoman/internal/model"
 )
 
-// parseDateTime 尝试多种格式解析时间，支持精确到小时分钟
+// parseDateTime 尝试多种格式解析时间，支持精确到小时分钟，支持负年份（BCE）
+// 负年份格式示例："-0500-01-01"（公元前500年）
 func parseDateTime(s string) (time.Time, error) {
+	// Handle BCE dates: strings starting with '-' indicate negative year
+	if len(s) > 0 && s[0] == '-' {
+		// Extract year (everything up to the second '-')
+		rest := s[1:] // remove leading minus
+		yearEnd := len(rest)
+		for i, c := range rest {
+			if c == '-' {
+				yearEnd = i
+				break
+			}
+		}
+		yearStr := rest[:yearEnd]
+		suffix := ""
+		if yearEnd < len(rest) {
+			suffix = rest[yearEnd:] // e.g. "-01-01"
+		}
+		var year int
+		if _, err := fmt.Sscanf(yearStr, "%d", &year); err == nil {
+			// Rebuild as positive year date, parse, then adjust year
+			positive := fmt.Sprintf("%04d%s", year, suffix)
+			formats := []string{"2006-01-02", "2006-01-02T15:04", "2006-01-02T15:04:05", time.RFC3339}
+			for _, f := range formats {
+				if t, err := time.Parse(f, positive); err == nil {
+					return time.Date(-year, t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), 0, time.UTC), nil
+				}
+			}
+		}
+	}
 	formats := []string{
 		"2006-01-02T15:04",
 		"2006-01-02T15:04:05",
@@ -47,6 +77,8 @@ func SetupTimelineRoutes(router *gin.Engine, db *gorm.DB) {
 			protected.POST("/events", CreateTimelineEvent(db))
 			protected.PUT("/events/:id", UpdateTimelineEvent(db))
 			protected.DELETE("/events/:id", DeleteTimelineEvent(db))
+			protected.GET("/events/:id/history", GetTimelineEventHistory(db))
+			protected.POST("/events/:id/revert/:revision_id", RevertTimelineEvent(db))
 
 			protected.POST("/persons", CreateTimelinePerson(db))
 			protected.PUT("/persons/:id", UpdateTimelinePerson(db))
@@ -185,6 +217,8 @@ func CreateTimelineEvent(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		db.Preload("User").First(&event, event.ID)
+		// Save initial revision
+		saveEventRevision(db, event, userID.(uuid.UUID))
 		c.JSON(http.StatusCreated, gin.H{"data": event})
 	}
 }
@@ -249,6 +283,8 @@ func UpdateTimelineEvent(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		db.Preload("User").First(&event, event.ID)
+		// Save revision snapshot after update
+		saveEventRevision(db, event, userID.(uuid.UUID))
 		c.JSON(http.StatusOK, gin.H{"data": event})
 	}
 }
@@ -633,5 +669,88 @@ func DeletePersonLocation(db *gorm.DB) gin.HandlerFunc {
 
 		db.Delete(&location)
 		c.JSON(http.StatusOK, gin.H{"message": "Location deleted"})
+	}
+}
+
+// saveEventRevision saves a snapshot of the given event as a TimelineRevision.
+func saveEventRevision(db *gorm.DB, event model.TimelineEvent, editorID uuid.UUID) {
+	endDate := ""
+	if event.EndDate != nil {
+		endDate = event.EndDate.Format("2006-01-02")
+	}
+	rev := model.TimelineRevision{
+		EventID:     event.ID,
+		EditorID:    editorID,
+		Title:       event.Title,
+		Description: event.Description,
+		Content:     event.Content,
+		EventDate:   event.EventDate.Format("2006-01-02"),
+		EndDate:     endDate,
+		Location:    event.Location,
+		Source:      event.Source,
+		Category:    event.Category,
+		IsPublic:    event.IsPublic,
+	}
+	db.Create(&rev)
+}
+
+// GetTimelineEventHistory returns revision history for an event.
+// Route: GET /api/timeline/events/:id/history
+func GetTimelineEventHistory(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := c.Param("id")
+		var revisions []model.TimelineRevision
+		if err := db.Preload("Editor").Where("event_id = ?", id).Order("created_at DESC").Find(&revisions).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch history"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"data": revisions})
+	}
+}
+
+// RevertTimelineEvent reverts an event to a specific revision (admin only).
+// Route: POST /api/timeline/events/:id/revert/:revision_id
+func RevertTimelineEvent(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, _ := c.Get("role")
+		if role != "admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Admin only"})
+			return
+		}
+
+		id := c.Param("id")
+		revID := c.Param("revision_id")
+
+		var rev model.TimelineRevision
+		if err := db.First(&rev, "id = ? AND event_id = ?", revID, id).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Revision not found"})
+			return
+		}
+
+		eventDate, _ := parseDateTime(rev.EventDate)
+		updates := map[string]interface{}{
+			"title":       rev.Title,
+			"description": rev.Description,
+			"content":     rev.Content,
+			"event_date":  eventDate,
+			"location":    rev.Location,
+			"source":      rev.Source,
+			"category":    rev.Category,
+			"is_public":   rev.IsPublic,
+		}
+		if rev.EndDate != "" {
+			if endDate, err := parseDateTime(rev.EndDate); err == nil {
+				updates["end_date"] = endDate
+			}
+		} else {
+			updates["end_date"] = nil
+		}
+
+		if err := db.Model(&model.TimelineEvent{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revert event"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "reverted"})
 	}
 }
