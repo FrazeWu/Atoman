@@ -691,7 +691,541 @@ git commit -m "feat(forum): add report modal and admin featured toggle to ForumT
 
 ---
 
-## Task 8：验收
+## Task 8：后端 — SiteSettings 模型 + 迁移注册
+
+**Files:**
+- Create: `server/internal/model/site_settings.go`
+- Modify: `server/cmd/start_server/main.go`
+- Modify: `server/internal/service/forum_migrate.go`
+
+**背景：** 需要存储可配置的站点参数（如 `forum.solved_auto_threshold`），用于 Solved 自动标记阈值。
+
+- [ ] **Step 1: 创建 SiteSettings 模型**
+
+创建 `server/internal/model/site_settings.go`：
+
+```go
+package model
+
+import "time"
+
+// SiteSetting stores administrator-configurable key/value parameters.
+// Keys are namespaced by module: "forum.xxx", "timeline.xxx", etc.
+type SiteSetting struct {
+	Key         string    `json:"key" gorm:"primaryKey"`
+	Value       string    `json:"value" gorm:"not null"`
+	Description string    `json:"description"`
+	UpdatedAt   time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+}
+
+func (SiteSetting) TableName() string { return "site_settings" }
+```
+
+- [ ] **Step 2: 在 AutoMigrate 中注册新模型**
+
+找到 `server/cmd/start_server/main.go` 中 `AutoMigrate` 调用，在 forum 模型列表后添加：
+
+```go
+&model.ForumReport{},
+&model.CategoryRequest{},
+&model.SiteSetting{},
+```
+
+- [ ] **Step 3: 在 forum_migrate.go 的 PostgreSQL 分支中补充新列迁移**
+
+在 `ALTER TABLE forum_topics ADD COLUMN IF NOT EXISTS tags TEXT` 之后添加：
+
+```go
+db.Exec(`ALTER TABLE forum_topics ADD COLUMN IF NOT EXISTS featured BOOLEAN DEFAULT FALSE`)
+db.Exec(`ALTER TABLE forum_topics ADD COLUMN IF NOT EXISTS is_solved BOOLEAN DEFAULT FALSE`)
+db.Exec(`ALTER TABLE forum_topics ADD COLUMN IF NOT EXISTS solved_reply_id UUID`)
+db.Exec(`ALTER TABLE forum_replies ADD COLUMN IF NOT EXISTS depth INT DEFAULT 0`)
+db.Exec(`ALTER TABLE forum_replies ADD COLUMN IF NOT EXISTS is_solved BOOLEAN DEFAULT FALSE`)
+```
+
+- [ ] **Step 4: 种子数据（幂等）**
+
+在 `cmd/start_server/main.go` 的 AutoMigrate 之后添加：
+
+```go
+db.Exec(`INSERT INTO site_settings (key, value, description, updated_at)
+VALUES ('forum.solved_auto_threshold', '10', '回复点赞数达到该值时自动标记为解决方案', NOW())
+ON CONFLICT (key) DO NOTHING`)
+```
+
+- [ ] **Step 5: 更新 ForumTopic 模型字段**
+
+在 `server/internal/model/forum.go` 的 `ForumTopic` struct 中，`Pinned bool` 后添加：
+
+```go
+Featured      bool       `json:"featured" gorm:"default:false"`
+IsSolved      bool       `json:"is_solved" gorm:"default:false"`
+SolvedReplyID *uuid.UUID `json:"solved_reply_id" gorm:"type:uuid"`
+```
+
+在 `ForumReply` struct 的 `FloorNumber int` 后添加：
+
+```go
+Depth    int  `json:"depth" gorm:"default:0"`
+IsSolved bool `json:"is_solved" gorm:"default:false"`
+```
+
+- [ ] **Step 6: 编译验证**
+
+```bash
+cd /Users/fafa/Documents/projects/Atoman/server && go build ./...
+```
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add server/internal/model/site_settings.go server/internal/model/forum.go \
+        server/cmd/start_server/main.go server/internal/service/forum_migrate.go
+git commit -m "feat(forum): add SiteSettings model, IsSolved/Featured/Depth fields, DB migrations"
+```
+
+---
+
+## Task 9：后端 handler — Solved 标记 + 深度校验
+
+**Files:**
+- Modify: `server/internal/handlers/forum_handler.go`
+
+**背景：**
+- `POST /api/forum/replies/:id/solve`：楼主或管理员标记该回复为解决方案；同时检查点赞数是否达到阈值
+- `DELETE /api/forum/replies/:id/solve`：楼主或管理员取消标记
+- `CreateForumReply` 中添加 depth 校验：若 parent 的 depth=1，则返回 400
+
+- [ ] **Step 1: 读取当前 CreateForumReply handler**
+
+```bash
+grep -n "CreateForumReply\|ParentReplyID\|parent_reply_id" /Users/fafa/Documents/projects/Atoman/server/internal/handlers/forum_handler.go | head -10
+```
+
+- [ ] **Step 2: 在 CreateForumReply 中添加 Depth 校验和赋值**
+
+找到 CreateForumReply handler 中创建 `ForumReply` 对象的位置，在创建前添加：
+
+```go
+var depth int
+if req.ParentReplyID != nil {
+    var parent model.ForumReply
+    if err := db.First(&parent, "id = ?", req.ParentReplyID).Error; err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "parent reply not found"})
+        return
+    }
+    if parent.Depth >= 1 {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "nesting limit reached: max 2 levels"})
+        return
+    }
+    depth = parent.Depth + 1
+}
+```
+
+并在 `ForumReply` struct 初始化时加上 `Depth: depth`。
+
+- [ ] **Step 3: 添加 MarkReplySolved handler**
+
+```go
+// MarkReplySolved marks a reply as the solution for its topic.
+// Only the topic author or an admin can call this.
+// A topic can have only one solved reply; marking a new one replaces the previous.
+// Route: POST /api/forum/replies/:id/solve
+func MarkReplySolved(db *gorm.DB) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        replyID := c.Param("id")
+        userID := c.MustGet("userID").(uuid.UUID)
+
+        var reply model.ForumReply
+        if err := db.Preload("Topic").First(&reply, "id = ?", replyID).Error; err != nil {
+            c.JSON(http.StatusNotFound, gin.H{"error": "reply not found"})
+            return
+        }
+
+        // Only topic author or admin
+        isAuthor := reply.Topic != nil && reply.Topic.UserID == userID
+        if !isAuthor && !isAdmin(c) {
+            c.JSON(http.StatusForbidden, gin.H{"error": "only topic author or admin"})
+            return
+        }
+
+        // Clear previous solved reply on this topic
+        db.Model(&model.ForumReply{}).Where("topic_id = ? AND is_solved = ?", reply.TopicID, true).Update("is_solved", false)
+
+        // Mark this reply as solved
+        db.Model(&reply).Update("is_solved", true)
+        replyUUID := reply.ID
+        db.Model(&model.ForumTopic{}).Where("id = ?", reply.TopicID).Updates(map[string]interface{}{
+            "is_solved":       true,
+            "solved_reply_id": replyUUID,
+        })
+
+        c.JSON(http.StatusOK, gin.H{"message": "marked as solution"})
+    }
+}
+
+// UnmarkReplySolved removes the solution mark from a reply.
+// Route: DELETE /api/forum/replies/:id/solve
+func UnmarkReplySolved(db *gorm.DB) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        replyID := c.Param("id")
+        userID := c.MustGet("userID").(uuid.UUID)
+
+        var reply model.ForumReply
+        if err := db.Preload("Topic").First(&reply, "id = ?", replyID).Error; err != nil {
+            c.JSON(http.StatusNotFound, gin.H{"error": "reply not found"})
+            return
+        }
+
+        isAuthor := reply.Topic != nil && reply.Topic.UserID == userID
+        if !isAuthor && !isAdmin(c) {
+            c.JSON(http.StatusForbidden, gin.H{"error": "only topic author or admin"})
+            return
+        }
+
+        db.Model(&reply).Update("is_solved", false)
+        db.Model(&model.ForumTopic{}).Where("id = ? AND solved_reply_id = ?", reply.TopicID, reply.ID).Updates(map[string]interface{}{
+            "is_solved":       false,
+            "solved_reply_id": nil,
+        })
+
+        c.JSON(http.StatusOK, gin.H{"message": "solution mark removed"})
+    }
+}
+```
+
+- [ ] **Step 4: 在 ToggleForumTopicLike / ToggleReplyLike 中触发自动 Solved**
+
+找到点赞 handler（`ToggleForumTopicLike` 或类似函数），在点赞计数更新后，若是 reply 被点赞，添加自动触发逻辑：
+
+```go
+// Auto-mark as solved if like count reaches threshold
+var threshold int
+var setting model.SiteSetting
+if db.First(&setting, "key = ?", "forum.solved_auto_threshold").Error == nil {
+    fmt.Sscanf(setting.Value, "%d", &threshold)
+}
+if threshold > 0 {
+    var updatedReply model.ForumReply
+    db.First(&updatedReply, "id = ?", replyID)
+    if updatedReply.LikeCount >= threshold && !updatedReply.IsSolved {
+        db.Model(&updatedReply).Update("is_solved", true)
+        replyUUID := updatedReply.ID
+        db.Model(&model.ForumTopic{}).Where("id = ? AND is_solved = ?", updatedReply.TopicID, false).Updates(map[string]interface{}{
+            "is_solved":       true,
+            "solved_reply_id": replyUUID,
+        })
+    }
+}
+```
+
+- [ ] **Step 5: 注册路由**
+
+在 protected 路由区域添加：
+
+```go
+protected.POST("/replies/:id/solve", MarkReplySolved(db))
+protected.DELETE("/replies/:id/solve", UnmarkReplySolved(db))
+```
+
+- [ ] **Step 6: 添加 SiteSettings admin 接口**
+
+```go
+// GetSiteSettings returns all site settings (admin only).
+// Route: GET /api/admin/settings
+func GetSiteSettings(db *gorm.DB) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        var settings []model.SiteSetting
+        db.Order("key ASC").Find(&settings)
+        c.JSON(http.StatusOK, gin.H{"data": settings})
+    }
+}
+
+// UpdateSiteSetting updates a site setting value (admin only).
+// Route: PUT /api/admin/settings/:key
+func UpdateSiteSetting(db *gorm.DB) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        key := c.Param("key")
+        var req struct {
+            Value string `json:"value" binding:"required"`
+        }
+        if err := c.ShouldBindJSON(&req); err != nil {
+            c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+            return
+        }
+        if err := db.Model(&model.SiteSetting{}).Where("key = ?", key).Update("value", req.Value).Error; err != nil {
+            c.JSON(http.StatusInternalServerError, gin.H{"error": "failed"})
+            return
+        }
+        c.JSON(http.StatusOK, gin.H{"message": "updated"})
+    }
+}
+```
+
+在 `admin_handler.go` 的路由注册处（或 `forum_handler.go` 末尾）添加，确认挂在 `/api/admin/` 前缀下。
+
+- [ ] **Step 7: 编译验证**
+
+```bash
+cd /Users/fafa/Documents/projects/Atoman/server && go build ./...
+```
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add server/internal/handlers/forum_handler.go server/internal/handlers/admin_handler.go
+git commit -m "feat(forum): add Solved endpoints, depth enforcement, SiteSettings admin API"
+```
+
+---
+
+## Task 10：前端 — ForumNewTopicView Tags 输入
+
+**Files:**
+- Modify: `web/src/views/forum/ForumNewTopicView.vue`
+
+**背景：** 发帖时允许输入自由标签，以 chip 形式显示，回车或逗号分隔确认。
+
+- [ ] **Step 1: 读取当前 ForumNewTopicView 表单**
+
+```bash
+grep -n "content\|title\|form\|submit" /Users/fafa/Documents/projects/Atoman/web/src/views/forum/ForumNewTopicView.vue | head -20
+```
+
+- [ ] **Step 2: 在 form 数据中添加 tags 字段**
+
+在 reactive form 对象中添加：
+
+```typescript
+tags: [] as string[],
+tagInput: '',
+```
+
+- [ ] **Step 3: 在模板 category/title 字段下方添加 Tags 输入区**
+
+```vue
+<!-- Tags -->
+<div class="a-field">
+  <label class="a-label">标签（可选）</label>
+  <div class="tag-input-wrap" style="display:flex;flex-wrap:wrap;gap:.25rem;align-items:center;border:1px solid var(--a-border-color);border-radius:.375rem;padding:.375rem .5rem;min-height:2.25rem">
+    <span
+      v-for="tag in form.tags"
+      :key="tag"
+      style="display:inline-flex;align-items:center;gap:.25rem;background:var(--a-color-surface-2);border-radius:.25rem;padding:.1rem .4rem;font-size:.75rem"
+    >
+      {{ tag }}
+      <button type="button" style="line-height:1;background:none;border:none;cursor:pointer;padding:0;color:var(--a-color-muted)" @click="removeTag(tag)">×</button>
+    </span>
+    <input
+      v-model="form.tagInput"
+      type="text"
+      placeholder="输入标签后按回车"
+      style="border:none;outline:none;background:transparent;font-size:.875rem;min-width:8rem;flex:1"
+      @keydown.enter.prevent="addTag"
+      @keydown.comma.prevent="addTag"
+    />
+  </div>
+  <p style="font-size:.7rem;color:var(--a-color-muted);margin:.25rem 0 0">按回车或逗号分隔，最多 5 个标签</p>
+</div>
+```
+
+- [ ] **Step 4: 添加 addTag / removeTag 函数**
+
+```typescript
+function addTag() {
+  const tag = form.tagInput.replace(/,/g, '').trim()
+  if (!tag || form.tags.includes(tag) || form.tags.length >= 5) {
+    form.tagInput = ''
+    return
+  }
+  form.tags.push(tag)
+  form.tagInput = ''
+}
+
+function removeTag(tag: string) {
+  form.tags = form.tags.filter(t => t !== tag)
+}
+```
+
+- [ ] **Step 5: 确认提交时 tags 包含在 payload 中**
+
+找到提交函数，确认 `tags: form.tags` 包含在 POST body 中。
+
+- [ ] **Step 6: 类型检查**
+
+```bash
+cd /Users/fafa/Documents/projects/Atoman/web && bun run type-check 2>&1 | tail -5
+```
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add web/src/views/forum/ForumNewTopicView.vue
+git commit -m "feat(forum): add tags input to ForumNewTopicView"
+```
+
+---
+
+## Task 11：前端 — ForumHomeView Tags 过滤 + ForumTopicView Solved UI + 子回复折叠
+
+**Files:**
+- Modify: `web/src/views/forum/ForumHomeView.vue`
+- Modify: `web/src/views/forum/ForumTopicView.vue`
+
+### Part A：ForumHomeView — Tags 过滤
+
+- [ ] **Step 1: 添加 activeTag 状态**
+
+```typescript
+const activeTag = ref<string | null>(null)
+```
+
+- [ ] **Step 2: 帖子卡片上的标签 chip 可点击**
+
+在帖子卡片中，标签 chip 绑定点击：
+
+```vue
+<span
+  v-for="tag in topic.tags"
+  :key="tag"
+  class="topic-tag"
+  :class="{ active: activeTag === tag }"
+  style="cursor:pointer;font-size:.7rem;padding:.1rem .35rem;border-radius:.25rem;background:var(--a-color-surface-2)"
+  @click.stop="activeTag = activeTag === tag ? null : tag"
+>{{ tag }}</span>
+```
+
+- [ ] **Step 3: 在 fetchTopics 请求中附加 tag 参数**
+
+```typescript
+if (activeTag.value) params.tag = activeTag.value
+```
+
+- [ ] **Step 4: 显示当前过滤 tag 的 pill + 清除按钮**
+
+在 Tab 栏下方条件渲染：
+
+```vue
+<div v-if="activeTag" style="display:flex;align-items:center;gap:.5rem;font-size:.8rem;padding:.25rem 0">
+  <span>标签筛选：</span>
+  <span style="background:var(--a-color-primary);color:#fff;padding:.1rem .5rem;border-radius:.25rem">{{ activeTag }}</span>
+  <button class="a-btn a-btn-ghost" style="padding:.1rem .35rem;font-size:.75rem" @click="activeTag = null">清除</button>
+</div>
+```
+
+### Part B：ForumTopicView — Solved UI
+
+- [ ] **Step 5: 在回复列表中显示 Solved 徽章**
+
+在回复卡片中，若 `reply.is_solved`，显示绿色徽章：
+
+```vue
+<span v-if="reply.is_solved" style="font-size:.7rem;background:#10b981;color:#fff;padding:.1rem .4rem;border-radius:.25rem;margin-left:.5rem">✓ 解决方案</span>
+```
+
+- [ ] **Step 6: 楼主/管理员可点击"标为解决"按钮**
+
+在回复操作区添加：
+
+```vue
+<button
+  v-if="canMarkSolved(reply)"
+  class="action-btn"
+  :class="{ 'action-active': reply.is_solved }"
+  @click="toggleSolved(reply)"
+>{{ reply.is_solved ? '取消解决' : '标为解决' }}</button>
+```
+
+在 `<script setup>` 添加：
+
+```typescript
+function canMarkSolved(reply: ForumReply): boolean {
+  if (!authStore.isAuthenticated) return false
+  const isTopicAuthor = topic.value?.user_id === authStore.user?.id
+  const isAdminUser = authStore.user?.role === 'admin'
+  return isTopicAuthor || isAdminUser
+}
+
+async function toggleSolved(reply: ForumReply) {
+  const method = reply.is_solved ? 'delete' : 'post'
+  await api[method](`/api/forum/replies/${reply.id}/solve`)
+  reply.is_solved = !reply.is_solved
+  if (topic.value) topic.value.is_solved = !reply.is_solved ? false : true
+}
+```
+
+- [ ] **Step 7: 帖子标题旁显示"已解决"pill**
+
+在帖子标题旁添加：
+
+```vue
+<span v-if="topic.is_solved" style="font-size:.75rem;background:#10b981;color:#fff;padding:.1rem .5rem;border-radius:.25rem;margin-left:.5rem">已解决</span>
+```
+
+### Part C：ForumTopicView — 子回复折叠（默认显示前 2 条）
+
+- [ ] **Step 8: 为顶层回复添加子回复折叠状态**
+
+在 `<script setup>` 添加展开状态 map：
+
+```typescript
+const expandedReplies = reactive<Record<string, boolean>>({})
+
+function isExpanded(parentId: string): boolean {
+  return !!expandedReplies[parentId]
+}
+
+function toggleExpand(parentId: string) {
+  expandedReplies[parentId] = !expandedReplies[parentId]
+}
+
+function getSubReplies(parentId: string): ForumReply[] {
+  return replies.value.filter(r => r.parent_reply_id === parentId)
+}
+```
+
+- [ ] **Step 9: 修改回复渲染逻辑**
+
+子回复列表默认只显示前 2 条，其余折叠：
+
+```vue
+<!-- 子回复区域 -->
+<template v-if="getSubReplies(reply.id).length > 0">
+  <div
+    v-for="sub in (isExpanded(reply.id) ? getSubReplies(reply.id) : getSubReplies(reply.id).slice(0, 2))"
+    :key="sub.id"
+    class="sub-reply"
+    style="margin-left:2rem;border-left:2px solid var(--a-border-color);padding-left:.75rem;margin-top:.5rem"
+  >
+    <!-- 子回复内容（复用已有结构） -->
+  </div>
+  <button
+    v-if="getSubReplies(reply.id).length > 2"
+    class="a-btn a-btn-ghost"
+    style="margin-left:2rem;font-size:.75rem;padding:.2rem .5rem;margin-top:.25rem"
+    @click="toggleExpand(reply.id)"
+  >
+    {{ isExpanded(reply.id) ? '收起' : `展开全部 ${getSubReplies(reply.id).length} 条回复` }}
+  </button>
+</template>
+```
+
+- [ ] **Step 10: 类型检查**
+
+```bash
+cd /Users/fafa/Documents/projects/Atoman/web && bun run type-check 2>&1 | tail -5
+```
+
+- [ ] **Step 11: Commit**
+
+```bash
+git add web/src/views/forum/ForumHomeView.vue web/src/views/forum/ForumTopicView.vue
+git commit -m "feat(forum): add tags filter, solved UI, and sub-reply collapse"
+```
+
+---
+
+## Task 12：验收
 
 - [ ] **Step 1: 后端构建**
 
