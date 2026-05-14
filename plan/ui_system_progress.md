@@ -1,0 +1,83 @@
+# 进度日志：统一风格组件系统
+
+## 2026-05-12
+- 与用户逐步确认了第一批基础组件系统的视觉方向。
+- 已确认整体风格：黑白极简、档案馆 / Brutalist、高对比、0 圆角、2px 黑边。
+- 已确认 AButton 的四类语义及 primary / secondary / danger / ghost 的交互规则。
+- 已确认 AInput / ATextarea 采用扁平化方案，focus 不悬浮、不加阴影，仅靠边框细节变化表达状态。
+- 已确认 ASelect 的 trigger 与 input 同体系，dropdown panel 使用硬阴影，selected 采用左侧标记方案。
+- 已确认 AModal 需要独立标题栏和固定 footer。
+- 已确认 ADropdown / APopover 共用同一套硬风格弹层语言。
+- 已整理出后续实施路线：tokens → 组件 API → 实现顺序 → 页面迁移顺序。
+- 继续与用户确认了 design tokens 的拆分深度与落点：采用更完整的 token 方案，并统一放入 `web/src/style.css` 的全局 CSS variables。
+- 已完成第一版 token 规划，覆盖颜色、边框、圆角、阴影、间距、字号、字重、字距、层级。
+- 已完成第一版组件 API 规划，覆盖 `AButton`、`AInput`、`ATextarea`、`ASelect`、`AModal`、`ADropdown`、`APopover`。
+- 已将第一版 tokens 与基础通用类落入 `web/src/style.css`。
+- 已升级/实现基础组件：
+  - `src/components/ui/ABtn.vue`
+  - `src/components/ui/AInput.vue`
+  - `src/components/ui/ATextarea.vue`
+  - `src/components/ui/AModal.vue`
+  - `src/components/ui/ASelect.vue`
+  - `src/components/ui/ADropdown.vue`
+  - `src/components/ui/APopover.vue`
+- 兼容性策略：`ABtn` 同时兼容旧写法（如 `outline` / `danger`）和新写法（`variant`），以避免一次性修改大量页面。
+- 已执行前端构建验证：`npm run build` 通过。
+- 已完成第一批页面样式统一：
+  - `src/views/feed/FeedView.vue`
+  - `src/views/blog/PostDetailView.vue`
+  - `src/views/forum/ForumHomeView.vue`
+  - `src/views/forum/ForumTopicView.vue`
+- 第一批中保留了代码高亮主题色与 warning 语义色，不强制收口为黑白 tokens，以免损伤内容语义。
+
+## 2026-05-13
+- 已开始第二批页面迁移：
+  - `src/views/music/HomeView.vue`
+  - `src/views/music/AlbumDetailView.vue`
+  - `src/views/music/UploadView.vue`
+  - `src/views/debate/DebateHomeView.vue`
+  - `src/views/debate/DebateTopicView.vue`
+- 已完成这批页面的第一轮统一：
+  - 将主色、边框色、中性灰、surface、success、danger 等基础 UI 色值替换为 `--a-*` tokens
+  - 保留少量 warning / 结论语义色块作为内容语义表现，不强行统一成纯黑白
+- 已再次执行前端构建验证：`npm run build` 通过。
+- 已开始第三批页面迁移：
+  - `src/views/timeline/TimelineHomeView.vue`
+  - `src/views/blog/PostEditorView.vue`
+  - `src/views/blog/BlogHomeView.vue`
+  - `src/components/blog/PostCard.vue`
+  - `src/components/AudioPlayer.vue`
+- 已完成第三批的第一轮统一：
+  - `TimelineHomeView`：将大部分基础黑白/中性灰/边框/背景层级替换为 tokens，保留 warning 与 danger 语义色
+  - `PostEditorView`：保留复杂布局结构，后续可继续抽离，但本轮重点保留在统一 tokens 与组件体系上
+  - `BlogHomeView`：保持与新按钮 / token 体系一致
+  - `PostCard` 与 `AudioPlayer`：完成黑白、灰阶、边框与分隔线的 token 化
+- 已再次执行前端构建验证：`npm run build` 通过。
+- 已开始第四批管理/表单页迁移：
+  - `src/views/music/AdminReviewView.vue`
+  - `src/views/blog/ChannelManageDetailView.vue`
+  - `src/views/blog/CollectionManageView.vue`
+  - `src/views/timeline/PersonListView.vue`
+  - `src/views/timeline/PersonMapView.vue`
+- 已完成第四批第一轮统一：
+  - `CollectionManageView`：替换原生 `<select>` 为 `ASelect`，FAB 改为 token 风格
+  - `ChannelManageDetailView`：危险区和按钮色值收口到 tokens
+  - `PersonListView` / `PersonMapView`：中性灰、黑白、边框与交互色值收口到 tokens
+  - `AdminReviewView`：中性黑白灰收口到 tokens，保留审核语义色块
+- 已再次执行前端构建验证：`npm run build` 通过。
+- 已定位并修复 `src/views/music/EditAlbumView.vue` 的样式错乱：
+  - 根因是模板已部分脱离旧 Tailwind 结构，但文件没有对应的统一 scoped 样式块，导致页面样式缺失
+  - 已将页面重新收口到与 `UploadView` 一致的编辑表单体系
+  - 已补齐完整的 scoped 样式块，使其回到统一 Archive / Brutalist 风格
+- 已再次执行前端构建验证：`npm run build` 通过。
+- 已完成页面级剩余原生 `<select>` 的进一步替换：
+  - `src/views/music/AlbumHistoryView.vue`
+  - `src/views/music/SongHistoryView.vue`
+  - `src/views/music/AdminReviewView.vue`
+  - `src/views/music/UploadView.vue`
+  - `src/views/debate/DebateHomeView.vue`
+  - `src/views/debate/DebateTopicView.vue`
+  - `src/views/blog/CollectionManageView.vue`
+  - `src/views/blog/BlogManageView.vue`
+- 已再次执行前端构建验证：`npm run build` 通过。
+- 当前状态：页面级原生 select 基本已经收口，后续剩余工作主要集中在 `DatetimePicker.vue` 内部控件统一、重复 modal header/footer 壳层清理，以及高频 inline layout style 的进一步抽离。
