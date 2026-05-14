@@ -41,7 +41,7 @@ func FormatFloor(n int) string {
 	return fmt.Sprintf("#%d", n)
 }
 
-// Unused in SQLite path: helper to do path prefix queries
+// PathPrefix returns a LIKE pattern to match all descendants of a path.
 func PathPrefix(path string) string {
 	return path + ".%"
 }

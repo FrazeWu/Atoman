@@ -126,8 +126,7 @@ go run cmd/start_server/main.go &
 验证：
 
 ```bash
-# 若使用 SQLite dev 模式
-sqlite3 atoman_dev.db ".tables" | grep artist_corrections
+psql $DATABASE_URL -c "\dt artist_corrections"
 ```
 
 - [ ] **Step 5: Commit**

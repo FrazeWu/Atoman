@@ -6,7 +6,6 @@ import (
 
 	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
 	"atoman/internal/migrations"
@@ -18,26 +17,13 @@ func main() {
 		log.Println("No .env file found, using environment variables")
 	}
 
-	// Connect to database
-	dbType := os.Getenv("DB_TYPE")
-	if dbType == "" {
-		dbType = "sqlite"
+	// Connect to PostgreSQL
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		log.Fatal("DATABASE_URL environment variable is required")
 	}
 
-	var db *gorm.DB
-	var err error
-
-	if dbType == "postgres" {
-		dsn := os.Getenv("DATABASE_URL")
-		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
-	} else {
-		dbPath := os.Getenv("DB_PATH")
-		if dbPath == "" {
-			dbPath = "./atoman.db"
-		}
-		db, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
-	}
-
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}

@@ -10,7 +10,7 @@
 | State / Router | Pinia 3, Vue Router 4 |
 | Styling | Tailwind CSS v4 |
 | Backend | Go, Gin, GORM, JWT |
-| Database | PostgreSQL (prod) / SQLite (dev) |
+| Database | PostgreSQL |
 | Storage | S3-compatible, MinIO (dev) |
 | Infra | Docker Compose, Nginx, supervisord |
 

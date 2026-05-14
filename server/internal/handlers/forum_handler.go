@@ -132,15 +132,8 @@ func GetForumTopics(db *gorm.DB) gin.HandlerFunc {
 			}
 		}
 		if search != "" {
-			dialect := db.Dialector.Name()
-			if dialect == "postgres" || dialect == "pgx" {
-				query = query.Where("title ILIKE ? OR content ILIKE ?",
-					"%"+search+"%", "%"+search+"%")
-			} else {
-				// SQLite: LIKE is case-insensitive for ASCII
-				query = query.Where("title LIKE ? OR content LIKE ?",
-					"%"+search+"%", "%"+search+"%")
-			}
+			query = query.Where("title ILIKE ? OR content ILIKE ?",
+				"%"+search+"%", "%"+search+"%")
 		}
 
 		var total int64

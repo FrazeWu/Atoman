@@ -38,16 +38,6 @@ func RunForumMigrations(db *gorm.DB) error {
 		if err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_forum_replies_path ON forum_replies USING GIST(path)`).Error; err != nil {
 			return fmt.Errorf("create forum_replies path gist index: %w", err)
 		}
-	} else {
-		// SQLite fallback — path is plain TEXT, GIST not supported
-
-		// Note: SQLite ALTER TABLE ADD COLUMN cannot use IF NOT EXISTS before SQLite 3.25.0
-		// Since we want this to be resilient, we just ignore errors on ADD COLUMN for SQLite
-		db.Exec(`ALTER TABLE forum_topics ADD COLUMN tags TEXT DEFAULT '[]'`)
-		db.Exec(`ALTER TABLE forum_topics ADD COLUMN last_reply_at DATETIME`)
-		db.Exec(`ALTER TABLE forum_replies ADD COLUMN path TEXT`)
-		db.Exec(`ALTER TABLE forum_replies ADD COLUMN floor_number INTEGER DEFAULT 0`)
-		db.Exec(`CREATE INDEX IF NOT EXISTS idx_forum_replies_path ON forum_replies (path)`)
 	}
 
 	// AutoMigrate new tables that use standard GORM-safe types

@@ -9,8 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// StringSlice is a []string that serializes as a JSON array in the database.
-// Compatible with both SQLite (TEXT column) and PostgreSQL (TEXT or JSONB column).
+// StringSlice is a []string that serializes as a JSON text array in PostgreSQL.
 type StringSlice []string
 
 // Value implements driver.Valuer — marshals to JSON string for storage.
