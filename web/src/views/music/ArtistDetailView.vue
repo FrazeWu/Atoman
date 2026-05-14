@@ -101,7 +101,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import type { Artist } from '@/types'
+import type { Artist, MusicEntryStatus } from '@/types'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -129,7 +129,7 @@ const fetchArtist = async () => {
   }
 }
 
-const changeStatus = async (status: string) => {
+const changeStatus = async (status: MusicEntryStatus) => {
   try {
     await fetch(`${API_URL}/artists/${artistId}/status`, {
       method: 'POST',

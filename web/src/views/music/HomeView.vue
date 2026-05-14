@@ -205,7 +205,7 @@ const shouldShowYear = (index: number) =>
     <div class="home-header">
       <h1 class="home-title">
         <template v-if="selectedArtistId">
-          <RouterLink :to="`/music/artists/${selectedArtistId}/detail`" class="artist-title-link">
+          <RouterLink :to="`/music/artists/${selectedArtistId}`" class="artist-title-link">
             {{ selectedArtistName ? selectedArtistName.toUpperCase() : 'ATOMAN' }}
           </RouterLink>
         </template>

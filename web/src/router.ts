@@ -4,47 +4,33 @@ import { useAuthStore } from '@/stores/auth'
 const routes: RouteRecordRaw[] = [
   { path: '/', redirect: '/feed' },
   { path: '/music', component: () => import('@/views/music/HomeView.vue') },
-  { path: '/music/artists/:artistName', component: () => import('@/views/music/HomeView.vue') },
+  { path: '/music/artists', component: () => import('@/views/music/HomeView.vue') },
   { path: '/about', component: () => import('@/views/music/AboutView.vue') },
+  // Album routes (canonical, UUID-based)
+  { path: '/music/albums/new', component: () => import('@/views/music/UploadView.vue'), meta: { requiresAuth: true } },
   { path: '/music/albums/:albumId', component: () => import('@/views/music/AlbumDetailView.vue') },
-  { path: '/music/artists/:artistName/albums/:albumId', component: () => import('@/views/music/AlbumDetailView.vue') },
+  { path: '/music/albums/:albumId/edit', component: () => import('@/views/music/EditAlbumView.vue'), meta: { requiresAuth: true } },
   { path: '/music/albums/:albumId/history', component: () => import('@/views/music/AlbumHistoryView.vue') },
   { path: '/music/albums/:albumId/discussion', component: () => import('@/views/music/AlbumDiscussionView.vue') },
+  // Song-level wiki routes
   { path: '/music/songs/:songId/history', component: () => import('@/views/music/SongHistoryView.vue') },
   { path: '/music/songs/:songId/discussion', component: () => import('@/views/music/SongDiscussionView.vue') },
-  // Artist wiki routes
-  { path: '/music/artists/:artistId/detail', component: () => import('@/views/music/ArtistDetailView.vue') },
+  // Artist routes (canonical, ID-based)
+  {
+    path: '/music/artists/new',
+    component: () => import('@/views/music/AddArtistView.vue'),
+    meta: { requiresAuth: true },
+  },
+  { path: '/music/artists/:artistId', component: () => import('@/views/music/ArtistDetailView.vue') },
   {
     path: '/music/artists/:artistId/edit',
     component: () => import('@/views/music/ArtistEditView.vue'),
     meta: { requiresAuth: true },
   },
   { path: '/music/artists/:artistId/history', component: () => import('@/views/music/ArtistHistoryView.vue') },
-  {
-    path: '/music/albums/:albumId/edit',
-    component: () => import('@/views/music/EditAlbumView.vue'),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: '/music/artists/:artistName/albums/:albumId/edit',
-    component: () => import('@/views/music/EditAlbumView.vue'),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: '/music/contribute',
-    component: () => import('@/views/music/UploadView.vue'),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: '/music/artists/new',
-    component: () => import('@/views/music/AddArtistView.vue'),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: '/music/artists/add',
-    component: () => import('@/views/music/AddArtistView.vue'),
-    meta: { requiresAuth: true },
-  },
+  { path: '/music/artists/:artistId/discussion', component: () => import('@/views/music/ArtistDiscussionView.vue') },
+  // Legacy aliases for backward compatibility
+  { path: '/music/contribute', redirect: '/music/albums/new' },
   { path: '/login', component: () => import('@/views/auth/LoginView.vue') },
   { path: '/register', component: () => import('@/views/auth/LoginView.vue') },
   {
@@ -90,11 +76,6 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/blog/settings',
     component: () => import('@/views/blog/BlogSettingsView.vue'),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: '/blog/notifications',
-    component: () => import('@/views/blog/NotificationsView.vue'),
     meta: { requiresAuth: true },
   },
   { path: '/feed', component: () => import('@/views/feed/FeedView.vue'), meta: { requiresAuth: true } },

@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
-import type { Subscription, SubscriptionGroup, Notification } from '@/types'
+import type { Subscription, SubscriptionGroup } from '@/types'
 import { useAuthStore } from '@/stores/auth'
 import { useApi } from '@/composables/useApi'
 
@@ -15,9 +15,6 @@ export const useFeedStore = defineStore('feed', () => {
   const timeline = ref<any[]>([])
   const activeSource = ref<{ type: string; id: string } | null>(null)
 
-  // Notification state (integrated, no separate notification.ts)
-  const notifications = ref<Notification[]>([])
-  const unreadCount = ref(0)
 
   let pollInterval: ReturnType<typeof setInterval> | null = null
 
@@ -192,74 +189,6 @@ export const useFeedStore = defineStore('feed', () => {
       })
     } catch (e) {
       console.error('Failed to mark all read', e)
-    }
-  }
-
-  // --- Notification Actions (integrated here) ---
-
-  const fetchNotifications = async () => {
-    const authStore = useAuthStore()
-    if (!authStore.isAuthenticated) return
-    try {
-      const res = await fetch(api.notifications.list, {
-        headers: { Authorization: `Bearer ${authStore.token}` },
-      })
-      if (res.ok) {
-        const data = await res.json()
-        notifications.value = data.data || []
-        unreadCount.value = notifications.value.filter((notification) => !notification.read_at).length
-      }
-    } catch (e) {
-      console.error('Failed to fetch notifications', e)
-    }
-  }
-
-  const markRead = async (id: number) => {
-    const authStore = useAuthStore()
-    try {
-      await fetch(api.notifications.read(id), {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${authStore.token}` },
-      })
-      const n = notifications.value.find((n) => n.id === id)
-      if (n && !n.read_at) {
-        n.read_at = new Date().toISOString()
-        unreadCount.value = Math.max(0, unreadCount.value - 1)
-      }
-    } catch (e) {
-      console.error('Failed to mark notification read', e)
-    }
-  }
-
-  const markAllNotificationsRead = async () => {
-    const authStore = useAuthStore()
-    try {
-      await fetch(api.notifications.readAll, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${authStore.token}` },
-      })
-      notifications.value.forEach((n) => {
-        if (!n.read_at) n.read_at = new Date().toISOString()
-      })
-      unreadCount.value = 0
-    } catch (e) {
-      console.error('Failed to mark all notifications read', e)
-    }
-  }
-
-  const startPolling = () => {
-    const authStore = useAuthStore()
-    if (!authStore.isAuthenticated) return
-    fetchNotifications()
-    if (!pollInterval) {
-      pollInterval = setInterval(fetchNotifications, 60_000)
-    }
-  }
-
-  const stopPolling = () => {
-    if (pollInterval) {
-      clearInterval(pollInterval)
-      pollInterval = null
     }
   }
 
@@ -625,13 +554,5 @@ export const useFeedStore = defineStore('feed', () => {
     subscribeToRSS,
     unsubscribeFromRSS,
     isSubscribedToRSS,
-    // Notifications
-    notifications,
-    unreadCount,
-    fetchNotifications,
-    markRead,
-    markAllRead: markAllNotificationsRead,
-    startPolling,
-    stopPolling,
   }
 })

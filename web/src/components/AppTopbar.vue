@@ -22,30 +22,6 @@
 
       <!-- Right side -->
       <div class="nav-right">
-        <!-- Notifications dropdown -->
-        <div v-if="authStore.isAuthenticated" class="dropdown-wrap" data-dropdown="notif">
-          <button class="notif-btn" @click="toggleDropdown('notif')">
-            通知<span v-if="unreadCount > 0" class="notif-count">{{ unreadCount > 9 ? '9+' : unreadCount }}</span>
-          </button>
-          <div v-if="activeDropdown === 'notif'" class="dropdown notif-dropdown">
-            <div v-if="notifications.length === 0" class="notif-drop-empty">暂无通知</div>
-            <div
-              v-for="n in recentNotifications"
-              :key="n.id"
-              class="notif-drop-item"
-              :class="{ unread: !n.read_at }"
-              @click="openNotification(n)"
-            >
-              <span class="notif-drop-dot" v-if="!n.read_at" />
-              <span class="notif-drop-text">{{ n.content }}</span>
-            </div>
-            <div class="dropdown-divider" />
-            <RouterLink to="/blog/notifications" class="dropdown-item notif-drop-all" @click="closeDropdown">
-              查看全部通知
-            </RouterLink>
-          </div>
-        </div>
-
         <!-- User menu -->
         <div v-if="authStore.isAuthenticated" class="dropdown-wrap" data-dropdown="user">
           <button class="user-btn" @click="toggleDropdown('user')">
@@ -72,19 +48,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink, useRouter, useRoute } from 'vue-router'
-import { storeToRefs } from 'pinia'
 import { useAuthStore } from '@/stores/auth'
-import { useFeedStore } from '@/stores/feed'
-import type { Notification } from '@/types'
 
 const authStore = useAuthStore()
-const feedStore = useFeedStore()
 const router = useRouter()
 
 const activeDropdown = ref<string | null>(null)
-const { notifications, unreadCount } = storeToRefs(feedStore)
-
-const recentNotifications = computed(() => notifications.value.slice(0, 5))
 const userInitial = computed(() => (authStore.user?.username || '?').charAt(0).toUpperCase())
 
 const route = useRoute()
@@ -112,7 +81,6 @@ const handleClickOutside = (e: MouseEvent) => {
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
-  if (authStore.isAuthenticated) feedStore.fetchNotifications()
 })
 
 onUnmounted(() => document.removeEventListener('click', handleClickOutside))
@@ -123,17 +91,6 @@ const logout = () => {
   router.push('/login')
 }
 
-const openNotification = async (n: Notification) => {
-  closeDropdown()
-  if (!n.read_at) {
-    await feedStore.markRead(Number(n.id))
-  }
-  if (n.target_type === 'post' && n.target_id) {
-    router.push(`/post/${n.target_id}`)
-  } else {
-    router.push('/blog/notifications')
-  }
-}
 </script>
 
 <style scoped>

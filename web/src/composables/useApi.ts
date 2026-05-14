@@ -13,6 +13,28 @@ export function useApi() {
     album: (id: number | string) => `${apiUrl}/albums/${id}`,
     artists: `${apiUrl}/artists`,
     corrections: `${apiUrl}/corrections`,
+
+    music: {
+      albums: `${apiUrl}/albums`,
+      album: (id: number | string) => `${apiUrl}/albums/${id}`,
+      albumRevisions: (id: number | string) => `${apiUrl}/albums/${id}/revisions`,
+      albumRevision: (id: number | string, version: number | string) => `${apiUrl}/albums/${id}/revisions/${version}`,
+      albumRevisionDiff: (id: number | string) => `${apiUrl}/albums/${id}/revisions/diff`,
+      albumRevert: (id: number | string, version: number | string) => `${apiUrl}/albums/${id}/revert/${version}`,
+      albumDiscussions: (id: number | string) => `${apiUrl}/albums/${id}/discussions`,
+      albumEntryStatus: (id: number | string) => `${apiUrl}/albums/${id}/status`,
+      albumProtection: (id: number | string) => `${apiUrl}/albums/${id}/protection`,
+      artists: `${apiUrl}/artists`,
+      artist: (id: number | string) => `${apiUrl}/artists/${id}`,
+      artistRevisions: (id: number | string) => `${apiUrl}/artists/${id}/revisions`,
+      artistAliases: (id: number | string) => `${apiUrl}/artists/${id}/aliases`,
+      artistEntryStatus: (id: number | string) => `${apiUrl}/artists/${id}/status`,
+      artistDiscussions: (id: number | string) => `${apiUrl}/artists/${id}/discussions`,
+      songAnnotations: (id: number | string) => `${apiUrl}/songs/${id}/annotations`,
+      adminMusicReview: `${apiUrl}/admin/music/entries`,
+      adminMusicConfirm: (id: number | string, type: 'album' | 'artist') =>
+        type === 'album' ? `${apiUrl}/albums/${id}/status` : `${apiUrl}/artists/${id}/status`,
+    },
     
     blog: {
       channels: `${apiUrl}/blog/channels`,
@@ -58,7 +80,7 @@ export function useApi() {
     users: {
       me: `${apiUrl}/users/me`,
       settings: `${apiUrl}/users/me`,          // profile update (display_name, bio, etc)
-      meSettings: `${apiUrl}/users/me/settings`, // app settings (notifications, privacy)
+      meSettings: `${apiUrl}/users/me/settings`,
       profile: (username: string) => `${apiUrl}/users/by-username/${username}`,
       follow: (userUuid: string) => `${apiUrl}/users/${userUuid}/follow`,
       followers: (userUuid: string) => `${apiUrl}/users/${userUuid}/followers`,
@@ -72,10 +94,5 @@ export function useApi() {
       rss: (username: string) => `${apiUrl}/feed/rss/${username}`,
     },
     
-    notifications: {
-      list: `${apiUrl}/notifications`,
-      read: (id: number) => `${apiUrl}/notifications/${id}/read`,
-      readAll: `${apiUrl}/notifications/read-all`,
-    }
   };
 }

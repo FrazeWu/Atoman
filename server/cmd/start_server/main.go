@@ -35,7 +35,6 @@ func ensureSoftDeleteColumns(db *gorm.DB) {
 		&model.Comment{},
 		&model.FeedSource{},
 		&model.FeedItem{},
-		&model.Notification{},
 		&model.AlbumCorrection{},
 		&model.SongCorrection{},
 	}
@@ -207,8 +206,7 @@ func main() {
 			&model.FeedItemStar{},
 			&model.ReadingListItem{},
 			&model.SubscriptionGroup{},
-			&model.Notification{},
-			&model.ForumCategory{},
+				&model.ForumCategory{},
 			&model.ForumTopic{},
 			&model.ForumReply{},
 			&model.ForumLike{},
@@ -344,7 +342,6 @@ func main() {
 	handlers.SetupBlogInteractionRoutes(r, db)
 	handlers.SetupBlogUploadRoutes(r, db, s3Client)
 	handlers.SetupFeedRoutes(r, db)
-	handlers.SetupNotificationRoutes(r, db)
 	handlers.SetupSongRoutes(r, db, s3Client)
 	handlers.SetupAlbumRoutes(r, db, s3Client)
 	handlers.SetupArtistRoutes(r, db)

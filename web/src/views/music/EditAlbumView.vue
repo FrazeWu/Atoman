@@ -208,23 +208,36 @@ const authStore = useAuthStore();
 const playerStore = usePlayerStore();
 const api = useApi();
 
-// Get album and artist names from route params
-const albumName = decodeURIComponent(route.params.albumId as string);
-const artistName = route.params.artistName ? decodeURIComponent(route.params.artistName as string) : null;
+// Support both UUID-based routing (new canonical) and name-based routing (legacy)
+const albumIdParam = decodeURIComponent(route.params.albumId as string);
+const isUuidRoute = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(albumIdParam);
 
-// Find album UUID by matching songs
-const albumUuid = computed(() => {
-  const matchingSong = playerStore.songs.find(song => {
-    const albumMatch = song.album.toLowerCase() === albumName.toLowerCase();
-    if (artistName) {
-      return albumMatch && song.artist.toLowerCase() === artistName.toLowerCase();
-    }
-    return albumMatch;
-  });
-  return matchingSong ? String(matchingSong.album_id) : null;
+// Resolved UUID — set during onMounted
+const resolvedAlbumUuid = ref<string | null>(isUuidRoute ? albumIdParam : null);
+
+// Legacy name-based fallback via player store
+const albumSongsByName = computed(() => {
+  if (isUuidRoute) return [];
+  return playerStore.songs.filter(
+    song => song.album.toLowerCase() === albumIdParam.toLowerCase()
+  );
+});
+
+const albumUuid = computed(() => resolvedAlbumUuid.value);
+
+const albumSongs = computed(() => {
+  const uuid = albumUuid.value;
+  if (!uuid) return [];
+  return playerStore.songs.filter(song => String(song.album_id) === uuid);
 });
 
 const formData = reactive({
+  artist: [] as Artist[],
+  album: '',
+  releaseDate: '',
+});
+
+const originalFormData = reactive({
   artist: [] as Artist[],
   album: '',
   releaseDate: '',
@@ -238,13 +251,6 @@ const coverPreview = ref<string>('');
 const originalCoverUrl = ref<string>('');
 const draggingIndex = ref<number | null>(null);
 
-const originalFormData = reactive({
-  artist: [] as Artist[],
-  album: '',
-  releaseDate: '',
-});
-
-
 const isLoading = ref(true);
 const isSaving = ref(false);
 const currentTrackIndex = ref(0);
@@ -256,48 +262,89 @@ const deleteConfirmTitle = ref('请确认删除');
 const deleteConfirmMessage = ref('该操作不可撤销，是否继续？');
 let pendingDeleteAction: (() => void) | null = null;
 
-const albumSongs = computed(() => {
-  const uuid = albumUuid.value;
-  if (!uuid) return [];
-  return playerStore.songs.filter(song => String(song.album_id) === uuid);
-});
-
 onMounted(async () => {
   if (!authStore.isAuthenticated) {
     router.push('/login');
     return;
   }
 
-  await playerStore.fetchSongs();
+  if (isUuidRoute) {
+    // UUID-based: load album directly from API
+    try {
+      const res = await fetch(`${api.url}/albums/${albumIdParam}`, {
+        headers: { Authorization: `Bearer ${authStore.token}` },
+      });
+      if (!res.ok) throw new Error('Album not found');
+      const albumData = await res.json();
+      const album = albumData;
 
-  if (albumSongs.value.length === 0) {
-    alert('专辑未找到');
-    router.push('/');
-    return;
+      // Populate form from API response
+      formData.artist = (album.artists || []).map((a: any) => ({ id: a.id, name: a.name }));
+      formData.album = album.title || '';
+      formData.releaseDate = album.release_date
+        ? album.release_date.substring(0, 10)
+        : '';
+
+      originalFormData.artist = [...formData.artist];
+      originalFormData.album = formData.album;
+      originalFormData.releaseDate = formData.releaseDate;
+
+      originalCoverUrl.value = album.cover_url || '';
+      coverPreview.value = album.cover_url || '';
+
+      // Load songs for the album
+      await playerStore.fetchSongs();
+      tracks.value = albumSongs.value.map((song, index) => ({
+        id: `existing-${song.id}`,
+        title: song.title,
+        track_number: song.track_number || index + 1,
+        isExisting: true,
+        songId: song.id,
+      }));
+    } catch {
+      alert('专辑未找到');
+      router.push('/music');
+      return;
+    }
+  } else {
+    // Legacy name-based: load from player store
+    await playerStore.fetchSongs();
+
+    // Resolve UUID from name
+    const matchingSong = albumSongsByName.value[0];
+    if (!matchingSong) {
+      alert('专辑未找到');
+      router.push('/music');
+      return;
+    }
+    resolvedAlbumUuid.value = String(matchingSong.album_id);
+
+    const firstSong = albumSongs.value[0];
+    if (!firstSong) {
+      alert('专辑未找到');
+      router.push('/music');
+      return;
+    }
+
+    formData.artist = firstSong.artist ? [{ id: (firstSong as any).artist_id || 0, name: firstSong.artist }] : [];
+    formData.album = firstSong.album;
+    formData.releaseDate = firstSong.release_date;
+
+    originalFormData.artist = [...formData.artist];
+    originalFormData.album = firstSong.album;
+    originalFormData.releaseDate = firstSong.release_date;
+
+    originalCoverUrl.value = firstSong.cover_url || '';
+    coverPreview.value = firstSong.cover_url || '';
+
+    tracks.value = albumSongs.value.map((song, index) => ({
+      id: `existing-${song.id}`,
+      title: song.title,
+      track_number: index + 1,
+      isExisting: true,
+      songId: song.id,
+    }));
   }
-
-  const firstSong = albumSongs.value[0];
-
-  // Build Artist array from song data
-  const artistObj: Artist = { id: (firstSong as any).artist_id || 0, name: firstSong.artist };
-  formData.artist = firstSong.artist ? [artistObj] : [];
-  formData.album = firstSong.album;
-  formData.releaseDate = firstSong.release_date;
-
-  originalFormData.artist = [...formData.artist];
-  originalFormData.album = firstSong.album;
-  originalFormData.releaseDate = firstSong.release_date;
-
-  originalCoverUrl.value = firstSong.cover_url || '';
-  coverPreview.value = firstSong.cover_url || '';
-
-  tracks.value = albumSongs.value.map((song, index) => ({
-    id: `existing-${song.id}`,
-    title: song.title,
-    track_number: index + 1,
-    isExisting: true,
-    songId: song.id
-  }));
 
   isLoading.value = false;
 });

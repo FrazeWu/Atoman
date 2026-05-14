@@ -15,6 +15,7 @@ import (
 
 	"atoman/internal/middleware"
 	"atoman/internal/model"
+	"atoman/internal/service"
 	"atoman/internal/storage"
 )
 
@@ -24,16 +25,18 @@ type AlbumInput struct {
 	Year        int    `form:"year"`
 	ReleaseDate string `form:"release_date"`
 	CoverURL    string `form:"cover_url"`
+	AlbumType   string `form:"album_type"`
+	EditSummary string `form:"edit_summary"`
 }
 
 func SetupAlbumRoutes(router *gin.Engine, db *gorm.DB, s3Client *s3.S3) {
+	revisionService := service.NewRevisionService(db)
 	albums := router.Group("/api/albums")
 	{
 		albums.GET("", GetAlbumsHandler(db))
 		albums.GET("/:id", GetAlbumHandler(db))
-		albums.POST("", middleware.AuthMiddleware(), middleware.AdminMiddleware(db), CreateAlbumHandler(db, s3Client))
-		// REMOVED AdminMiddleware - now allows all authenticated users to edit
-		albums.PUT("/:id", middleware.AuthMiddleware(), UpdateAlbumHandler(db, s3Client))
+		albums.POST("", middleware.AuthMiddleware(), CreateAlbumHandler(db, s3Client))
+		albums.PUT("/:id", middleware.AuthMiddleware(), UpdateAlbumHandler(db, s3Client, revisionService))
 		albums.DELETE("/:id", middleware.AuthMiddleware(), middleware.AdminMiddleware(db), DeleteAlbumHandler(db, s3Client))
 	}
 }
@@ -164,6 +167,11 @@ func CreateAlbumHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 			return
 		}
 
+		albumType := strings.TrimSpace(input.AlbumType)
+		if albumType == "" {
+			albumType = "album"
+		}
+
 		album := model.Album{
 			Title:       input.Title,
 			Year:        year,
@@ -171,6 +179,8 @@ func CreateAlbumHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 			CoverURL:    coverURL,
 			CoverSource: coverSource,
 			Status:      "open",
+			EntryStatus: "open",
+			AlbumType:   albumType,
 			UploadedBy:  userID,
 		}
 		if album.CoverSource == "" {
@@ -222,12 +232,12 @@ func splitArtistNames(value string) []string {
 	return names
 }
 
-func UpdateAlbumHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
+func UpdateAlbumHandler(db *gorm.DB, s3Client *s3.S3, revisionService *service.RevisionService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 
 		var album model.Album
-		if err := db.Preload("Artists").First(&album, "id = ?", id).Error; err != nil {
+		if err := db.Preload("Artists").Preload("Songs").First(&album, "id = ?", id).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
 				c.JSON(http.StatusNotFound, gin.H{"error": "Album not found"})
 				return
@@ -242,31 +252,25 @@ func UpdateAlbumHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 			return
 		}
 
-		// Get user info from context
+		// Get editor user ID
 		userID, userExists := c.Get("user_id")
-		userRole := "anonymous"
+		if !userExists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
+			return
+		}
+		editorID := userID.(uuid.UUID)
+
+		// Wiki model: any authenticated user can edit open or disputed entries
+		validEditStatuses := map[string]bool{"open": true, "disputed": true}
+		userRole := ""
 		if roleVal, exists := c.Get("role"); exists {
 			if role, ok := roleVal.(string); ok {
 				userRole = role
 			}
 		}
-
-		// Check ownership or admin permission
-		if userRole != "admin" {
-			if !userExists {
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
-				return
-			}
-			// Check if user owns this album
-			if album.UploadedBy != nil && *album.UploadedBy != userID.(uuid.UUID) {
-				c.JSON(http.StatusForbidden, gin.H{"error": "You can only edit your own albums"})
-				return
-			}
-			// If album has no UploadedBy (legacy data), only admin can edit
-			if album.UploadedBy == nil {
-				c.JSON(http.StatusForbidden, gin.H{"error": "Cannot edit legacy albums without owner information"})
-				return
-			}
+		if userRole != "admin" && !validEditStatuses[album.EntryStatus] {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only admins can edit confirmed or protected entries"})
+			return
 		}
 
 		coverFile, coverHeader, err := c.Request.FormFile("cover")
@@ -370,6 +374,14 @@ func UpdateAlbumHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update album"})
 			return
 		}
+
+		// Create a wiki revision record for this edit
+		editSummary := strings.TrimSpace(input.EditSummary)
+		if editSummary == "" {
+			editSummary = "编辑专辑信息"
+		}
+		albumID, _ := uuid.Parse(id)
+		_ = revisionService.CreateAlbumSnapshot(albumID, editorID, editSummary, db)
 
 		c.JSON(http.StatusOK, album)
 	}

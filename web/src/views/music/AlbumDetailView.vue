@@ -192,8 +192,8 @@ const changeEntryStatus = async (status: string) => {
               ▶ 播放专辑
             </button>
             <RouterLink
-              v-if="authStore.isAuthenticated && albumInfo?.artist"
-              :to="`/music/artists/${encodeURIComponent(albumInfo.artist)}/albums/${encodeURIComponent(albumInfo.title)}/edit`"
+              v-if="canEdit && albumUuid"
+              :to="`/music/albums/${albumUuid}/edit`"
               class="btn-edit-album"
             >
               编辑专辑

@@ -20,24 +20,37 @@
 
       <!-- 工具栏 sticky -->
       <div class="a-editor-toolbar">
-        <button type="button" class="tb-btn" @click="sv_wrapLinePrefix('## ', '标题')">H2</button>
-        <button type="button" class="tb-btn" @click="sv_wrapLinePrefix('### ', '标题')">H3</button>
+        <button type="button" class="tb-btn" title="撤销" @click="sv_undo">↶</button>
+        <button type="button" class="tb-btn" title="重做" @click="sv_redo">↷</button>
+        <button type="button" class="tb-btn" title="插入代码块" @click="sv_insertCodeBlock">Code</button>
+        <button type="button" class="tb-btn" title="清空内容" @click="sv_clearContent">Clear</button>
+        <button
+          type="button"
+          class="tb-btn"
+          :class="{ active: showLineNumbers }"
+          title="显示或隐藏行号"
+          @click="toggleLineNumbers"
+        >
+          LN
+        </button>
         <span class="tb-sep" />
-        <button type="button" class="tb-btn" @click="sv_wrap('**', '**', '粗体文字')">B</button>
-        <button type="button" class="tb-btn" @click="sv_wrap('*', '*', '斜体文字')">I</button>
-        <button type="button" class="tb-btn" @click="sv_wrap('~~', '~~', '删除线')">S</button>
-        <button type="button" class="tb-btn" @click="sv_wrap('`', '`', '代码')">code</button>
-        <button type="button" class="tb-btn" @click="sv_insertLink">Link</button>
-        <button type="button" class="tb-btn" :class="{ uploading: uploadingImage }" @click="triggerImageUpload">
+        <button type="button" class="tb-btn" title="二级标题" @click="sv_wrapLinePrefix('## ', '标题')">H2</button>
+        <button type="button" class="tb-btn" title="三级标题" @click="sv_wrapLinePrefix('### ', '标题')">H3</button>
+        <button type="button" class="tb-btn" title="粗体" @click="sv_wrap('**', '**', '粗体文字')">B</button>
+        <button type="button" class="tb-btn" title="斜体" @click="sv_wrap('*', '*', '斜体文字')">I</button>
+        <button type="button" class="tb-btn" title="删除线" @click="sv_wrap('~~', '~~', '删除线')">S</button>
+        <button type="button" class="tb-btn" title="行内代码" @click="sv_wrap('`', '`', '代码')">code</button>
+        <button type="button" class="tb-btn" title="插入链接" @click="sv_insertLink">Link</button>
+        <button type="button" class="tb-btn" :class="{ uploading: uploadingImage }" title="上传图片" @click="triggerImageUpload">
           {{ uploadingImage ? '…' : 'Img' }}
         </button>
         <input ref="imageInputRef" type="file" accept="image/*" class="tb-hidden-input" @change="handleImageUploadFile" />
         <span class="tb-sep" />
-        <button type="button" class="tb-btn" @click="sv_wrapLinePrefix('> ', '引用内容')">Quote</button>
-        <button type="button" class="tb-btn" @click="sv_wrapLinePrefix('- ', '列表项')">·List</button>
-        <button type="button" class="tb-btn" @click="sv_wrapLinePrefix('1. ', '列表项')">1.List</button>
-        <button type="button" class="tb-btn" @click="sv_insertTable">Table</button>
-        <button type="button" class="tb-btn" @click="sv_insertHr">HR</button>
+        <button type="button" class="tb-btn" title="引用" @click="sv_wrapLinePrefix('> ', '引用内容')">Quote</button>
+        <button type="button" class="tb-btn" title="无序列表" @click="sv_wrapLinePrefix('- ', '列表项')">·List</button>
+        <button type="button" class="tb-btn" title="有序列表" @click="sv_wrapLinePrefix('1. ', '列表项')">1.List</button>
+        <button type="button" class="tb-btn" title="插入表格" @click="sv_insertTable">Table</button>
+        <button type="button" class="tb-btn" title="插入分割线" @click="sv_insertHr">HR</button>
         <template v-if="enableEmbeds">
           <span class="tb-sep" />
           <button type="button" class="tb-btn" @click="insertEmbed('post')">POST</button>
@@ -94,10 +107,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { EditorView, keymap, scrollPastEnd } from '@codemirror/view'
-import { EditorState, Text } from '@codemirror/state'
-import { defaultKeymap, historyKeymap, history, indentWithTab } from '@codemirror/commands'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { EditorView, keymap, scrollPastEnd, lineNumbers, highlightActiveLineGutter } from '@codemirror/view'
+import { Compartment, EditorState } from '@codemirror/state'
+import { defaultKeymap, historyKeymap, history, indentWithTab, undo, redo } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import * as Y from 'yjs'
@@ -152,6 +165,8 @@ const svPreviewHtml = computed(() => renderMarkdown(props.modelValue))
 // ── SV: CodeMirror ──────────────────────────────────────
 const cmContainerRef = ref<HTMLElement | null>(null)
 const previewPaneRef = ref<HTMLElement | null>(null)
+const showLineNumbers = ref(false)
+const lineNumberCompartment = new Compartment()
 let cmView: EditorView | null = null
 
 // ── Collab ──────────────────────────────────────────────
@@ -200,6 +215,7 @@ function initCodeMirror() {
     history(),
     keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
     markdown({ codeLanguages: languages }),
+    lineNumberCompartment.of([]),
     EditorView.lineWrapping,
     scrollPastEnd(),
     EditorView.domEventHandlers({
@@ -329,6 +345,46 @@ function sv_insertTable() {
 function sv_insertHr() {
   const { from } = getCmSelection()
   cmInsert(from, from, '\n---\n')
+}
+
+function sv_insertCodeBlock() {
+  const { from, to, selectedText } = getCmSelection()
+  const body = selectedText || '代码'
+  const newText = `\n\`\`\`txt\n${body}\n\`\`\`\n`
+  const bodyStart = from + '\n```txt\n'.length
+  cmInsert(from, to, newText, bodyStart, bodyStart + body.length)
+}
+
+function sv_undo() {
+  if (!cmView) return
+  undo({ state: cmView.state, dispatch: cmView.dispatch.bind(cmView) })
+  cmView.focus()
+}
+
+function sv_redo() {
+  if (!cmView) return
+  redo({ state: cmView.state, dispatch: cmView.dispatch.bind(cmView) })
+  cmView.focus()
+}
+
+function sv_clearContent() {
+  if (!cmView) return
+  if (!window.confirm('确认清空内容？')) return
+  const current = cmView.state.doc.toString()
+  if (!current) return
+  cmInsert(0, current.length, '')
+}
+
+function lineNumberExtensions() {
+  return showLineNumbers.value ? [lineNumbers(), highlightActiveLineGutter()] : []
+}
+
+function toggleLineNumbers() {
+  if (!cmView) return
+  showLineNumbers.value = !showLineNumbers.value
+  cmView.dispatch({
+    effects: lineNumberCompartment.reconfigure(lineNumberExtensions()),
+  })
 }
 
 function insertEmbed(kind: 'post' | 'music' | 'video') {

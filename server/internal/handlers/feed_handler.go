@@ -73,16 +73,6 @@ func SetupFeedRoutes(router *gin.Engine, db *gorm.DB) {
 	}
 }
 
-func SetupNotificationRoutes(router *gin.Engine, db *gorm.DB) {
-	notifications := router.Group("/api/notifications")
-	notifications.Use(middleware.AuthMiddleware())
-	{
-		notifications.GET("", GetNotifications(db))
-		notifications.PUT("/:id/read", MarkNotificationRead(db))
-		notifications.PUT("/read-all", MarkAllNotificationsRead(db))
-	}
-}
-
 const defaultSubscriptionGroupName = "默认分组"
 
 func getOrCreateDefaultSubscriptionGroup(db *gorm.DB, userID uuid.UUID) (*model.SubscriptionGroup, error) {
@@ -141,6 +131,113 @@ type SubscriptionInput struct {
 	Title      string     `json:"title"`
 }
 
+func buildFeedSourceHash(targetType string, targetID *uuid.UUID, rssURL string) string {
+	var raw string
+	if targetType == "external_rss" {
+		raw = strings.TrimSpace(rssURL)
+	} else {
+		raw = fmt.Sprintf("%s:%s", targetType, targetID.String())
+	}
+
+	h := sha256.New()
+	h.Write([]byte(raw))
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+func populateFeedSourceTitle(db *gorm.DB, source *model.FeedSource, fallbackTitle string) {
+	if strings.TrimSpace(source.Title) != "" {
+		return
+	}
+
+	switch source.SourceType {
+	case "internal_user":
+		if source.SourceID == nil {
+			break
+		}
+		var user model.User
+		if err := db.Where("uuid = ?", source.SourceID).First(&user).Error; err == nil {
+			source.Title = user.Username
+		}
+	case "internal_channel":
+		if source.SourceID == nil {
+			break
+		}
+		var channel model.Channel
+		if err := db.First(&channel, source.SourceID).Error; err == nil {
+			source.Title = channel.Name
+		}
+	case "internal_collection":
+		if source.SourceID == nil {
+			break
+		}
+		var collection model.Collection
+		if err := db.First(&collection, source.SourceID).Error; err == nil {
+			source.Title = collection.Name
+		}
+	case "external_rss":
+		if source.RssURL == "" {
+			break
+		}
+		if _, sourceTitle, err := service.FetchAndParseRSS(source.RssURL); err == nil && strings.TrimSpace(sourceTitle) != "" {
+			source.Title = sourceTitle
+		}
+	}
+
+	if strings.TrimSpace(source.Title) == "" {
+		source.Title = strings.TrimSpace(fallbackTitle)
+	}
+}
+
+func findOrCreateFeedSource(db *gorm.DB, targetType string, targetID *uuid.UUID, rssURL, fallbackTitle string) (*model.FeedSource, error) {
+	sourceHash := buildFeedSourceHash(targetType, targetID, rssURL)
+
+	var source model.FeedSource
+	if err := db.Where("hash = ?", sourceHash).First(&source).Error; err == nil {
+		updates := map[string]any{}
+		if strings.TrimSpace(source.SourceType) == "" {
+			updates["source_type"] = targetType
+		}
+		if targetType == "external_rss" {
+			trimmedURL := strings.TrimSpace(rssURL)
+			if strings.TrimSpace(source.RssURL) == "" && trimmedURL != "" {
+				updates["rss_url"] = trimmedURL
+			}
+		} else if source.SourceID == nil && targetID != nil {
+			updates["source_id"] = *targetID
+		}
+		if strings.TrimSpace(source.Hash) == "" {
+			updates["hash"] = sourceHash
+		}
+		if strings.TrimSpace(source.Title) == "" {
+			populateFeedSourceTitle(db, &source, fallbackTitle)
+			if strings.TrimSpace(source.Title) != "" {
+				updates["title"] = source.Title
+			}
+		}
+		if len(updates) > 0 {
+			if err := db.Model(&source).Updates(updates).Error; err != nil {
+				return nil, err
+			}
+			if err := db.Where("id = ?", source.ID).First(&source).Error; err != nil {
+				return nil, err
+			}
+		}
+		return &source, nil
+	}
+
+	source = model.FeedSource{
+		SourceType: targetType,
+		SourceID:   targetID,
+		RssURL:     strings.TrimSpace(rssURL),
+		Hash:       sourceHash,
+	}
+	populateFeedSourceTitle(db, &source, fallbackTitle)
+	if err := db.Create(&source).Error; err != nil {
+		return nil, err
+	}
+	return &source, nil
+}
+
 func CreateSubscription(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var input SubscriptionInput
@@ -161,8 +258,6 @@ func CreateSubscription(db *gorm.DB) gin.HandlerFunc {
 		userIDVal, _ := c.Get("user_id")
 		userID := userIDVal.(uuid.UUID)
 
-		// Only auto-assign default group for external RSS and internal user subscriptions
-		// Channel and collection subscriptions require explicit group selection
 		var subscriptionGroupID *uuid.UUID
 		if input.TargetType == "external_rss" || input.TargetType == "internal_user" {
 			defaultGroup, err := getOrCreateDefaultSubscriptionGroup(db, userID)
@@ -173,54 +268,10 @@ func CreateSubscription(db *gorm.DB) gin.HandlerFunc {
 			subscriptionGroupID = &defaultGroup.ID
 		}
 
-		var sourceHash string
-		if input.TargetType == "external_rss" {
-			h := sha256.New()
-			h.Write([]byte(strings.TrimSpace(input.RssURL)))
-			sourceHash = hex.EncodeToString(h.Sum(nil))
-		} else {
-			raw := fmt.Sprintf("%s:%s", input.TargetType, input.TargetID.String())
-			h := sha256.New()
-			h.Write([]byte(raw))
-			sourceHash = hex.EncodeToString(h.Sum(nil))
-		}
-
-		var source model.FeedSource
-		if err := db.Where("hash = ?", sourceHash).First(&source).Error; err != nil {
-			source = model.FeedSource{
-				SourceType: input.TargetType,
-				SourceID:   input.TargetID,
-				RssURL:     input.RssURL,
-				Hash:       sourceHash,
-			}
-
-			if input.TargetType == "internal_user" {
-				var user model.User
-				if err := db.Where("uuid = ?", input.TargetID).First(&user).Error; err == nil {
-					source.Title = user.Username
-				}
-			} else if input.TargetType == "internal_channel" {
-				var channel model.Channel
-				if err := db.First(&channel, input.TargetID).Error; err == nil {
-					source.Title = channel.Name
-				}
-			} else if input.TargetType == "internal_collection" {
-				var collection model.Collection
-				if err := db.First(&collection, input.TargetID).Error; err == nil {
-					source.Title = collection.Name
-				}
-			} else if input.TargetType == "external_rss" {
-				_, sourceTitle, err := service.FetchAndParseRSS(input.RssURL)
-				if err == nil {
-					source.Title = sourceTitle
-				}
-			}
-
-			if err := db.Create(&source).Error; err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create feed source"})
-				return
-			}
-
+		source, err := findOrCreateFeedSource(db, input.TargetType, input.TargetID, input.RssURL, input.Title)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create feed source"})
+			return
 		}
 
 		var existingSub model.Subscription
@@ -241,10 +292,8 @@ func CreateSubscription(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		// Always trigger immediate RSS sync for external subscriptions,
-		// even if the feed source already existed before this subscription.
 		if input.TargetType == "external_rss" {
-			go service.SyncSingleRSS(db, source)
+			go service.SyncSingleRSS(db, *source)
 		}
 
 		c.JSON(http.StatusCreated, gin.H{"data": subscription, "message": "ok"})
@@ -1015,74 +1064,15 @@ func GetUserRSS(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func GetNotifications(db *gorm.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		userIDVal, _ := c.Get("user_id")
-		userID := userIDVal.(uuid.UUID)
-
-		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-		offset := (page - 1) * limit
-
-		unreadOnly := c.Query("unread") == "true"
-
-		var notifications []model.Notification
-		query := db.Where("user_id = ?", userID)
-
-		if unreadOnly {
-			query = query.Where("read_at IS NULL")
-		}
-
-		if err := query.Order("created_at DESC").Limit(limit).Offset(offset).Find(&notifications).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch notifications"})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{"data": notifications, "message": "ok"})
-	}
-}
-
-func MarkNotificationRead(db *gorm.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		id := c.Param("id")
-		userIDVal, _ := c.Get("user_id")
-		userID := userIDVal.(uuid.UUID)
-
-		now := time.Now()
-		if err := db.Model(&model.Notification{}).Where("id = ? AND user_id = ?", id, userID).Update("read_at", now).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to mark notification as read"})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	}
-}
-
-func MarkAllNotificationsRead(db *gorm.DB) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		userIDVal, _ := c.Get("user_id")
-		userID := userIDVal.(uuid.UUID)
-
-		now := time.Now()
-		if err := db.Model(&model.Notification{}).Where("user_id = ? AND read_at IS NULL", userID).Update("read_at", now).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to mark all notifications as read"})
-			return
-		}
-
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
-	}
-}
-
-// OPML 导入导出相关结构体
 type OPML struct {
 	XMLName xml.Name `xml:"opml"`
-	Version string   `xml:"version,attr"`
+	Version string   `xml:"version,attr,omitempty"`
 	Head    OPMLHead `xml:"head"`
 	Body    OPMLBody `xml:"body"`
 }
 
 type OPMLHead struct {
-	Title string `xml:"title"`
+	Title string `xml:"title,omitempty"`
 }
 
 type OPMLBody struct {
@@ -1090,47 +1080,42 @@ type OPMLBody struct {
 }
 
 type OPMLOutline struct {
-	Text     string        `xml:"text,attr"`
-	Title    string        `xml:"title,attr"`
-	Type     string        `xml:"type,attr"`
-	XMLURL   string        `xml:"xmlUrl,attr"`
-	HtmlURL  string        `xml:"htmlUrl,attr"`
-	Outlines []OPMLOutline `xml:"outline"`
+	Text     string        `xml:"text,attr,omitempty"`
+	Title    string        `xml:"title,attr,omitempty"`
+	Type     string        `xml:"type,attr,omitempty"`
+	XMLURL   string        `xml:"xmlUrl,attr,omitempty"`
+	Outlines []OPMLOutline `xml:"outline,omitempty"`
 }
 
-// Helper function to import feed from URL
 func importFeedFromURL(db *gorm.DB, userID uuid.UUID, title, xmlURL string) error {
-	// Check if feed source already exists
-	var feedSource model.FeedSource
-	result := db.Where("rss_url = ?", xmlURL).First(&feedSource)
-	if result.Error == gorm.ErrRecordNotFound {
-		// Create new feed source
-		feedSource = model.FeedSource{
-			Title:  title,
-			RssURL: xmlURL,
-		}
-		if err := db.Create(&feedSource).Error; err != nil {
-			return err
-		}
-	} else if result.Error != nil {
-		return result.Error
+	defaultGroup, err := getOrCreateDefaultSubscriptionGroup(db, userID)
+	if err != nil {
+		return err
 	}
 
-	// Check if subscription already exists
+	feedSource, err := findOrCreateFeedSource(db, "external_rss", nil, xmlURL, title)
+	if err != nil {
+		return err
+	}
+
 	var existingSub model.Subscription
 	if err := db.Where("user_id = ? AND feed_source_id = ?", userID, feedSource.ID).First(&existingSub).Error; err == nil {
-		// Already subscribed
 		return nil
 	}
 
-	// Create new subscription
 	subscription := model.Subscription{
-		UserID:       userID,
-		FeedSourceID: feedSource.ID,
-		Title:        title,
+		UserID:              userID,
+		FeedSourceID:        feedSource.ID,
+		Title:               title,
+		SubscriptionGroupID: &defaultGroup.ID,
 	}
 
-	return db.Create(&subscription).Error
+	if err := db.Create(&subscription).Error; err != nil {
+		return err
+	}
+
+	go service.SyncSingleRSS(db, *feedSource)
+	return nil
 }
 
 func ImportOPML(db *gorm.DB) gin.HandlerFunc {

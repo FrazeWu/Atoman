@@ -44,6 +44,15 @@ func SetupDiscussionRoutes(router *gin.Engine, db *gorm.DB) {
 		{
 			adminDiscussions.DELETE("/:id", AdminDeleteDiscussionHandler(db))
 		}
+
+		// Artist discussions
+		artistsDisc := discussions.Group("/artists/:id")
+		{
+			artistsDisc.GET("/discussions", GetEntityDiscussionsHandler(db, "artist"))
+			artistsDisc.POST("/discussions", middleware.AuthMiddleware(), CreateEntityDiscussionHandler(db, "artist"))
+			artistsDisc.DELETE("/discussions/:discussion_id", middleware.AuthMiddleware(), DeleteEntityDiscussionHandler(db))
+			artistsDisc.POST("/discussions/:discussion_id/reply", middleware.AuthMiddleware(), ReplyToEntityDiscussionHandler(db, "artist"))
+		}
 	}
 }
 
@@ -412,5 +421,134 @@ func AdminDeleteDiscussionHandler(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "Discussion deleted by admin"})
+	}
+}
+
+// GetEntityDiscussionsHandler returns discussions for any content type (artist, album, etc.)
+func GetEntityDiscussionsHandler(db *gorm.DB, contentType string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		entityID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+			return
+		}
+		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+		offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+
+		var discussions []model.Discussion
+		var total int64
+
+		query := db.Where("content_type = ? AND content_id = ? AND parent_id IS NULL AND status != ?",
+			contentType, entityID, "deleted")
+		query.Model(&model.Discussion{}).Count(&total)
+
+		if err := query.
+			Preload("User").
+			Preload("Replies.User").
+			Order("created_at DESC").
+			Limit(limit).Offset(offset).
+			Find(&discussions).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch discussions"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"data": discussions, "total": total})
+	}
+}
+
+// CreateEntityDiscussionHandler creates a discussion for any content type
+func CreateEntityDiscussionHandler(db *gorm.DB, contentType string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		entityID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+			return
+		}
+		var input CreateDiscussionInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Content is required"})
+			return
+		}
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		discussion := model.Discussion{
+			ContentType: contentType,
+			ContentID:   entityID,
+			UserID:      userID,
+			Content:     input.Content,
+			ParentID:    input.ParentID,
+			Status:      "active",
+		}
+		if err := db.Create(&discussion).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create discussion"})
+			return
+		}
+		db.Preload("User").First(&discussion, "id = ?", discussion.ID)
+		c.JSON(http.StatusCreated, gin.H{"data": discussion})
+	}
+}
+
+// DeleteEntityDiscussionHandler soft-deletes a discussion (owner or admin)
+func DeleteEntityDiscussionHandler(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		discussionID, err := uuid.Parse(c.Param("discussion_id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid discussion ID"})
+			return
+		}
+		var discussion model.Discussion
+		if err := db.First(&discussion, "id = ?", discussionID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Discussion not found"})
+			return
+		}
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+		userRole, _ := c.Get("role")
+		if discussion.UserID != userID && userRole != "admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden"})
+			return
+		}
+		db.Model(&discussion).Update("status", "deleted")
+		c.JSON(http.StatusOK, gin.H{"message": "Discussion deleted"})
+	}
+}
+
+// ReplyToEntityDiscussionHandler adds a reply to any entity discussion
+func ReplyToEntityDiscussionHandler(db *gorm.DB, contentType string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		entityID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+			return
+		}
+		discussionID, err := uuid.Parse(c.Param("discussion_id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid discussion ID"})
+			return
+		}
+		var input struct {
+			Content string `json:"content" binding:"required"`
+		}
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Content is required"})
+			return
+		}
+		userIDVal, _ := c.Get("user_id")
+		userID := userIDVal.(uuid.UUID)
+
+		reply := model.Discussion{
+			ContentType: contentType,
+			ContentID:   entityID,
+			UserID:      userID,
+			Content:     input.Content,
+			ParentID:    &discussionID,
+			Status:      "active",
+		}
+		if err := db.Create(&reply).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create reply"})
+			return
+		}
+		db.Preload("User").First(&reply, "id = ?", reply.ID)
+		c.JSON(http.StatusCreated, gin.H{"data": reply})
 	}
 }

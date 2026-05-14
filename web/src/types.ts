@@ -1,3 +1,5 @@
+export type MusicEntryStatus = 'open' | 'confirmed' | 'disputed'
+
 export interface ArtistAlias {
   id: string
   artist_id: string
@@ -24,7 +26,7 @@ export interface Artist {
   birth_year?: number;
   death_year?: number;
   members?: string;
-  entry_status?: string;
+  entry_status?: MusicEntryStatus;
   aliases?: ArtistAlias[];
   created_at?: string;
   updated_at?: string;
@@ -39,7 +41,7 @@ export interface Album {
   cover_source?: 'local' | 's3';
   status: 'open' | 'closed' | 'pending' | 'approved' | 'rejected';
   album_type?: string;
-  entry_status?: string;
+  entry_status?: MusicEntryStatus;
   uploaded_by?: number;
   artists?: Artist[];
   created_at?: string;
@@ -312,19 +314,6 @@ export interface OrbitItem {
   duration?: string
   image_url?: string
   is_starred?: boolean
-}
-
-// ===== Notification Types =====
-
-export interface Notification {
-  id: number
-  user_id: string
-  type: 'comment' | 'like' | 'bookmark' | 'system' | 'forum_reply' | 'mention'
-  content: string
-  target_type?: string
-  target_id?: string | number
-  read_at?: string
-  created_at: string
 }
 
 // ===== Forum Types =====

@@ -16,7 +16,6 @@ import { NConfigProvider } from 'naive-ui'
 import AppTopbar from '@/components/AppTopbar.vue'
 import AudioPlayer from '@/components/AudioPlayer.vue'
 import { useAuthStore } from '@/stores/auth'
-import { useFeedStore } from '@/stores/feed'
 
 const themeOverrides = {
   common: {
@@ -28,17 +27,4 @@ const themeOverrides = {
 }
 
 const authStore = useAuthStore()
-const feedStore = useFeedStore()
-
-onMounted(() => {
-  if (authStore.isAuthenticated) feedStore.startPolling()
-})
-
-watch(() => authStore.isAuthenticated, (authenticated) => {
-  if (authenticated) {
-    feedStore.startPolling()
-  } else {
-    feedStore.stopPolling()
-  }
-})
 </script>

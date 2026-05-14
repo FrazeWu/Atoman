@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -351,17 +350,6 @@ func ToggleForumTopicLike(db *gorm.DB) gin.HandlerFunc {
 		} else {
 			db.Create(&model.ForumLike{UserID: uid, TargetType: "topic", TargetID: id})
 			db.Model(&model.ForumTopic{}).Where("id = ?", id).UpdateColumn("like_count", gorm.Expr("like_count + 1"))
-			// Notify topic owner
-			var topic model.ForumTopic
-			if db.First(&topic, "id = ?", id).Error == nil && topic.UserID != uid {
-				db.Create(&model.Notification{
-					UserID:     topic.UserID,
-					Type:       "like",
-					Content:    fmt.Sprintf("有人赞了你的话题「%s」", truncate(topic.Title, 30)),
-					TargetType: "topic",
-					TargetID:   &id,
-				})
-			}
 			c.JSON(http.StatusOK, gin.H{"liked": true})
 		}
 	}
@@ -555,35 +543,6 @@ func CreateForumReply(db *gorm.DB) gin.HandlerFunc {
 
 		db.Preload("User").First(&reply, "id = ?", reply.ID)
 
-		// ── Notifications ───────────────────────────────────────────────────
-		// 1. Notify topic owner if they're not the replier
-		if topic.UserID != uid {
-			db.Create(&model.Notification{
-				UserID:     topic.UserID,
-				Type:       "forum_reply",
-				Content:    fmt.Sprintf("有人回复了你的话题「%s」", truncate(topic.Title, 30)),
-				TargetType: "topic",
-				TargetID:   &topicID,
-			})
-			service.LogActivity(db, topic.UserID, "receive_reply", "reply", reply.ID)
-		}
-
-		// 2. @mention notifications
-		if mentionedUsers, err := service.ParseMentions(db, input.Content); err == nil {
-			for _, mu := range mentionedUsers {
-				if mu.UUID == uid {
-					continue // skip self-mention
-				}
-				uuCopy := mu.UUID
-				db.Create(&model.Notification{
-					UserID:     mu.UUID,
-					Type:       "mention",
-					Content:    fmt.Sprintf("%s 在话题「%s」中提到了你", getDisplayName(reply.User), truncate(topic.Title, 25)),
-					TargetType: "reply",
-					TargetID:   &uuCopy,
-				})
-			}
-		}
 
 		// 3. Log activity
 		service.LogActivity(db, uid, "create_reply", "reply", reply.ID)
