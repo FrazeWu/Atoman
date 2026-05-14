@@ -68,6 +68,9 @@ type ForumTopic struct {
 	Content      string         `json:"content" gorm:"type:text;not null"` // raw Markdown
 	Tags         StringSlice    `json:"tags" gorm:"type:text;default:'[]'"`
 	Pinned       bool           `json:"pinned" gorm:"default:false"`
+	Featured      bool           `json:"featured" gorm:"default:false"`
+	IsSolved      bool           `json:"is_solved" gorm:"default:false"`
+	SolvedReplyID *uuid.UUID     `json:"solved_reply_id" gorm:"type:uuid"`
 	Closed       bool           `json:"closed" gorm:"default:false"`
 	ReplyCount   int            `json:"reply_count" gorm:"default:0"`
 	LikeCount    int            `json:"like_count" gorm:"default:0"`
@@ -91,6 +94,8 @@ type ForumReply struct {
 	Content       string      `json:"content" gorm:"type:text;not null"` // raw Markdown
 	Path          string      `json:"path" gorm:"type:ltree"`            // ltree path (Postgres) / text prefix (SQLite)
 	FloorNumber   int         `json:"floor_number" gorm:"default:0"`
+	Depth         int         `json:"depth" gorm:"default:0"`
+	IsSolved      bool        `json:"is_solved" gorm:"default:false"`
 	LikeCount     int         `json:"like_count" gorm:"default:0"`
 	IsLiked       bool        `json:"is_liked" gorm:"-"` // computed per-user
 }
@@ -139,3 +144,30 @@ type ForumDraft struct {
 }
 
 func (ForumDraft) TableName() string { return "forum_drafts" }
+
+// ForumReport represents a user's report on a topic or reply.
+type ForumReport struct {
+	Base
+	UserID     uuid.UUID `json:"user_id" gorm:"type:uuid;not null;index"`
+	TargetType string    `json:"target_type" gorm:"not null"` // "topic" | "reply"
+	TargetID   uuid.UUID `json:"target_id" gorm:"type:uuid;not null;index"`
+	Reason     string    `json:"reason" gorm:"not null"` // spam | off-topic | harassment | other
+	Note       string    `json:"note" gorm:"type:text"`
+}
+
+func (ForumReport) TableName() string { return "forum_reports" }
+
+// CategoryRequest represents a user's request to create a new forum category.
+type CategoryRequest struct {
+	Base
+	UserID      uuid.UUID  `json:"user_id" gorm:"type:uuid;not null;index"`
+	User        *User      `json:"user,omitempty" gorm:"foreignKey:UserID;references:UUID"`
+	Name        string     `json:"name" gorm:"not null"`
+	Description string     `json:"description" gorm:"type:text"`
+	Reason      string     `json:"reason" gorm:"type:text"`
+	Status      string     `json:"status" gorm:"default:'pending'"` // pending | approved | rejected
+	ReviewedBy  *uuid.UUID `json:"reviewed_by" gorm:"type:uuid"`
+	ReviewNote  string     `json:"review_note" gorm:"type:text"`
+}
+
+func (CategoryRequest) TableName() string { return "category_requests" }
