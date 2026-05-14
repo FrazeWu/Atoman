@@ -3,6 +3,7 @@ import { computed, ref, onMounted } from 'vue';
 import { useRoute, RouterLink } from 'vue-router';
 import { usePlayerStore } from '@/stores/player';
 import { useAuthStore } from '@/stores/auth';
+import CorrectionProposalModal from '@/components/music/CorrectionProposalModal.vue';
 
 const route = useRoute();
 const player = usePlayerStore();
@@ -94,6 +95,12 @@ const canEdit = computed(() => {
   if (protection.value?.protection_level === 'full') return false
   return true
 })
+
+const canDirectEditAlbum = computed(() =>
+  authStore.user?.role === 'admin' || albumDetails.value?.entry_status !== 'confirmed'
+)
+
+const showAlbumProposalModal = ref(false)
 
 // Fetch album discussion count
 const discussionCount = ref<number>(0)
@@ -192,13 +199,28 @@ const changeEntryStatus = async (status: string) => {
               ▶ 播放专辑
             </button>
             <RouterLink
-              v-if="canEdit && albumUuid"
+              v-if="canEdit && canDirectEditAlbum && albumUuid"
               :to="`/music/albums/${albumUuid}/edit`"
               class="btn-edit-album"
             >
               编辑专辑
             </RouterLink>
+            <button
+              v-else-if="authStore.isAuthenticated && !canDirectEditAlbum && albumUuid"
+              class="btn-edit-album"
+              @click="showAlbumProposalModal = true"
+            >
+              提交修改建议
+            </button>
           </div>
+
+          <CorrectionProposalModal
+            :show="showAlbumProposalModal"
+            type="album"
+            :target-id="albumUuid || ''"
+            @close="showAlbumProposalModal = false"
+            @submitted="showAlbumProposalModal = false"
+          />
 
           <div class="wiki-links">
             <RouterLink
