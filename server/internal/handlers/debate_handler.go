@@ -49,6 +49,10 @@ func SetupDebateRoutes(router *gin.Engine, db *gorm.DB) {
 			protected.POST("/arguments/:id/vote", VoteArgument(db))
 			protected.DELETE("/arguments/:id/vote", RemoveVote(db))
 			protected.GET("/arguments/:id/votes", GetArgumentVotes(db)) // admin only
+
+			// Admin fold/unfold
+			protected.POST("/arguments/:id/fold", FoldArgument(db))
+			protected.DELETE("/arguments/:id/fold", UnfoldArgument(db))
 		}
 	}
 }
@@ -407,9 +411,12 @@ func GetDebateArguments(db *gorm.DB) gin.HandlerFunc {
 }
 
 type CreateArgumentInput struct {
-	Content      string             `json:"content" binding:"required"`
-	ArgumentType model.ArgumentType `json:"argument_type" binding:"required"`
-	ParentID     *uuid.UUID         `json:"parent_id"`
+	Content       string             `json:"content" binding:"required"`
+	ArgumentType  model.ArgumentType `json:"argument_type" binding:"required"`
+	ParentID      *uuid.UUID         `json:"parent_id"`
+	SourceURL     string             `json:"source_url"`
+	SourceTitle   string             `json:"source_title"`
+	SourceExcerpt string             `json:"source_excerpt"`
 }
 
 func CreateArgument(db *gorm.DB) gin.HandlerFunc {
@@ -442,11 +449,14 @@ func CreateArgument(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		argument := model.Argument{
-			DebateID:     debate.ID,
-			ParentID:     input.ParentID,
-			UserID:       userID.(uuid.UUID),
-			Content:      input.Content,
-			ArgumentType: input.ArgumentType,
+			DebateID:      debate.ID,
+			ParentID:      input.ParentID,
+			UserID:        userID.(uuid.UUID),
+			Content:       input.Content,
+			ArgumentType:  input.ArgumentType,
+			SourceURL:     input.SourceURL,
+			SourceTitle:   input.SourceTitle,
+			SourceExcerpt: input.SourceExcerpt,
 		}
 
 		if err := db.Create(&argument).Error; err != nil {
@@ -486,8 +496,11 @@ func UpdateArgument(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		updates := map[string]interface{}{
-			"content":       input.Content,
-			"argument_type": input.ArgumentType,
+			"content":        input.Content,
+			"argument_type":  input.ArgumentType,
+			"source_url":     input.SourceURL,
+			"source_title":   input.SourceTitle,
+			"source_excerpt": input.SourceExcerpt,
 		}
 
 		if err := db.Model(&argument).Updates(updates).Error; err != nil {
@@ -761,5 +774,51 @@ func GetArgumentVotes(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"data": votes})
+	}
+}
+
+// FoldArgument hides an argument from display (admin only).
+// Route: POST /api/debate/arguments/:id/fold
+func FoldArgument(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, _ := c.Get("role")
+		if role != "admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Admin only"})
+			return
+		}
+		id := c.Param("id")
+		var req struct {
+			FoldNote string `json:"fold_note"`
+		}
+		c.ShouldBindJSON(&req)
+		if err := db.Model(&model.Argument{}).Where("id = ?", id).Updates(map[string]interface{}{
+			"is_folded": true,
+			"fold_note": req.FoldNote,
+		}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fold"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "folded"})
+	}
+}
+
+// UnfoldArgument makes a previously folded argument visible again (admin only).
+// Route: DELETE /api/debate/arguments/:id/fold
+func UnfoldArgument(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, _ := c.Get("role")
+		if role != "admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Admin only"})
+			return
+		}
+		id := c.Param("id")
+		if err := db.Model(&model.Argument{}).Where("id = ?", id).Updates(map[string]interface{}{
+			"is_folded": false,
+			"fold_note": "",
+		}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to unfold"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "unfolded"})
 	}
 }
