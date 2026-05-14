@@ -9,7 +9,7 @@ import type { Song, User } from '@/types';
 // 统一的审核项接口
 interface ReviewItem {
   id: string; // 唯一标识
-  type: 'song_batch' | 'song_correction' | 'album_correction' | 'album_upload';
+  type: 'song_batch' | 'song_correction' | 'album_correction' | 'album_upload' | 'artist_correction';
   created_at: string;
   user: User;
   
@@ -33,6 +33,10 @@ interface ReviewItem {
   cover_url?: string;
   cover_source?: 'local' | 's3';
   count?: number;
+  // 艺人修改建议
+  artist_id?: string;
+  description?: string;
+  artist_name?: string;
 }
 
 const authStore = useAuthStore();
@@ -47,11 +51,12 @@ const fetchAllPendingItems = async () => {
     const headers = { 'Authorization': `Bearer ${authStore.token}` };
     
     // 并行获取所有待审核数据
-    const [songsRes, songCorrectionsRes, albumCorrectionsRes, albumsRes] = await Promise.all([
+    const [songsRes, songCorrectionsRes, albumCorrectionsRes, albumsRes, artistCorrectionsRes] = await Promise.all([
       fetch(`${api.url}/admin/pending`, { headers }),
       fetch(`${api.url}/admin/pending-song-corrections`, { headers }),
       fetch(`${api.url}/admin/pending-album-corrections`, { headers }),
-      fetch(`${api.url}/admin/pending-albums`, { headers })
+      fetch(`${api.url}/admin/pending-albums`, { headers }),
+      fetch(`${api.url}/admin/pending-artist-corrections`, { headers })
     ]);
 
     const items: ReviewItem[] = [];
@@ -165,6 +170,29 @@ const fetchAllPendingItems = async () => {
 
     // 按时间倒序排列（最新的在前）
     items.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    // 处理艺人修改建议
+    if (artistCorrectionsRes.ok) {
+      const artistCorr = await artistCorrectionsRes.json();
+      if (Array.isArray(artistCorr)) {
+        artistCorr.forEach((corr: any) => {
+          items.push({
+            id: `artist_corr_${corr.id}`,
+            type: 'artist_correction',
+            created_at: corr.created_at,
+            user: corr.user,
+            correction_id: corr.id,
+            artist_id: corr.artist_id,
+            artist_name: corr.artist?.name,
+            description: corr.description,
+            reason: corr.reason,
+            target_title: corr.artist?.name,
+            artist: corr.artist?.name,
+          });
+        });
+      }
+ }
+
     
     reviewItems.value = items;
   } catch (e) {
@@ -254,6 +282,8 @@ const rejectSongBatch = async (item: ReviewItem) => {
 const approveCorrection = async (item: ReviewItem) => {
   const endpoint = item.type === 'song_correction' 
     ? `${api.url}/admin/approve-song-correction/${item.correction_id}`
+    : item.type === 'artist_correction'
+    ? `${api.url}/admin/approve-artist-correction/${item.correction_id}`
     : `${api.url}/admin/approve-album-correction/${item.correction_id}`;
   
   try {
@@ -276,6 +306,8 @@ const approveCorrection = async (item: ReviewItem) => {
 const rejectCorrection = async (item: ReviewItem) => {
   const endpoint = item.type === 'song_correction'
     ? `${api.url}/admin/reject-song-correction/${item.correction_id}`
+    : item.type === 'artist_correction'
+    ? `${api.url}/admin/reject-artist-correction/${item.correction_id}`
     : `${api.url}/admin/reject-album-correction/${item.correction_id}`;
   
   try {
@@ -342,7 +374,8 @@ const getTypeLabel = (type: string) => {
     'song_batch': '歌曲上传',
     'song_correction': '歌曲纠错',
     'album_correction': '专辑修正',
-    'album_upload': '专辑上传'
+    'album_upload': '专辑上传',
+    'artist_correction': '艺人修改建议'
   };
   return labels[type] || type;
 };
@@ -742,6 +775,20 @@ watch([entriesTypeFilter, entriesStatusFilter], () => {
           </div>
 
           <div v-if="item.reason" class="mt-4 p-4 bg-gray-50 border-l-4 border-black">
+            <p class="text-sm font-black uppercase tracking-widest text-gray-500 mb-1">修改原因</p>
+            <p class="text-gray-700">{{ item.reason }}</p>
+          </div>
+        </div>
+
+        <!-- 艺人修改建议 -->
+        <div v-else-if="item.type === 'artist_correction'" class="space-y-4">
+          <div>
+            <p class="text-sm font-black uppercase tracking-widest text-gray-500 mb-2">修改描述</p>
+            <div class="p-4 bg-gray-50 border-2 border-gray-300 text-sm min-h-16">
+              {{ item.description || '（无描述）' }}
+            </div>
+          </div>
+          <div v-if="item.reason" class="p-4 bg-gray-50 border-l-4 border-black">
             <p class="text-sm font-black uppercase tracking-widest text-gray-500 mb-1">修改原因</p>
             <p class="text-gray-700">{{ item.reason }}</p>
           </div>
