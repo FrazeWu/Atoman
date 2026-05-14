@@ -78,15 +78,44 @@
 | 发帖（ForumTopic） | SV（Markdown） |
 | 回复（ForumReply） | plain（纯文本 + 图片） |
 
+### 嵌套回复
+- 最多 **2 层**（顶层回复 depth=0，子回复 depth=1），后端拒绝 depth≥2 的创建请求（400）
+- 子回复默认只显示前 **2 条**，其余折叠，显示"展开 N 条回复"按钮
+- 想回复子回复时，只能发新顶层回复并 `@用户名`（不允许多级嵌套）
+
+### 标签（Tags）
+- 自由输入，无预设标签库，发帖时输入、回车或逗号分隔，显示为 chip
+- 存储：`ForumTopic.Tags` 使用现有 `StringSlice` 类型（JSON text array）
+- 过滤：`GET /api/forum/topics?tag=xxx`，后端用 `tags LIKE '%"xxx"%'`
+- 前端：帖子卡片和详情显示标签 chip，点击跳转过滤列表
+
+### 解决方案标记（Solved）
+- `ForumTopic` 添加 `IsSolved bool`、`SolvedReplyID *uuid.UUID`
+- `ForumReply` 添加 `IsSolved bool`（冗余，方便渲染）
+- **手动标记**：楼主或管理员点击"✓ 标为解决" → `POST /api/forum/replies/:id/solve`
+- **自动标记**：回复点赞数 ≥ `SiteSettings["forum.solved_auto_threshold"]`（默认 10）时自动触发
+- **取消**：楼主或管理员可取消 → `DELETE /api/forum/replies/:id/solve`
+- 一帖只有一个 Solved 标记，新标记自动替换旧标记
+- 前端：被标记回复显示绿色 ✓ 徽章；帖子标题旁显示"已解决"pill；帖子卡片同步显示
+
+### SiteSettings（站点配置表）
+- 用于存储管理员可调整的全局配置参数
+- 表结构：`key`（unique）、`value`（string）、`description`、`updated_at`
+- 命名空间前缀区分模块：`forum.xxx`、`timeline.xxx` 等
+- 管理员后台接口：`GET /api/admin/settings`、`PUT /api/admin/settings/:key`
+- 首期配置项：`forum.solved_auto_threshold`（默认 `"10"`）
+
 ### 核心约束
 - 不允许匿名发帖
 - 分区一层结构，用户可申请新分区，管理员审核
 - 排序：最新 / 最热 / 精华
 - 不做声望系统（后续单独规划）
 - 举报达阈值自动折叠
+- 通知（@提及 + 回复通知）：**独立通知模块**，不在 Forum 首期范围
+- 私信（DM）：**独立私信模块**，不在 Forum 首期范围
 
 ### 首期范围
-分区页 → 主题帖 CRUD → 嵌套回复 → 点赞/收藏 → 置顶/关闭 → 举报入口
+分区页 → 主题帖 CRUD → 嵌套回复（2层上限）→ 点赞/收藏 → 置顶/关闭/精华 → 举报 → 标签 → 解决方案标记 → 分区申请
 
 ---
 
