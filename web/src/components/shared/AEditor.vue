@@ -95,7 +95,14 @@
 
     <!-- ── Plain 模式 ────────────────────────────────────── -->
     <template v-else>
+      <div class="a-editor-plain-toolbar">
+        <button type="button" class="tb-btn" :class="{ uploading: uploadingImage }" title="上传图片" @click="triggerPlainImageUpload">
+          {{ uploadingImage ? '…' : 'Img' }}
+        </button>
+        <input ref="plainImageInputRef" type="file" accept="image/*" class="tb-hidden-input" @change="handlePlainImageUploadFile" />
+      </div>
       <textarea
+        ref="plainTextareaRef"
         v-model="plainValue"
         class="a-editor-plain-textarea"
         :placeholder="placeholder"
@@ -398,6 +405,8 @@ function insertEmbed(kind: 'post' | 'music' | 'video') {
 
 // ── 图片上传 ─────────────────────────────────────────────
 const imageInputRef = ref<HTMLInputElement | null>(null)
+const plainImageInputRef = ref<HTMLInputElement | null>(null)
+const plainTextareaRef = ref<HTMLTextAreaElement | null>(null)
 const uploadingImage = ref(false)
 
 function triggerImageUpload() {
@@ -409,6 +418,47 @@ async function handleImageUploadFile(e: Event) {
   if (!file) return
   if (imageInputRef.value) imageInputRef.value.value = ''
   await uploadImage(file)
+}
+
+function triggerPlainImageUpload() {
+  plainImageInputRef.value?.click()
+}
+
+async function handlePlainImageUploadFile(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  if (plainImageInputRef.value) plainImageInputRef.value.value = ''
+  await uploadImagePlain(file)
+}
+
+async function uploadImagePlain(file: File) {
+  uploadingImage.value = true
+  try {
+    const formData = new FormData()
+    formData.append('image', file)
+    const res = await fetch('/api/blog/upload-image', {
+      method: 'POST',
+      headers: authStore.token ? { Authorization: `Bearer ${authStore.token}` } : {},
+      body: formData,
+    })
+    if (!res.ok) throw new Error('upload failed')
+    const data = await res.json()
+    const url: string = data.url
+    const md = `![图片](${url})`
+    const ta = plainTextareaRef.value
+    if (ta) {
+      const start = ta.selectionStart ?? plainValue.value.length
+      const end = ta.selectionEnd ?? start
+      plainValue.value = plainValue.value.slice(0, start) + md + plainValue.value.slice(end)
+    } else {
+      plainValue.value += md
+    }
+    emit('update:modelValue', plainValue.value)
+  } catch (err) {
+    console.error('Image upload failed', err)
+  } finally {
+    uploadingImage.value = false
+  }
 }
 
 async function uploadImage(file: File) {
@@ -722,6 +772,15 @@ onBeforeUnmount(() => {
 }
 
 /* ── Plain mode ──────────────────────────────────────── */
+.a-editor-plain-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.4rem 0.75rem;
+  border-bottom: 2px solid #000;
+  background: #fff;
+}
+
 .a-editor-plain-textarea {
   width: 100%;
   min-height: 8rem;
