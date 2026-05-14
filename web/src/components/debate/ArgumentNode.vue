@@ -51,25 +51,53 @@
       <ABtn v-if="canReply" size="sm" outline @click="$emit('reference', argument.id, '')">
         引用辩题
       </ABtn>
+      <!-- Admin fold/unfold -->
+      <ABtn v-if="authStore.user?.role === 'admin' && !localIsFolded" size="sm" outline @click="foldArgument">
+        折叠
+      </ABtn>
+      <ABtn v-if="authStore.user?.role === 'admin' && localIsFolded" size="sm" outline @click="unfoldArgument">
+        展开
+      </ABtn>
       <ABtn v-if="canDelete" size="sm" variant="danger" @click="$emit('delete', argument)">
         删除
       </ABtn>
     </div>
   </div>
 
-  <!-- Quote -->
-  <div v-if="quotedArgument" class="mb-3 border-l-4 border-black bg-gray-50 p-3">
-    <div class="text-xs font-black uppercase tracking-widest mb-1">
-      引用 {{ quotedAuthorName }}
-    </div>
-    <p class="text-sm text-gray-600 leading-6">
-      {{ quotedArgument.content.substring(0, 140) }}
-    </p>
+  <!-- Folded overlay -->
+  <div v-if="localIsFolded && authStore.user?.role !== 'admin'" style="padding:.5rem .75rem;color:var(--a-color-muted);font-size:.75rem;font-style:italic">
+    [此论点已被管理员折叠<span v-if="argument.fold_note">：{{ argument.fold_note }}</span>]
   </div>
 
-  <!-- Content -->
-  <div class="mb-3">
-    <p class="font-medium">{{ argument.content }}</p>
+  <!-- Content (dimmed for admin when folded) -->
+  <div v-if="!localIsFolded || authStore.user?.role === 'admin'" :style="localIsFolded ? 'opacity:.4' : ''">
+    <!-- Quote -->
+    <div v-if="quotedArgument" class="mb-3 border-l-4 border-black bg-gray-50 p-3">
+      <div class="text-xs font-black uppercase tracking-widest mb-1">
+        引用 {{ quotedAuthorName }}
+      </div>
+      <p class="text-sm text-gray-600 leading-6">
+        {{ quotedArgument.content.substring(0, 140) }}
+      </p>
+    </div>
+
+    <!-- Content -->
+    <div class="mb-3">
+      <p class="font-medium">{{ argument.content }}</p>
+    </div>
+
+    <!-- Evidence source card -->
+    <div
+      v-if="argument.argument_type === 'evidence' && argument.source_url"
+      style="margin-top:.5rem;padding:.5rem .75rem;border:1px solid var(--a-border);border-radius:.375rem;font-size:.75rem;margin-bottom:.75rem"
+    >
+      <a :href="argument.source_url" target="_blank" rel="noopener noreferrer" style="font-weight:700;display:block;margin-bottom:.2rem">
+        {{ argument.source_title || argument.source_url }}
+      </a>
+      <p v-if="argument.source_excerpt" style="color:var(--a-color-muted);margin:0;font-style:italic">
+        "{{ argument.source_excerpt }}"
+      </p>
+    </div>
   </div>
 
   <!-- References -->
@@ -126,7 +154,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { Argument, Debate } from '@/types'
 import { useAuthStore } from '@/stores/auth'
 import ABtn from '@/components/ui/ABtn.vue'
@@ -147,6 +175,27 @@ const emit = defineEmits<{
 }>()
 
 const authStore = useAuthStore()
+
+const apiBase = import.meta.env.VITE_API_URL || '/api'
+const localIsFolded = ref(props.argument.is_folded ?? false)
+
+const foldArgument = async () => {
+  const note = prompt('折叠理由（可选）：', '') ?? ''
+  const res = await fetch(`${apiBase}/debate/arguments/${props.argument.id}/fold`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authStore.token}` },
+    body: JSON.stringify({ fold_note: note }),
+  })
+  if (res.ok) localIsFolded.value = true
+}
+
+const unfoldArgument = async () => {
+  const res = await fetch(`${apiBase}/debate/arguments/${props.argument.id}/fold`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${authStore.token}` },
+  })
+  if (res.ok) localIsFolded.value = false
+}
 
 const canVote = computed(() => {
   return authStore.isAuthenticated && props.debate.status === 'open'
