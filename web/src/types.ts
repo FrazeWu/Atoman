@@ -352,6 +352,7 @@ export interface ForumTopic {
   content: string          // raw Markdown
   tags: string[]
   pinned: boolean
+  featured: boolean
   closed: boolean
   reply_count: number
   like_count: number

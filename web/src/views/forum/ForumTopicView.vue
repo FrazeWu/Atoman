@@ -26,6 +26,7 @@
       <div class="topic-header">
         <h1 class="topic-title">
           <span v-if="forumStore.currentTopic.pinned" class="badge-pinned">置顶</span>
+          <span v-if="forumStore.currentTopic.featured" class="badge-featured">精华</span>
           <span v-if="forumStore.currentTopic.closed" class="badge-closed">已关闭</span>
           {{ forumStore.currentTopic.title }}
         </h1>
@@ -62,6 +63,21 @@
             class="action-btn"
             :class="{ 'action-btn-active': forumStore.currentTopic.is_bookmarked }"
           >{{ forumStore.currentTopic.is_bookmarked ? '已收藏' : '收藏' }}</button>
+
+          <!-- Report button (non-owner, authenticated) -->
+          <button
+            v-if="authStore.isAuthenticated && authStore.user?.uuid !== forumStore.currentTopic.user_id"
+            @click="reportModalOpen = true"
+            class="action-btn"
+          >举报</button>
+
+          <!-- Admin: feature/unfeature -->
+          <button
+            v-if="authStore.user?.role === 'admin'"
+            @click="toggleFeatured"
+            class="action-btn"
+            :class="{ 'action-btn-active': forumStore.currentTopic.featured }"
+          >{{ forumStore.currentTopic.featured ? '取消精华' : '设为精华' }}</button>
         </div>
       </div>
 
@@ -204,6 +220,36 @@
       class="back-to-top"
       @click="scrollToTop"
     >↑ 顶部</button>
+  </div>
+
+  <!-- Report Modal -->
+  <div
+    v-if="reportModalOpen"
+    style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center"
+    @click.self="reportModalOpen = false"
+  >
+    <div style="background:var(--a-color-bg);border:var(--a-border);padding:1.5rem;width:min(420px,90vw);display:flex;flex-direction:column;gap:1rem">
+      <h3 style="margin:0;font-size:.9rem;font-weight:900;text-transform:uppercase">举报内容</h3>
+      <div style="display:flex;flex-direction:column;gap:.5rem">
+        <label style="font-size:.75rem;font-weight:700">举报原因 *</label>
+        <select v-model="reportForm.reason" style="border:var(--a-border);padding:.5rem;background:var(--a-color-bg);font-size:.85rem">
+          <option value="">请选择原因</option>
+          <option value="spam">垃圾广告</option>
+          <option value="harassment">骚扰攻击</option>
+          <option value="misinformation">虚假信息</option>
+          <option value="off-topic">偏离主题</option>
+          <option value="other">其他</option>
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:.5rem">
+        <label style="font-size:.75rem;font-weight:700">补充说明</label>
+        <textarea v-model="reportForm.note" style="border:var(--a-border);padding:.5rem;background:var(--a-color-bg);font-size:.85rem;resize:vertical;min-height:80px" placeholder="可选：详细说明" />
+      </div>
+      <div style="display:flex;gap:.5rem;justify-content:flex-end">
+        <button @click="reportModalOpen = false" style="padding:.5rem 1rem;border:var(--a-border);background:none;cursor:pointer;font-size:.8rem">取消</button>
+        <button @click="submitReport" style="padding:.5rem 1rem;border:none;background:var(--a-color-fg);color:var(--a-color-bg);cursor:pointer;font-size:.8rem;font-weight:700">提交举报</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -380,6 +426,48 @@ watch(
   () => forumStore.currentTopic,
   () => setTimeout(buildToC, 100),
 )
+
+// Report & Featured
+const API_URL = import.meta.env.VITE_API_URL || '/api'
+const reportModalOpen = ref(false)
+const reportForm = ref({ reason: '', note: '' })
+
+const submitReport = async () => {
+  if (!reportForm.value.reason.trim()) { alert('请选择举报原因'); return }
+  const res = await fetch(`${API_URL}/forum/report`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authStore.token}`,
+    },
+    body: JSON.stringify({
+      target_type: 'topic',
+      target_id: forumStore.currentTopic!.id,
+      reason: reportForm.value.reason,
+      note: reportForm.value.note,
+    }),
+  })
+  if (res.ok) {
+    reportModalOpen.value = false
+    reportForm.value = { reason: '', note: '' }
+    alert('举报已提交')
+  } else {
+    const d = await res.json()
+    alert(`举报失败: ${d.error || '未知错误'}`)
+  }
+}
+
+const toggleFeatured = async () => {
+  const topic = forumStore.currentTopic!
+  const method = topic.featured ? 'DELETE' : 'POST'
+  const res = await fetch(`${API_URL}/forum/topics/${topic.id}/feature`, {
+    method,
+    headers: { Authorization: `Bearer ${authStore.token}` },
+  })
+  if (res.ok) {
+    topic.featured = !topic.featured
+  }
+}
 </script>
 
 <style scoped>
@@ -415,6 +503,18 @@ watch(
   padding: 0.15rem 0.4rem;
   border: 1.5px solid var(--a-color-muted-soft);
   color: var(--a-color-muted-soft);
+  margin-right: 0.6rem;
+  vertical-align: middle;
+}
+
+.badge-featured {
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 0.15rem 0.4rem;
+  border: 1.5px solid var(--a-color-accent, #f59e0b);
+  color: var(--a-color-accent, #f59e0b);
   margin-right: 0.6rem;
   vertical-align: middle;
 }
