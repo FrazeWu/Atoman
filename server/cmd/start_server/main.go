@@ -37,6 +37,7 @@ func ensureSoftDeleteColumns(db *gorm.DB) {
 		&model.FeedItem{},
 		&model.AlbumCorrection{},
 		&model.SongCorrection{},
+		&model.ArtistCorrection{},
 	}
 
 	for _, m := range softDeleteModels {
@@ -191,6 +192,7 @@ func main() {
 			&model.Song{},
 			&model.SongCorrection{},
 			&model.AlbumCorrection{},
+			&model.ArtistCorrection{},
 			&model.Channel{},
 			&model.Collection{},
 			&model.Post{},
