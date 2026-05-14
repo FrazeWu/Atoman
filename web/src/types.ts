@@ -109,6 +109,21 @@ export interface AlbumCorrection {
   rejected_by?: number;
 }
 
+export interface ArtistCorrection {
+  id: string
+  artist_id: string
+  artist?: Artist
+  user_id?: string
+  user?: User
+  description: string
+  reason?: string
+  status: 'pending' | 'approved' | 'rejected'
+  approved_by?: string
+  approved_at?: string
+  created_at: string
+  updated_at: string
+}
+
 export type RepeatMode = 'none' | 'one' | 'all'
 
 export interface User {
