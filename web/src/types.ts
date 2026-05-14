@@ -445,6 +445,11 @@ export interface Argument {
   referenced_debates?: Debate[]
   is_concluded: boolean
   conclusion?: string
+  source_url?: string
+  source_title?: string
+  source_excerpt?: string
+  is_folded?: boolean
+  fold_note?: string
   created_at: string
   updated_at: string
 }
