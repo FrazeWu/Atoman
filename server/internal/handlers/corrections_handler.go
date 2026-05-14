@@ -39,6 +39,7 @@ func SetupCorrectionRoutes(router *gin.Engine, db *gorm.DB, s3Client *s3.S3) {
 	{
 		corrections.POST("/song", middleware.AuthMiddleware(), CreateSongCorrectionHandler(db))
 		corrections.POST("/album", middleware.AuthMiddleware(), CreateAlbumCorrectionHandler(db, s3Client))
+		corrections.POST("/artist", middleware.AuthMiddleware(), CreateArtistCorrectionHandler(db))
 	}
 }
 
@@ -213,5 +214,55 @@ func CreateAlbumCorrectionHandler(db *gorm.DB, s3Client *s3.S3) gin.HandlerFunc 
 			"id":      correction.ID,
 			"status":  status,
 		})
+	}
+}
+
+// CreateArtistCorrectionHandler submits a proposed change for a confirmed artist entry.
+// Route: POST /api/corrections/artist
+// Auth: Required
+func CreateArtistCorrectionHandler(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		uid, exists := c.Get("userID")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+		userID := uid.(uuid.UUID)
+
+		var req struct {
+			ArtistID    string `json:"artist_id" binding:"required"`
+			Description string `json:"description" binding:"required"`
+			Reason      string `json:"reason"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		artistUUID, err := uuid.Parse(req.ArtistID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid artist_id"})
+			return
+		}
+
+		var artist model.Artist
+		if err := db.First(&artist, "id = ?", artistUUID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "artist not found"})
+			return
+		}
+
+		correction := model.ArtistCorrection{
+			ArtistID:    artistUUID,
+			UserID:      &userID,
+			Description: req.Description,
+			Reason:      req.Reason,
+			Status:      "pending",
+		}
+		if err := db.Create(&correction).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create correction"})
+			return
+		}
+
+		c.JSON(http.StatusCreated, gin.H{"data": correction})
 	}
 }
