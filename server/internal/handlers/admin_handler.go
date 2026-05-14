@@ -37,9 +37,9 @@ func SetupAdminRoutes(router *gin.Engine, db *gorm.DB, s3Client *s3.S3) {
 		admin.POST("/approve-album-correction/:id", ApproveAlbumCorrectionHandler(db))
 		admin.POST("/reject-album-correction/:id", RejectAlbumCorrectionHandler(db, s3Client))
 
-			admin.GET("/pending-artist-corrections", GetPendingArtistCorrectionsHandler(db))
-			admin.POST("/approve-artist-correction/:id", ApproveArtistCorrectionHandler(db))
-			admin.POST("/reject-artist-correction/:id", RejectArtistCorrectionHandler(db))
+		admin.GET("/pending-artist-corrections", GetPendingArtistCorrectionsHandler(db))
+		admin.POST("/approve-artist-correction/:id", ApproveArtistCorrectionHandler(db))
+		admin.POST("/reject-artist-correction/:id", RejectArtistCorrectionHandler(db))
 	}
 }
 
@@ -446,7 +446,7 @@ func GetPendingArtistCorrectionsHandler(db *gorm.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch pending artist corrections"})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"data": corrections})
+		c.JSON(http.StatusOK, corrections)
 	}
 }
 

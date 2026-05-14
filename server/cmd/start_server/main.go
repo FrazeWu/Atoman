@@ -208,7 +208,7 @@ func main() {
 			&model.FeedItemStar{},
 			&model.ReadingListItem{},
 			&model.SubscriptionGroup{},
-				&model.ForumCategory{},
+			&model.ForumCategory{},
 			&model.ForumTopic{},
 			&model.ForumReply{},
 			&model.ForumLike{},

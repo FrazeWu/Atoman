@@ -8,17 +8,17 @@ import (
 
 type Artist struct {
 	Base
-	Name        string     `json:"name" gorm:"unique;not null"`
-	Bio         string     `json:"bio" gorm:"type:text"`
-	ImageURL    string     `json:"image_url"`
-	Nationality string     `json:"nationality"`
-	BirthYear   int        `json:"birth_year"`
-	DeathYear   int        `json:"death_year"`
-	Members     string     `json:"members" gorm:"type:text"`
-	EntryStatus string     `json:"entry_status" gorm:"default:'open'"`
-	RedirectTo  *uuid.UUID `json:"redirect_to,omitempty" gorm:"type:uuid"`
-	Albums      []Album    `json:"albums,omitempty" gorm:"many2many:album_artists;"`
-	Songs       []Song     `json:"songs,omitempty" gorm:"many2many:song_artists;"`
+	Name        string        `json:"name" gorm:"unique;not null"`
+	Bio         string        `json:"bio" gorm:"type:text"`
+	ImageURL    string        `json:"image_url"`
+	Nationality string        `json:"nationality"`
+	BirthYear   int           `json:"birth_year"`
+	DeathYear   int           `json:"death_year"`
+	Members     string        `json:"members" gorm:"type:text"`
+	EntryStatus string        `json:"entry_status" gorm:"default:'open'"`
+	RedirectTo  *uuid.UUID    `json:"redirect_to,omitempty" gorm:"type:uuid"`
+	Albums      []Album       `json:"albums,omitempty" gorm:"many2many:album_artists;"`
+	Songs       []Song        `json:"songs,omitempty" gorm:"many2many:song_artists;"`
 	Aliases     []ArtistAlias `json:"aliases,omitempty" gorm:"foreignKey:ArtistID"`
 }
 
@@ -160,7 +160,7 @@ type ArtistCorrection struct {
 	User        *User      `json:"user,omitempty" gorm:"foreignKey:UserID;references:UUID"`
 	Description string     `json:"description" gorm:"type:text;not null"` // 修改说明
 	Reason      string     `json:"reason" gorm:"type:text"`               // 修改理由
-	Status      string     `json:"status" gorm:"default:'pending'"`        // pending|approved|rejected
+	Status      string     `json:"status" gorm:"default:'pending'"`       // pending|approved|rejected
 	ApprovedBy  *uuid.UUID `json:"approved_by" gorm:"type:uuid"`
 	ApprovedAt  *time.Time `json:"approved_at"`
 }
