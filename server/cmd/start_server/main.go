@@ -370,6 +370,7 @@ func main() {
 	collabGroup.GET("/ws/:roomID", collabHub.ServeWS)
 
 	// Admin routes
+	handlers.SetupPodcastRoutes(r, db, s3Client)
 	handlers.SetupAdminRoutes(r, db, s3Client)
 
 	// 404 handler - must be last
