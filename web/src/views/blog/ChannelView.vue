@@ -169,8 +169,9 @@ const isSlug = computed(() => !/^[0-9a-f-]{36}$/.test(routeParam.value))
 const authHeader = computed(() => ({ Authorization: `Bearer ${authStore.token}` }))
 const isOwner = computed(() => !!channel.value && channel.value.user_id === authStore.user?.uuid)
 const channelRssUrl = computed(() => {
-  if (!channel.value?.id) return ''
-  return api.feed.rss(channel.value.user?.username || '')
+  if (!channel.value?.slug) return ''
+  const base = import.meta.env.VITE_API_URL || '/api'
+  return `${base}/blog/channels/slug/${channel.value.slug}/rss/article`
 })
 
 const filteredPosts = computed(() => {
