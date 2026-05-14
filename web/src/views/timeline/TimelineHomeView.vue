@@ -309,6 +309,7 @@
       <template #footer>
         <div class="a-modal-footer" v-if="canEdit(detailEvent)">
           <ABtn outline @click="openEdit(detailEvent)">编辑</ABtn>
+          <ABtn outline @click="openHistory(detailEvent)">历史版本</ABtn>
           <ABtn variant="danger" @click="confirmDelete(detailEvent)">删除</ABtn>
         </div>
       </template>
@@ -388,6 +389,11 @@
           <label class="form-label">标签 (逗号分隔)</label>
           <AInput v-model="tagsInput" placeholder="战争, 革命, 法国" />
         </div>
+        <div class="form-group" style="display:flex;align-items:center;gap:.75rem">
+          <label class="form-label" style="margin:0">公开可见</label>
+          <input type="checkbox" v-model="form.is_public" style="width:1rem;height:1rem;cursor:pointer" />
+          <span style="font-size:.75rem;color:var(--a-color-muted)">{{ form.is_public ? '所有人可见' : '仅自己可见' }}</span>
+        </div>
       </div>
       <template #footer>
         <div class="a-modal-footer">
@@ -445,6 +451,32 @@
       @confirm="doDelete"
       @cancel="deletingEvent = null"
     />
+
+    <!-- History Modal -->
+    <AModal v-if="historyEvent" @close="historyEvent = null">
+      <div class="a-modal-header">
+        <h2 class="a-modal-title">历史版本 — {{ historyEvent.title }}</h2>
+        <button class="a-modal-close" @click="historyEvent = null">✕</button>
+      </div>
+      <div class="a-modal-body">
+        <div v-if="loadingHistory" style="color:var(--a-color-muted);font-size:.85rem">加载中...</div>
+        <div v-else-if="historyRevisions.length === 0" style="color:var(--a-color-muted);font-size:.85rem">暂无历史版本</div>
+        <div v-else style="display:flex;flex-direction:column;gap:.75rem">
+          <div
+            v-for="rev in historyRevisions"
+            :key="rev.id"
+            style="border:var(--a-border);padding:.75rem;display:flex;flex-direction:column;gap:.25rem"
+          >
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:.75rem;font-weight:700">{{ rev.title }}</span>
+              <span style="font-size:.65rem;color:var(--a-color-muted)">{{ formatDatetime(rev.created_at) }}</span>
+            </div>
+            <div style="font-size:.7rem;color:var(--a-color-muted)">编辑者: {{ rev.editor?.display_name || rev.editor?.username || rev.editor_id }}</div>
+            <div style="font-size:.7rem;color:var(--a-color-muted)">事件日期: {{ rev.event_date }}</div>
+          </div>
+        </div>
+      </div>
+    </AModal>
   </div>
 </template>
 
@@ -465,7 +497,7 @@ import { Circle as CircleStyle, Fill, Stroke, Style } from 'ol/style'
 import Overlay from 'ol/Overlay'
 import { useTimelineStore } from '@/stores/timeline'
 import { useAuthStore } from '@/stores/auth'
-import type { TimelineEvent } from '@/types'
+import type { TimelineEvent, TimelineRevision } from '@/types'
 import ABtn from '@/components/ui/ABtn.vue'
 import AModal from '@/components/ui/AModal.vue'
 import AEmpty from '@/components/ui/AEmpty.vue'
@@ -601,6 +633,15 @@ const compareBounds = computed(() => {
 const formatDatetime = (value: string) => {
   if (!value) return ''
 
+  // BCE dates: strings starting with '-' (e.g. "-0500-01-01")
+  if (value.startsWith('-')) {
+    const parts = value.slice(1).split('-')
+    const year = parts[0]
+    const suffix = parts.length > 1 ? `-${parts.slice(1).join('-')}` : ''
+    const dateStr = `公元前 ${parseInt(year, 10)} 年${suffix ? suffix.slice(0, 6).replace('-', ' ').replace('-', ' 月') + ' 日' : ''}`
+    return dateStr
+  }
+
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value.slice(0, 16)
 
@@ -622,6 +663,9 @@ const formatTickLabel = (timestamp: number) => {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
+
+  // BCE dates have negative year from JS Date (year ≤ 0)
+  if (year <= 0) return `BCE ${Math.abs(year)}`
 
   if (totalDays > 365 * 2) return `${year}`
   if (totalDays > 60) return `${year}-${month}`
@@ -818,6 +862,7 @@ const emptyForm = () => ({
   category: '',
   description: '',
   content: '',
+  is_public: true,
 })
 
 const form = ref(emptyForm())
@@ -877,6 +922,7 @@ const openEdit = (event: TimelineEvent) => {
     category: event.category || '',
     description: event.description || '',
     content: event.content || '',
+    is_public: event.is_public ?? true,
   }
   tagsInput.value = (event.tags || []).join(', ')
   detailEvent.value = null
@@ -888,6 +934,28 @@ const closeForm = () => {
   showForm.value = false
   editingEvent.value = null
   formError.value = ''
+}
+
+// History
+const historyEvent = ref<TimelineEvent | null>(null)
+const historyRevisions = ref<TimelineRevision[]>([])
+const loadingHistory = ref(false)
+
+const openHistory = async (event: TimelineEvent) => {
+  historyEvent.value = event
+  historyRevisions.value = []
+  loadingHistory.value = true
+  try {
+    const res = await fetch(`${API_URL}/timeline/events/${event.id}/history`, {
+      headers: { Authorization: `Bearer ${authStore.token}` },
+    })
+    if (res.ok) {
+      const d = await res.json()
+      historyRevisions.value = d.data || []
+    }
+  } finally {
+    loadingHistory.value = false
+  }
 }
 
 const submitForm = async () => {

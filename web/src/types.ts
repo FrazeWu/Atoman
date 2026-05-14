@@ -524,6 +524,24 @@ export interface PersonLocation {
   updated_at: string
 }
 
+export interface TimelineRevision {
+  id: string
+  event_id: string
+  editor_id: string
+  editor?: User
+  title: string
+  description: string
+  content: string
+  event_date: string
+  end_date?: string
+  location: string
+  source: string
+  category: string
+  is_public: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface PodcastEpisode {
   id: string
   post_id: string
