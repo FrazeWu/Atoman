@@ -96,6 +96,12 @@ const routes: RouteRecordRaw[] = [
   { path: '/timeline', component: () => import('@/views/timeline/TimelineHomeView.vue') },
   { path: '/timeline/persons', component: () => import('@/views/timeline/PersonListView.vue') },
   { path: '/timeline/persons/:id', component: () => import('@/views/timeline/PersonMapView.vue') },
+  // Podcast routes — order matters: /new and /show/:channelSlug before /:id
+  { path: '/podcast', component: () => import('@/views/podcast/PodcastHomeView.vue') },
+  { path: '/podcast/show/:channelSlug', component: () => import('@/views/podcast/PodcastShowView.vue') },
+  { path: '/podcast/new', component: () => import('@/views/podcast/PodcastEditorView.vue'), meta: { requiresAuth: true } },
+  { path: '/podcast/:id/edit', component: () => import('@/views/podcast/PodcastEditorView.vue'), meta: { requiresAuth: true } },
+  { path: '/podcast/:id', component: () => import('@/views/podcast/PodcastEpisodeView.vue') },
   { path: '/:pathMatch(.*)*', component: () => import('@/views/NotFoundView.vue') },
 ]
 
