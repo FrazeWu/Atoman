@@ -14,6 +14,7 @@ test_*
 .idea/
 .sisyphus/
 .ruff_cache/
+.superpowers/
 
 nginx/ssl/*.pem
 nginx/ssl/*.key
