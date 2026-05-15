@@ -384,6 +384,7 @@ ON CONFLICT (key) DO NOTHING`)
 	handlers.SetupDMRoutes(r, db, userHub, s3Client)
 	handlers.SetupDebateRoutes(r, db)
 	handlers.SetupTimelineRoutes(r, db)
+	handlers.SetupVideoRoutes(r, db, s3Client)
 	r.GET("/ws/user", func(c *gin.Context) {
 		userHub.ServeWS(c, os.Getenv("JWT_SECRET"))
 	})
