@@ -77,9 +77,7 @@
           {{ submitting ? '发布中...' : '发布话题' }}
         </ABtn>
         <ABtn outline @click="router.back()">取消</ABtn>
-        <button v-if="hasDraft" type="button" class="clear-draft-btn" @click="clearDraft">
-          清除草稿
-        </button>
+        <ABtn v-if="hasDraft" outline size="sm" @click="clearDraft">清除草稿</ABtn>
       </div>
     </div>
   </div>

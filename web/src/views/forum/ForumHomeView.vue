@@ -238,31 +238,18 @@
   </div>
 
   <!-- Category Request Modal -->
-  <div
-    v-if="catReqModalOpen"
-    style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center"
-    @click.self="catReqModalOpen = false"
-  >
-    <div style="background:var(--a-color-bg);border:var(--a-border);padding:1.5rem;width:min(480px,90vw);display:flex;flex-direction:column;gap:1rem">
-      <h3 style="margin:0;font-size:.9rem;font-weight:900;text-transform:uppercase">申请新分类</h3>
-      <div style="display:flex;flex-direction:column;gap:.5rem">
-        <label style="font-size:.75rem;font-weight:700">分类名称 *</label>
-        <input v-model="catReqForm.name" style="border:var(--a-border);padding:.5rem;background:var(--a-color-bg);font-size:.85rem" placeholder="分类名称" />
-      </div>
-      <div style="display:flex;flex-direction:column;gap:.5rem">
-        <label style="font-size:.75rem;font-weight:700">描述</label>
-        <textarea v-model="catReqForm.description" style="border:var(--a-border);padding:.5rem;background:var(--a-color-bg);font-size:.85rem;resize:vertical;min-height:60px" placeholder="分类用途说明" />
-      </div>
-      <div style="display:flex;flex-direction:column;gap:.5rem">
-        <label style="font-size:.75rem;font-weight:700">申请理由 *</label>
-        <textarea v-model="catReqForm.reason" style="border:var(--a-border);padding:.5rem;background:var(--a-color-bg);font-size:.85rem;resize:vertical;min-height:80px" placeholder="说明为什么需要此分区" />
-      </div>
-      <div style="display:flex;gap:.5rem;justify-content:flex-end">
-        <button @click="catReqModalOpen = false" style="padding:.5rem 1rem;border:var(--a-border);background:none;cursor:pointer;font-size:.8rem">取消</button>
-        <button @click="submitCategoryRequest" style="padding:.5rem 1rem;border:none;background:var(--a-color-fg);color:var(--a-color-bg);cursor:pointer;font-size:.8rem;font-weight:700">提交申请</button>
-      </div>
+  <AModal v-if="catReqModalOpen" @close="catReqModalOpen = false" size="md">
+    <h3 class="a-subtitle" style="margin-bottom:1.25rem">申请新分类</h3>
+    <div style="display:flex;flex-direction:column;gap:1rem">
+      <AInput v-model="catReqForm.name" label="分类名称 *" placeholder="分类名称" />
+      <ATextarea v-model="catReqForm.description" label="描述" :rows="3" placeholder="分类用途说明" />
+      <ATextarea v-model="catReqForm.reason" label="申请理由 *" :rows="4" placeholder="说明为什么需要此分区" />
     </div>
-  </div>
+    <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1.5rem">
+      <ABtn outline @click="catReqModalOpen = false">取消</ABtn>
+      <ABtn @click="submitCategoryRequest">提交申请</ABtn>
+    </div>
+  </AModal>
 </template>
 
 <script setup lang="ts">
@@ -272,6 +259,9 @@ import { useForumStore } from '@/stores/forum'
 import { useAuthStore } from '@/stores/auth'
 import ABtn from '@/components/ui/ABtn.vue'
 import AEmpty from '@/components/ui/AEmpty.vue'
+import AInput from '@/components/ui/AInput.vue'
+import ATextarea from '@/components/ui/ATextarea.vue'
+import AModal from '@/components/ui/AModal.vue'
 
 type TabKey = 'latest' | 'top' | 'active' | 'new' | 'bookmarked' | 'featured'
 

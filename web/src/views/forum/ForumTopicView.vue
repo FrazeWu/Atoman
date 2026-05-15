@@ -195,10 +195,7 @@
                     {{ getReplyPreview(quotedReply.content) }}
                   </div>
                 </div>
-                <button
-                  @click="clearQuote"
-                  style="font-size:.7rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;background:none;border:none;cursor:pointer"
-                >取消引用</button>
+                <ABtn outline size="sm" @click="clearQuote">取消引用</ABtn>
               </div>
 
               <!-- Draft restore notice -->
@@ -207,10 +204,7 @@
                 style="display:flex;align-items:center;justify-content:space-between;padding:.6rem 1rem;background:#fef3c7;border:1.5px solid #f59e0b;margin-bottom:1rem;font-size:.8rem;font-weight:700"
               >
                 <span>已恢复草稿</span>
-                <button
-                  @click="clearReplyDraft"
-                  style="background:none;border:none;font-size:.7rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;color:#92400e"
-                >清除</button>
+                <ABtn outline size="sm" @click="clearReplyDraft">清除</ABtn>
               </div>
 
               <!-- AEditor for reply -->
@@ -224,12 +218,7 @@
               </div>
 
               <div style="display:flex;justify-content:flex-end;margin-top:.75rem;gap:.75rem">
-                <button
-                  v-if="replyContent"
-                  type="button"
-                  style="font-size:.7rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;background:none;border:none;cursor:pointer;color:var(--a-color-muted-soft)"
-                  @click="clearReplyDraft"
-                >清除草稿</button>
+                <ABtn v-if="replyContent" outline size="sm" @click="clearReplyDraft">清除草稿</ABtn>
                 <ABtn @click="submitReply" :loading="submitting" :disabled="!replyContent.trim()">提交回复</ABtn>
               </div>
             </div>
@@ -265,20 +254,16 @@
   </div>
 
   <!-- Report Modal -->
-  <div
-    v-if="reportModal.show"
-    style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center"
-    @click.self="reportModal.show = false"
-  >
-    <div style="background:var(--a-color-bg);border:var(--a-border);padding:1.5rem;width:min(420px,90vw);display:flex;flex-direction:column;gap:1rem">
-      <h3 style="margin:0;font-size:.9rem;font-weight:900;text-transform:uppercase">举报内容</h3>
-      <div style="display:flex;flex-direction:column;gap:.5rem">
-        <label style="font-size:.75rem;font-weight:700">举报类型</label>
-        <div style="font-size:.8rem;color:var(--a-color-muted);font-weight:700">{{ reportModal.targetType === 'topic' ? '帖子' : '回复' }}</div>
+  <AModal v-if="reportModal.show" @close="reportModal.show = false" size="sm">
+    <h3 class="a-subtitle" style="margin-bottom:1.25rem">举报内容</h3>
+    <div style="display:flex;flex-direction:column;gap:1rem">
+      <div class="a-field">
+        <label class="a-field-label">举报类型</label>
+        <p class="a-muted" style="margin:0;font-size:.85rem;font-weight:700">{{ reportModal.targetType === 'topic' ? '帖子' : '回复' }}</p>
       </div>
-      <div style="display:flex;flex-direction:column;gap:.5rem">
-        <label style="font-size:.75rem;font-weight:700">举报原因 *</label>
-        <select v-model="reportForm.reason" style="border:var(--a-border);padding:.5rem;background:var(--a-color-bg);font-size:.85rem">
+      <div class="a-field">
+        <label class="a-field-label">举报原因 *</label>
+        <select v-model="reportForm.reason" class="a-select">
           <option value="">请选择原因</option>
           <option value="spam">垃圾内容</option>
           <option value="off-topic">与主题无关</option>
@@ -286,17 +271,14 @@
           <option value="other">其他</option>
         </select>
       </div>
-      <div style="display:flex;flex-direction:column;gap:.5rem">
-        <label style="font-size:.75rem;font-weight:700">补充说明</label>
-        <textarea v-model="reportForm.note" style="border:var(--a-border);padding:.5rem;background:var(--a-color-bg);font-size:.85rem;resize:vertical;min-height:80px" placeholder="可选：详细说明" />
-      </div>
-      <div v-if="reportFeedback" style="font-size:.8rem;font-weight:700;color:var(--a-color-muted)">{{ reportFeedback }}</div>
-      <div style="display:flex;gap:.5rem;justify-content:flex-end">
-        <button @click="reportModal.show = false" style="padding:.5rem 1rem;border:var(--a-border);background:none;cursor:pointer;font-size:.8rem">取消</button>
-        <button @click="submitReport" style="padding:.5rem 1rem;border:none;background:var(--a-color-fg);color:var(--a-color-bg);cursor:pointer;font-size:.8rem;font-weight:700">提交举报</button>
-      </div>
+      <ATextarea v-model="reportForm.note" label="补充说明" :rows="3" placeholder="可选：详细说明" />
     </div>
-  </div>
+    <div v-if="reportFeedback" class="a-muted" style="font-size:.8rem;font-weight:700;margin-top:.75rem">{{ reportFeedback }}</div>
+    <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1.5rem">
+      <ABtn outline @click="reportModal.show = false">取消</ABtn>
+      <ABtn @click="submitReport">提交举报</ABtn>
+    </div>
+  </AModal>
 </template>
 
 <script setup lang="ts">
@@ -308,6 +290,8 @@ import { useMarkdownRenderer } from '@/composables/useMarkdownRenderer'
 import type { ForumReply } from '@/types'
 import ABtn from '@/components/ui/ABtn.vue'
 import AEmpty from '@/components/ui/AEmpty.vue'
+import ATextarea from '@/components/ui/ATextarea.vue'
+import AModal from '@/components/ui/AModal.vue'
 import AEditor from '@/components/shared/AEditor.vue'
 import ForumReplyNode from '@/components/forum/ForumReplyNode.vue'
 
