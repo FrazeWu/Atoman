@@ -409,6 +409,68 @@ export interface UserProfile {
   created_at: string
 }
 
+export interface Notification {
+  id: string
+  recipient_id: string
+  actor_id?: string | null
+  actor?: User | null
+  type: 'forum_reply' | 'forum_mention' | 'forum_solved' | 'forum_like'
+  source_type: string
+  source_id: string
+  meta: {
+    topic_id?: string
+    topic_title?: string
+    reply_excerpt?: string
+    actor_count?: number
+    recent_actors?: string[]
+    [key: string]: any
+  }
+  read_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface DMConversation {
+  conversation_id: string
+  other_username: string
+  other_user_id: string
+  last_message_at?: string | null
+  preview: string
+  unread_count: number
+}
+
+export interface DMMessage {
+  id: string
+  conversation_id: string
+  sender_id: string
+  sender?: User
+  content: string
+  image_url?: string
+  read_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface UserSettings {
+  user_id: string
+  private_profile: boolean
+  dm_permission?: 'anyone' | 'following_only' | 'one_before_reply'
+}
+
+export interface DMRealtimePayload {
+  conversation_id: string
+  message_id: string
+  sender_id: string
+  sender_username: string
+  content: string
+  image_url: string
+  created_at: string
+}
+
+export type InboxTab = 'reply' | 'like' | 'mention' | 'dm'
+export type NotificationFilterType = '' | 'forum_reply' | 'forum_like' | 'forum_mention'
+export type DMPermission = 'anyone' | 'following_only' | 'one_before_reply'
+
 // ===== Debate Types =====
 
 export type DebateStatus = 'open' | 'concluded' | 'archived'
@@ -557,6 +619,35 @@ export interface PodcastEpisode {
   episode_cover_url: string
   season_number: number
   episode_number: number
+  created_at: string
+  updated_at: string
+}
+
+export interface VideoTag {
+  id: string
+  name: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Video {
+  id: string
+  channel_id: string | null
+  channel?: Channel
+  user_id: string
+  user?: User
+  title: string
+  description: string
+  storage_type: 'local' | 'external'
+  video_url: string
+  thumbnail_url: string
+  duration_sec: number
+  visibility: 'public' | 'followers' | 'private'
+  status: 'draft' | 'published'
+  view_count: number
+  subtitle_url?: string
+  tags: VideoTag[]
+  collections?: Collection[]
   created_at: string
   updated_at: string
 }
