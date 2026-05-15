@@ -42,6 +42,8 @@ func SetupForumRoutes(router *gin.Engine, db *gorm.DB) {
 			protected.PUT("/replies/:id", UpdateForumReply(db))
 			protected.DELETE("/replies/:id", DeleteForumReply(db))
 			protected.POST("/replies/:id/like", ToggleForumReplyLike(db))
+			protected.POST("/replies/:id/solve", SolveForumReply(db))
+			protected.DELETE("/replies/:id/solve", UnsolveForumReply(db))
 
 			// Drafts
 			protected.GET("/drafts", GetForumDraft(db))
@@ -508,12 +510,18 @@ func CreateForumReply(db *gorm.DB) gin.HandlerFunc {
 			}
 		}
 
+		var replyDepth int
 		if parentUID != nil {
 			var quotedReply model.ForumReply
-			if err := db.Select("id").First(&quotedReply, "id = ? AND topic_id = ? AND deleted_at IS NULL", *parentUID, topicID).Error; err != nil {
+			if err := db.Select("id", "depth").First(&quotedReply, "id = ? AND topic_id = ? AND deleted_at IS NULL", *parentUID, topicID).Error; err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "Quoted reply not found"})
 				return
 			}
+			if quotedReply.Depth >= 1 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "maximum reply nesting depth reached"})
+				return
+			}
+			replyDepth = quotedReply.Depth + 1
 		}
 
 		// Calculate flat floor order; parent_reply_id is now quote metadata only.
@@ -530,6 +538,7 @@ func CreateForumReply(db *gorm.DB) gin.HandlerFunc {
 			Content:       input.Content,
 			Path:          path,
 			FloorNumber:   floor,
+			Depth:         replyDepth,
 		}
 		if err := db.Create(&reply).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create reply"})
@@ -634,8 +643,107 @@ func ToggleForumReplyLike(db *gorm.DB) gin.HandlerFunc {
 			if db.First(&replyOwner, "id = ?", id).Error == nil && replyOwner.UserID != uid {
 				service.LogActivity(db, replyOwner.UserID, "receive_like", "reply", id)
 			}
+			// Auto-solve: if like count reaches threshold, mark topic as solved
+			var likeCount int64
+			db.Model(&model.ForumLike{}).Where("target_type = 'reply' AND target_id = ?", id).Count(&likeCount)
+			threshold := int64(10)
+			var setting model.SiteSetting
+			if db.Where("key = ?", "forum.solved_auto_threshold").First(&setting).Error == nil {
+				if v, err := strconv.ParseInt(setting.Value, 10, 64); err == nil {
+					threshold = v
+				}
+			}
+			if likeCount >= threshold {
+				var topic model.ForumTopic
+				if db.First(&topic, "id = ?", replyOwner.TopicID).Error == nil && !topic.IsSolved {
+					db.Model(&topic).Updates(map[string]interface{}{
+						"is_solved":       true,
+						"solved_reply_id": id,
+					})
+					db.Model(&model.ForumReply{}).Where("id = ?", id).Update("is_solved", true)
+				}
+			}
 			c.JSON(http.StatusOK, gin.H{"liked": true})
 		}
+	}
+}
+
+// SolveForumReply marks a reply as the solution (topic owner or admin only).
+// Route: POST /api/forum/replies/:id/solve
+func SolveForumReply(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		replyID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid reply id"})
+			return
+		}
+		userID, _ := c.Get("user_id")
+		uid, _ := userID.(uuid.UUID)
+
+		var reply model.ForumReply
+		if err := db.First(&reply, "id = ?", replyID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "reply not found"})
+			return
+		}
+
+		var topic model.ForumTopic
+		if err := db.First(&topic, "id = ?", reply.TopicID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "topic not found"})
+			return
+		}
+
+		if topic.UserID != uid && !isAdmin(c) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only topic owner or admin can mark solution"})
+			return
+		}
+
+		if err := db.Model(&topic).Updates(map[string]interface{}{
+			"is_solved":       true,
+			"solved_reply_id": reply.ID,
+		}).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed"})
+			return
+		}
+		db.Model(&reply).Update("is_solved", true)
+		c.JSON(http.StatusOK, gin.H{"message": "solved"})
+	}
+}
+
+// UnsolveForumReply removes the solution mark (topic owner or admin only).
+// Route: DELETE /api/forum/replies/:id/solve
+func UnsolveForumReply(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		replyID, err := uuid.Parse(c.Param("id"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid reply id"})
+			return
+		}
+		userID, _ := c.Get("user_id")
+		uid, _ := userID.(uuid.UUID)
+
+		var reply model.ForumReply
+		if err := db.First(&reply, "id = ?", replyID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "reply not found"})
+			return
+		}
+
+		var topic model.ForumTopic
+		if err := db.First(&topic, "id = ?", reply.TopicID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "topic not found"})
+			return
+		}
+
+		if topic.UserID != uid && !isAdmin(c) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "only topic owner or admin can unmark solution"})
+			return
+		}
+
+		db.Model(&topic).Updates(map[string]interface{}{
+			"is_solved":       false,
+			"solved_reply_id": nil,
+		})
+		db.Model(&reply).Update("is_solved", false)
+		c.JSON(http.StatusOK, gin.H{"message": "unsolved"})
 	}
 }
 
