@@ -18,6 +18,7 @@ import (
 	"atoman/internal/collab"
 	"atoman/internal/handlers"
 	"atoman/internal/middleware"
+	"atoman/internal/migrations"
 	"atoman/internal/model"
 	"atoman/internal/service"
 	"atoman/internal/storage"
@@ -215,6 +216,9 @@ func main() {
 			&model.ForumLike{},
 			&model.ForumBookmark{},
 			&model.ForumDraft{},
+			&model.Notification{},
+			&model.DMConversation{},
+			&model.DMMessage{},
 			&model.ActivityLog{},
 			&model.Debate{},
 			&model.Argument{},
@@ -237,6 +241,11 @@ func main() {
 			&model.LyricAnnotation{},
 			// Podcast
 			&model.PodcastEpisode{},
+			// Video module
+			&model.Video{},
+			&model.VideoTag{},
+			&model.VideoCollection{},
+			&model.VideoTagRelation{},
 			// Forum extensions
 			&model.ForumReport{},
 			&model.CategoryRequest{},
@@ -245,6 +254,10 @@ func main() {
 			log.Fatal("Failed to run migrations: ", err)
 		}
 		log.Println("Database migrations completed")
+
+		if err := migrations.RunNotificationDMIndexes(db); err != nil {
+			log.Printf("WARN: notification/dm index migration failed: %v", err)
+		}
 
 		// Seed default site settings (idempotent)
 		db.Exec(`INSERT INTO site_settings (key, value, description, updated_at)
@@ -364,9 +377,16 @@ ON CONFLICT (key) DO NOTHING`)
 	handlers.SetupCorrectionRoutes(r, db, s3Client)
 	handlers.SetupEntryStatusRoutes(r, db)
 	handlers.SetupLyricAnnotationRoutes(r, db)
-	handlers.SetupForumRoutes(r, db)
+	notifSvc := service.NewNotificationService(db)
+	userHub := collab.NewUserHub()
+	handlers.SetupForumRoutes(r, db, notifSvc, userHub)
+	handlers.SetupNotificationRoutes(r, db, userHub)
+	handlers.SetupDMRoutes(r, db, userHub, s3Client)
 	handlers.SetupDebateRoutes(r, db)
 	handlers.SetupTimelineRoutes(r, db)
+	r.GET("/ws/user", func(c *gin.Context) {
+		userHub.ServeWS(c, os.Getenv("JWT_SECRET"))
+	})
 
 	// Revision system routes (wiki-style collaboration)
 	handlers.SetupRevisionRoutes(r, db)
