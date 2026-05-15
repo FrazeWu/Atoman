@@ -354,6 +354,8 @@ export interface ForumTopic {
   pinned: boolean
   featured: boolean
   closed: boolean
+  is_solved?: boolean
+  solved_reply_id?: string
   reply_count: number
   like_count: number
   view_count: number
@@ -373,6 +375,8 @@ export interface ForumReply {
   content: string          // raw Markdown
   path: string
   floor_number: number
+  depth?: number
+  is_solved?: boolean
   like_count: number
   is_liked: boolean
   created_at: string

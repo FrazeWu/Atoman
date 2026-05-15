@@ -28,6 +28,7 @@
           <span v-if="forumStore.currentTopic.pinned" class="badge-pinned">置顶</span>
           <span v-if="forumStore.currentTopic.featured" class="badge-featured">精华</span>
           <span v-if="forumStore.currentTopic.closed" class="badge-closed">已关闭</span>
+          <span v-if="forumStore.currentTopic.is_solved" class="badge-solved">✓ 已解决</span>
           {{ forumStore.currentTopic.title }}
         </h1>
 
@@ -113,18 +114,58 @@
           <!-- Replies -->
           <AEmpty v-if="forumStore.replies.length === 0" text="还没有回复，来说第一句" />
           <div style="display:flex;flex-direction:column;gap:.75rem">
-            <ForumReplyNode
-              v-for="reply in forumStore.replies"
+            <template
+              v-for="reply in topLevelReplies"
               :key="reply.id"
-              :reply="reply"
-              :quoted-reply="getQuotedReply(reply)"
-              :auth-user-id="authStore.user?.uuid"
-              :is-authenticated="authStore.isAuthenticated"
-              @quote="setQuote"
-              @delete="handleDeleteReply"
-              @toggle-like="forumStore.toggleReplyLike"
-              @report="(id) => openReportModal('reply', id)"
-            />
+            >
+              <ForumReplyNode
+                :reply="reply"
+                :quoted-reply="getQuotedReply(reply)"
+                :auth-user-id="authStore.user?.uuid"
+                :is-authenticated="authStore.isAuthenticated"
+                :is-solution="reply.id === forumStore.currentTopic?.solved_reply_id"
+                :is-topic-owner="authStore.user?.uuid === forumStore.currentTopic?.user_id"
+                :topic-is-solved="forumStore.currentTopic?.is_solved"
+                @quote="setQuote"
+                @delete="handleDeleteReply"
+                @toggle-like="forumStore.toggleReplyLike"
+                @report="(id) => openReportModal('reply', id)"
+                @solve="handleSolveReply"
+                @unsolve="handleUnsolveReply"
+              />
+              <!-- Sub-replies -->
+              <div v-if="subRepliesMap[reply.id]?.length" class="sub-reply-wrap">
+                <ForumReplyNode
+                  v-for="sub in (expandedReplies.has(reply.id)
+                    ? subRepliesMap[reply.id]
+                    : subRepliesMap[reply.id].slice(0, 2))"
+                  :key="sub.id"
+                  :reply="sub"
+                  :quoted-reply="getQuotedReply(sub)"
+                  :auth-user-id="authStore.user?.uuid"
+                  :is-authenticated="authStore.isAuthenticated"
+                  :is-solution="sub.id === forumStore.currentTopic?.solved_reply_id"
+                  :is-topic-owner="authStore.user?.uuid === forumStore.currentTopic?.user_id"
+                  :topic-is-solved="forumStore.currentTopic?.is_solved"
+                  @quote="setQuote"
+                  @delete="handleDeleteReply"
+                  @toggle-like="forumStore.toggleReplyLike"
+                  @report="(id) => openReportModal('reply', id)"
+                  @solve="handleSolveReply"
+                  @unsolve="handleUnsolveReply"
+                />
+                <button
+                  v-if="subRepliesMap[reply.id].length > 2 && !expandedReplies.has(reply.id)"
+                  class="expand-replies-btn"
+                  @click="expandedReplies.add(reply.id)"
+                >展开 {{ subRepliesMap[reply.id].length - 2 }} 条回复</button>
+                <button
+                  v-if="expandedReplies.has(reply.id) && subRepliesMap[reply.id].length > 2"
+                  class="expand-replies-btn"
+                  @click="expandedReplies.delete(reply.id)"
+                >收起回复</button>
+              </div>
+            </template>
           </div>
 
           <!-- Reply form -->
@@ -290,6 +331,23 @@ const replyLookup = computed(() => {
   forumStore.replies.forEach((reply) => lookup.set(reply.id, reply))
   return lookup
 })
+
+const topLevelReplies = computed(() =>
+  forumStore.replies.filter((r) => !r.depth || r.depth === 0 || !r.parent_reply_id)
+)
+
+const subRepliesMap = computed(() => {
+  const map: Record<string, ForumReply[]> = {}
+  forumStore.replies.forEach((r) => {
+    if ((r.depth ?? 0) > 0 && r.parent_reply_id) {
+      if (!map[r.parent_reply_id]) map[r.parent_reply_id] = []
+      map[r.parent_reply_id].push(r)
+    }
+  })
+  return map
+})
+
+const expandedReplies = ref<Set<string>>(new Set())
 
 const replySortOptions: Record<string, string> = {
   oldest: '时间',
@@ -483,6 +541,28 @@ const toggleFeatured = async () => {
     topic.featured = !topic.featured
   }
 }
+
+const handleSolveReply = async (replyId: string) => {
+  const res = await fetch(`${API_URL}/forum/replies/${replyId}/solve`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${authStore.token}` },
+  })
+  if (res.ok && forumStore.currentTopic) {
+    forumStore.currentTopic.is_solved = true
+    forumStore.currentTopic.solved_reply_id = replyId
+  }
+}
+
+const handleUnsolveReply = async (replyId: string) => {
+  const res = await fetch(`${API_URL}/forum/replies/${replyId}/solve`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${authStore.token}` },
+  })
+  if (res.ok && forumStore.currentTopic) {
+    forumStore.currentTopic.is_solved = false
+    forumStore.currentTopic.solved_reply_id = undefined
+  }
+}
 </script>
 
 <style scoped>
@@ -518,6 +598,19 @@ const toggleFeatured = async () => {
   padding: 0.15rem 0.4rem;
   border: 1.5px solid var(--a-color-muted-soft);
   color: var(--a-color-muted-soft);
+  margin-right: 0.6rem;
+  vertical-align: middle;
+}
+
+.badge-solved {
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 0.15rem 0.4rem;
+  border: 1.5px solid #16a34a;
+  color: #fff;
+  background: #16a34a;
   margin-right: 0.6rem;
   vertical-align: middle;
 }
@@ -868,6 +961,32 @@ const toggleFeatured = async () => {
   padding: 0.1rem 0.5rem;
   border: 1.5px solid var(--a-color-disabled-border);
   color: var(--a-color-muted);
+}
+
+.sub-reply-wrap {
+  margin-left: 2rem;
+  margin-top: -0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.expand-replies-btn {
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--a-color-muted);
+  padding: 0.25rem 0;
+  text-align: left;
+}
+
+.expand-replies-btn:hover {
+  text-decoration: underline;
+  color: var(--a-color-fg);
 }
 
 .reply-login-cta {

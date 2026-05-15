@@ -1,5 +1,8 @@
 <template>
-  <div class="reply-node">
+  <div class="reply-node" :class="{ 'reply-node-solution': isSolution }">
+    <!-- Solution badge -->
+    <div v-if="isSolution" class="reply-solution-badge">✓ 采纳答案</div>
+
     <!-- Reply header -->
     <div class="reply-header">
       <div class="reply-meta">
@@ -31,6 +34,17 @@
           class="reply-btn"
           @click="$emit('report', reply.id)"
         >举报</button>
+        <!-- Solve / Unsolve (topic owner only) -->
+        <button
+          v-if="isTopicOwner && isSolution"
+          class="reply-btn reply-btn-unsolved"
+          @click="$emit('unsolve', reply.id)"
+        >取消采纳</button>
+        <button
+          v-if="isTopicOwner && !topicIsSolved && !isSolution"
+          class="reply-btn reply-btn-solve"
+          @click="$emit('solve', reply.id)"
+        >✓ 采纳</button>
       </div>
     </div>
 
@@ -60,6 +74,9 @@ const props = defineProps<{
   quotedReply?: ForumReply | null
   authUserId?: string
   isAuthenticated?: boolean
+  isSolution?: boolean
+  isTopicOwner?: boolean
+  topicIsSolved?: boolean
 }>()
 
 defineEmits<{
@@ -67,6 +84,8 @@ defineEmits<{
   (e: 'delete', id: string): void
   (e: 'toggle-like', id: string): void
   (e: 'report', id: string): void
+  (e: 'solve', id: string): void
+  (e: 'unsolve', id: string): void
 }>()
 
 const { renderMarkdown } = useMarkdownRenderer()
@@ -112,6 +131,23 @@ const formatTime = (iso: string) => {
   background: #fff;
   padding: 1.25rem 1.5rem;
   margin-bottom: 0.75rem;
+}
+
+.reply-node-solution {
+  border-color: #16a34a;
+  border-left-width: 4px;
+}
+
+.reply-solution-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.15rem 0.5rem;
+  background: #16a34a;
+  color: #fff;
+  margin-bottom: 0.6rem;
 }
 
 .reply-header {
@@ -191,6 +227,26 @@ const formatTime = (iso: string) => {
 
 .reply-btn-danger:hover {
   background: #ef4444;
+  color: #fff;
+}
+
+.reply-btn-solve {
+  border-color: #16a34a;
+  color: #16a34a;
+}
+
+.reply-btn-solve:hover {
+  background: #16a34a;
+  color: #fff;
+}
+
+.reply-btn-unsolved {
+  border-color: #9ca3af;
+  color: #9ca3af;
+}
+
+.reply-btn-unsolved:hover {
+  background: #9ca3af;
   color: #fff;
 }
 
