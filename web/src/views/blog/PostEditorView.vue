@@ -1,7 +1,7 @@
 <template>
   <div class="editor-page">
     <div class="editor-shell">
-      <div v-if="error" class="editor-error">{{ error }}</div>
+      <div v-if="error" class="editor-error a-error">{{ error }}</div>
 
       <div class="editor-layout">
         <!-- 主编辑区 -->
@@ -16,16 +16,16 @@
                 <span class="draft-status" :class="`is-${draftStatus.tone}`">{{ draftStatus.text }}</span>
 
                 <div v-if="contentSource !== 'manual'" class="import-actions">
-                  <label v-if="contentSource === 'empty'" class="import-btn">
+                  <ABtn v-if="contentSource === 'empty'" tag="label" variant="secondary" size="sm">
                     <input type="file" accept=".md,.markdown,.txt" @change="handleFileUpload" class="hidden-file-input" />
                     导入 Markdown
-                  </label>
+                  </ABtn>
                   <template v-else-if="contentSource === 'imported'">
-                    <button type="button" class="import-btn" @click="triggerReimport">
+                    <ABtn type="button" variant="secondary" size="sm" @click="triggerReimport">
                       <input ref="fileInput" type="file" accept=".md,.markdown,.txt" @change="handleFileUpload" class="hidden-file-input" />
                       重新导入
-                    </button>
-                    <button type="button" class="import-btn-clear" @click="clearContent">清空内容</button>
+                    </ABtn>
+                    <ABtn type="button" variant="ghost" size="sm" @click="clearContent">清空内容</ABtn>
                   </template>
                   <span v-if="uploading" class="a-muted">读取中…</span>
                 </div>
@@ -66,16 +66,28 @@
           <section class="right-section publish-section">
             <span class="a-label">发布</span>
             <div class="publish-actions">
-              <button class="btn-save" @click="save('draft')" :disabled="!!saving">
-                {{ saving === 'draft' ? '保存中…' : '存草稿' }}
-              </button>
-              <button class="btn-publish" @click="save('published')" :disabled="!!saving">
-                {{ saving === 'published' ? '发布中…' : '发布文章' }}
-              </button>
+              <ABtn
+                variant="secondary"
+                block
+                :loading="saving === 'draft'"
+                :disabled="!!saving"
+                loading-text="保存中…"
+                @click="save('draft')"
+              >
+                存草稿
+              </ABtn>
+              <ABtn
+                variant="primary"
+                block
+                :loading="saving === 'published'"
+                :disabled="!!saving"
+                loading-text="发布中…"
+                @click="save('published')"
+              >
+                发布文章
+              </ABtn>
             </div>
-            <button v-if="hasDraftManagerAccess" type="button" class="draft-status-btn" @click="openDraftManager">
-              草稿管理
-            </button>
+            <ABtn v-if="hasDraftManagerAccess" type="button" variant="ghost" size="sm" block @click="openDraftManager">草稿管理</ABtn>
           </section>
 
           <!-- 字数统计 -->
@@ -107,10 +119,52 @@
                 />
               </div>
               <div class="a-field">
-                <label class="a-field-label">封面图 URL</label>
-                <input v-model="form.cover_url" placeholder="https://…" class="a-input" />
+                <label class="a-field-label">封面图</label>
+                <input
+                  ref="coverInput"
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  class="hidden-file-input"
+                  @change="handleCoverUpload"
+                />
+                <div class="cover-upload-card a-card-sm">
+                  <div v-if="form.cover_url" class="cover-preview-wrap">
+                    <img :src="form.cover_url" alt="封面预览" class="cover-preview-image" />
+                  </div>
+                  <div v-else class="cover-empty-state">
+                    <strong>未上传封面</strong>
+                    <p class="a-muted">上传后会自动填入文章封面地址</p>
+                  </div>
+
+                  <div class="cover-upload-actions">
+                    <ABtn
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      :loading="coverUploading"
+                      :disabled="coverUploading"
+                      loading-text="上传中…"
+                      @click="triggerCoverUpload"
+                    >
+                      {{ form.cover_url ? '更换封面' : '上传封面' }}
+                    </ABtn>
+                    <ABtn
+                      v-if="form.cover_url"
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      :disabled="coverUploading"
+                      @click="removeCover"
+                    >
+                      移除封面
+                    </ABtn>
+                  </div>
+
+                  <p class="cover-upload-hint a-muted">支持 JPEG、PNG、GIF、WebP，最大 5MB。</p>
+                  <p v-if="coverUploadError" class="cover-upload-error">{{ coverUploadError }}</p>
+                </div>
               </div>
-              <label class="option-check">
+              <label class="option-check a-card-sm">
                 <input type="checkbox" v-model="form.allow_comments" />
                 <span>允许评论</span>
               </label>
@@ -132,7 +186,10 @@
                 :class="`toc-h${item.level}`"
                 href="#"
                 @click.prevent
-              >{{ item.text }}</a>
+              >
+                <span class="toc-rail" aria-hidden="true" />
+                <span class="toc-text">{{ item.text }}</span>
+              </a>
             </nav>
           </section>
         </aside>
@@ -147,7 +204,7 @@
           恢复后会覆盖当前编辑区内容。
         </p>
 
-        <div class="draft-recovery-preview">
+        <div class="draft-recovery-preview a-card-sm">
           <strong>{{ pendingDraftCandidate.payload.title || '未命名草稿' }}</strong>
           <p class="a-muted">{{ draftRecoveryPreview }}</p>
         </div>
@@ -155,9 +212,9 @@
 
       <template #footer>
         <div class="draft-recovery-actions">
-          <button type="button" class="btn-save" @click="keepCurrentContent">稍后处理</button>
-          <button type="button" class="import-btn-clear" @click="discardPendingDraft">丢弃草稿</button>
-          <button type="button" class="btn-publish" @click="restorePendingDraft">恢复草稿</button>
+          <ABtn type="button" variant="secondary" @click="keepCurrentContent">稍后处理</ABtn>
+          <ABtn type="button" variant="ghost" @click="discardPendingDraft">丢弃草稿</ABtn>
+          <ABtn type="button" variant="primary" @click="restorePendingDraft">恢复草稿</ABtn>
         </div>
       </template>
     </AModal>
@@ -165,20 +222,20 @@
     <AModal v-if="draftManagerVisible" title="草稿管理" size="md" @close="closeDraftManager">
       <div class="draft-manager-body">
         <div class="draft-manager-grid">
-          <div class="draft-manager-card">
+          <div class="draft-manager-card a-card-sm">
             <span class="a-label">本地草稿</span>
             <strong>{{ localDraftStatusText }}</strong>
             <p class="a-muted">保存在当前浏览器中，刷新页面后仍可恢复。</p>
           </div>
 
-          <div class="draft-manager-card">
+          <div class="draft-manager-card a-card-sm">
             <span class="a-label">云端草稿</span>
             <strong>{{ cloudDraftStatusText }}</strong>
             <p class="a-muted">登录状态下自动同步，可在其他会话中继续写作。</p>
           </div>
         </div>
 
-        <div v-if="deferredDraftCandidate" class="draft-manager-card draft-manager-card-accent">
+        <div v-if="deferredDraftCandidate" class="draft-manager-card draft-manager-card-accent a-card-sm">
           <span class="a-label">待恢复草稿</span>
           <strong>{{ deferredDraftCandidate.payload.title || '未命名草稿' }}</strong>
           <p class="a-muted">{{ deferredDraftCandidate.source === 'server' ? '云端' : '本地' }}版本，保存于 {{ formatSavedTime(deferredDraftCandidate.savedAt) }}</p>
@@ -192,31 +249,31 @@
 
       <template #footer>
         <div class="draft-recovery-actions">
-          <button type="button" class="btn-save" @click="closeDraftManager">关闭</button>
-          <button
+          <ABtn type="button" variant="secondary" @click="closeDraftManager">关闭</ABtn>
+          <ABtn
             v-if="authStore.token && hasMeaningfulDraft(draftPayload)"
             type="button"
-            class="import-btn"
+            variant="secondary"
             @click="syncDraftNow"
           >
             立即同步
-          </button>
-          <button
+          </ABtn>
+          <ABtn
             v-if="hasDraftManagerAccess"
             type="button"
-            class="import-btn-clear"
+            variant="ghost"
             @click="clearSavedDrafts"
           >
             清除已保存草稿
-          </button>
-          <button
+          </ABtn>
+          <ABtn
             v-if="deferredDraftCandidate"
             type="button"
-            class="btn-publish"
+            variant="primary"
             @click="restoreDeferredFromManager"
           >
             恢复最新草稿
-          </button>
+          </ABtn>
         </div>
       </template>
     </AModal>
@@ -229,8 +286,8 @@
 
       <template #footer>
         <div class="draft-recovery-actions">
-          <button type="button" class="btn-save" @click="cancelLeave">留在此页</button>
-          <button type="button" class="btn-publish" @click="confirmLeave">继续离开</button>
+          <ABtn type="button" variant="secondary" @click="cancelLeave">留在此页</ABtn>
+          <ABtn type="button" variant="primary" @click="confirmLeave">继续离开</ABtn>
         </div>
       </template>
     </AModal>
@@ -239,10 +296,11 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from 'vue'
-import { RouterLink, onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 
 import AEditor from '@/components/shared/AEditor.vue'
-import { useAutoSave } from '@/components/blog/composables/useAutoSave'
+import { useAutoSave } from '@/composables/useAutoSave'
+import ABtn from '@/components/ui/ABtn.vue'
 import AModal from '@/components/ui/AModal.vue'
 import { useApi } from '@/composables/useApi'
 import { useAuthStore } from '@/stores/auth'
@@ -284,9 +342,12 @@ const selectedCollectionIds = ref<string[]>([])
 const existingCollectionIds = ref<string[]>([])
 const loadingChannels = ref(false)
 const uploading = ref(false)
+const coverUploading = ref(false)
 const error = ref('')
+const coverUploadError = ref('')
 const titleRef = ref<HTMLTextAreaElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
+const coverInput = ref<HTMLInputElement | null>(null)
 const contentSource = ref<'empty' | 'imported' | 'manual'>('empty')
 const rightPanelMode = ref('outline')
 const loadedPostUpdatedAt = ref(0)
@@ -512,6 +573,71 @@ const parseTimestamp = (value?: string | null) => {
 const formatSavedTime = (value?: number | null) => {
   if (!value) return '--:--'
   return new Date(value).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+}
+
+const triggerCoverUpload = () => {
+  coverInput.value?.click()
+}
+
+const handleCoverUpload = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+
+  if (!file) return
+
+  if (!authStore.token) {
+    coverUploadError.value = '请先登录后再上传封面'
+    return
+  }
+
+  const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp'])
+  const maxSize = 5 * 1024 * 1024
+
+  if (!allowedTypes.has(file.type)) {
+    coverUploadError.value = '只支持 JPEG、PNG、GIF、WebP 格式的图片'
+    return
+  }
+  if (file.size > maxSize) {
+    coverUploadError.value = '图片不能超过 5MB'
+    return
+  }
+
+  coverUploading.value = true
+  coverUploadError.value = ''
+
+  try {
+    const formData = new FormData()
+    formData.append('image', file)
+
+    const res = await fetch(api.blog.uploadImage, {
+      method: 'POST',
+      headers: authHeaders.value,
+      body: formData,
+    })
+
+    const data = await res.json().catch(() => null)
+    if (!res.ok) {
+      throw new Error(data?.error || '封面上传失败')
+    }
+    if (!data?.url) {
+      throw new Error('服务器没有返回封面地址')
+    }
+
+    form.value.cover_url = data.url
+    if (contentSource.value === 'empty') {
+      contentSource.value = 'manual'
+    }
+  } catch (e) {
+    coverUploadError.value = e instanceof Error ? e.message : '封面上传失败'
+  } finally {
+    coverUploading.value = false
+  }
+}
+
+const removeCover = () => {
+  form.value.cover_url = ''
+  coverUploadError.value = ''
 }
 
 const clearServerSyncTimer = () => {
@@ -1033,7 +1159,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .editor-page {
   height: calc(100vh - 64px);
-  background: #f6f6f3;
+  background: var(--a-color-surface);
   overflow: hidden;
 }
 
@@ -1046,38 +1172,6 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
 }
 
-.layout-btn,
-.right-tab-btn,
-.btn-save,
-.btn-publish,
-.import-btn,
-.import-btn-clear {
-  border: 2px solid #000;
-  background: #fff;
-  color: #000;
-  font-family: inherit;
-  font-size: 0.75rem;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
-}
-
-.layout-btn,
-.right-tab-btn {
-  border: none;
-  padding: 0.5rem 0.85rem;
-}
-
-.layout-btn.active,
-.right-tab-btn.active,
-.btn-publish {
-  background: #000;
-  color: #fff;
-}
-
-.right-panel-tabs,
 .import-actions,
 .meta-chip-group {
   display: flex;
@@ -1086,39 +1180,8 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 
-.btn-save,
-.btn-publish,
-.import-btn,
-.import-btn-clear {
-  padding: 0.65rem 1rem;
-}
-
-.btn-save:hover,
-.import-btn:hover,
-.import-btn-clear:hover,
-.layout-btn:hover,
-.right-tab-btn:hover {
-  background: #000;
-  color: #fff;
-}
-
-.btn-publish:hover {
-  background: #1f2937;
-}
-
-.btn-save:disabled,
-.btn-publish:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .editor-error {
   padding: 0.9rem 1rem;
-  border: 2px solid #fca5a5;
-  background: #fff2f2;
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: #b91c1c;
 }
 
 .editor-layout {
@@ -1132,7 +1195,7 @@ onBeforeUnmount(() => {
 .col-left,
 .col-center,
 .col-right {
-  background: #fff;
+  background: var(--a-color-bg);
   min-height: 0;
 }
 
@@ -1151,27 +1214,13 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.panel-title {
-  margin: 0.2rem 0 0;
-  font-size: 1rem;
-  font-weight: 900;
-  letter-spacing: -0.02em;
-}
-
 /* 右侧 section 分区 */
 .right-section {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
   padding: 1.25rem;
-  border-bottom: 2px solid #000;
+  border-bottom: var(--a-border);
 }
 
 .right-section:last-child {
@@ -1189,50 +1238,9 @@ onBeforeUnmount(() => {
   gap: 0.5rem;
 }
 
-.publish-actions .btn-save,
-.publish-actions .btn-publish {
-  width: 100%;
-  justify-content: center;
-}
-
-.left-panel-section,
-.info-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.collections-section {
-  flex: 1;
-  min-height: 0;
-}
-
-.collection-list,
 .toc-list,
-.status-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.channel-select,
 .hidden-file-input {
   width: 100%;
-}
-
-.channel-select {
-  padding: 0.8rem 0.9rem;
-  border: 2px solid #000;
-  font-family: inherit;
-  font-size: 0.9rem;
-  font-weight: 700;
-  background: #fff;
-  appearance: none;
-  cursor: pointer;
-  outline: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%23000' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 0.8rem center;
 }
 
 .collection-item {
@@ -1241,19 +1249,19 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 0.75rem;
   padding: 0.9rem 1rem;
-  border: 2px solid #000;
-  background: #fff;
+  border: var(--a-border);
+  background: var(--a-color-bg);
   cursor: pointer;
 }
 
 .collection-item.selected {
-  background: #000;
-  color: #fff;
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
 }
 
 .collection-item.selected .badge-default {
-  border-color: #fff;
-  color: #fff;
+  border-color: var(--a-color-bg);
+  color: var(--a-color-bg);
 }
 
 .collection-name {
@@ -1267,7 +1275,7 @@ onBeforeUnmount(() => {
 
 .badge-default {
   padding: 0.2rem 0.4rem;
-  border: 1.5px solid #000;
+  border: 1.5px solid var(--a-color-border);
   font-size: 0.65rem;
   font-weight: 900;
   letter-spacing: 0.05em;
@@ -1277,7 +1285,7 @@ onBeforeUnmount(() => {
 .col-empty,
 .col-loading,
 .editor-loading {
-  color: #6b7280;
+  color: var(--a-color-muted);
   font-size: 0.82rem;
   font-weight: 700;
 }
@@ -1287,53 +1295,6 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-}
-
-.channel-picker-state {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
-}
-
-.channel-picker-card {
-  width: min(100%, 60rem);
-  padding: 2rem;
-}
-
-.channel-picker-card .a-subtitle,
-.channel-picker-card .a-muted {
-  margin: 0 0 1rem;
-}
-
-.channel-picker-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
-}
-
-.channel-picker-link {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  min-height: 8rem;
-  padding: 1.25rem;
-  color: #000;
-  text-align: left;
-}
-
-.channel-picker-name {
-  font-size: 1rem;
-  font-weight: 900;
-  letter-spacing: -0.02em;
-}
-
-.channel-picker-actions {
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  margin-top: 1.5rem;
 }
 
 .editor-workspace {
@@ -1353,8 +1314,7 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 
-.editor-meta-actions,
-.draft-status-group {
+.editor-meta-actions {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -1365,60 +1325,29 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   padding: 0.35rem 0.6rem;
-  border: 2px solid #000;
+  border: var(--a-border);
   font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.04em;
-  background: #fff;
+  background: var(--a-color-bg);
 }
 
 .draft-status.is-ok {
-  border-color: #166534;
-  color: #166534;
-  background: #f0fdf4;
+  border-color: var(--a-color-success);
+  color: var(--a-color-success);
+  background: color-mix(in srgb, var(--a-color-success) 8%, var(--a-color-bg));
 }
 
 .draft-status.is-warn {
-  border-color: #92400e;
-  color: #92400e;
-  background: #fffbeb;
+  border-color: var(--a-color-danger);
+  color: var(--a-color-danger);
+  background: color-mix(in srgb, var(--a-color-danger) 8%, var(--a-color-bg));
 }
 
 .draft-status.is-muted {
-  border-color: #d1d5db;
-  color: #6b7280;
-  background: #fafaf9;
-}
-
-.draft-status-btn {
-  border: 2px solid #000;
-  background: #fff;
-  color: #000;
-  font-family: inherit;
-  font-size: 0.72rem;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 0.55rem 0.85rem;
-  cursor: pointer;
-  width: 100%;
-  text-align: center;
-}
-
-.draft-status-btn:hover {
-  background: #000;
-  color: #fff;
-}
-
-.editor-mode-group {
-  display: inline-flex;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.draft-status-btn.is-active {
-  background: #000;
-  color: #fff;
+  border-color: var(--a-color-disabled-border);
+  color: var(--a-color-muted);
+  background: var(--a-color-surface);
 }
 
 
@@ -1426,16 +1355,12 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   padding: 0.4rem 0.65rem;
-  border: 2px solid #000;
+  border: var(--a-border);
   font-size: 0.72rem;
   font-weight: 900;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-
-.meta-chip-active {
-  background: #000;
-  color: #fff;
+  background: var(--a-color-bg);
 }
 
 .hidden-file-input {
@@ -1448,15 +1373,15 @@ onBeforeUnmount(() => {
   min-height: 0;
   flex-direction: column;
   overflow: auto;
-  border: 2px solid #000;
-  background: #fff;
+  border: var(--a-border);
+  background: var(--a-color-bg);
 }
 
 .title-sticky {
   position: sticky;
   top: 0;
   z-index: 8;
-  background: #fff;
+  background: var(--a-color-bg);
   flex-shrink: 0;
 }
 
@@ -1485,18 +1410,18 @@ onBeforeUnmount(() => {
   font-weight: 900;
   letter-spacing: -0.04em;
   line-height: 1.12;
-  color: #000;
-  background: #fff;
+  color: var(--a-color-fg);
+  background: var(--a-color-bg);
 }
 
 .title-input::placeholder {
-  color: #d1d5db;
+  color: var(--a-color-muted-soft);
 }
 
 .title-divider {
   height: 2px;
   margin: 0 2rem;
-  background: #e5e7eb;
+  background: var(--a-color-disabled-border);
   flex-shrink: 0;
 }
 
@@ -1511,7 +1436,7 @@ onBeforeUnmount(() => {
   margin: 0;
   font-size: 0.95rem;
   line-height: 1.7;
-  color: #111827;
+  color: var(--a-color-fg);
 }
 
 .draft-recovery-preview {
@@ -1519,8 +1444,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 0.55rem;
   padding: 1rem;
-  border: 2px solid #000;
-  background: #fafaf9;
+  background: var(--a-color-surface);
 }
 
 .draft-recovery-preview strong {
@@ -1560,8 +1484,6 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 0.55rem;
   padding: 1rem;
-  border: 2px solid #000;
-  background: #fff;
 }
 
 .draft-manager-card strong {
@@ -1575,7 +1497,7 @@ onBeforeUnmount(() => {
 }
 
 .draft-manager-card-accent {
-  background: #fafaf9;
+  background: var(--a-color-surface);
 }
 
 .draft-manager-preview,
@@ -1583,14 +1505,14 @@ onBeforeUnmount(() => {
   margin: 0;
   font-size: 0.94rem;
   line-height: 1.7;
-  color: #111827;
+  color: var(--a-color-fg);
 }
 
 .draft-manager-warning {
   padding: 0.95rem 1rem;
-  border: 2px solid #92400e;
-  background: #fffbeb;
-  color: #92400e;
+  border: 2px solid var(--a-color-danger);
+  background: color-mix(in srgb, var(--a-color-danger) 8%, var(--a-color-bg));
+  color: var(--a-color-danger);
   font-size: 0.85rem;
   font-weight: 700;
   line-height: 1.6;
@@ -1611,8 +1533,8 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 0.35rem;
   padding: 1rem;
-  border: 2px solid #000;
-  background: #fafafa;
+  border: var(--a-border);
+  background: var(--a-color-surface);
 }
 
 .stat-num {
@@ -1627,7 +1549,7 @@ onBeforeUnmount(() => {
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #6b7280;
+  color: var(--a-color-muted);
 }
 
 .toc-section {
@@ -1639,11 +1561,13 @@ onBeforeUnmount(() => {
 }
 
 .toc-item {
-  display: flex;
-  align-items: baseline;
-  gap: 0.4rem;
+  --toc-depth: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 0.65rem;
   padding: 0.55rem 0.7rem;
-  color: #374151;
+  color: var(--a-color-muted);
   text-decoration: none;
   font-size: 0.8rem;
   font-weight: 700;
@@ -1655,30 +1579,86 @@ onBeforeUnmount(() => {
 }
 
 .toc-item:hover {
-  border-left-color: #000;
-  background: #f3f4f6;
-  color: #000;
+  border-left-color: var(--a-color-border);
+  background: var(--a-color-surface);
+  color: var(--a-color-fg);
 }
 
-/* Vertical-bar depth indicator */
-.toc-item::before {
-  content: '';
-  display: inline-block;
-  flex-shrink: 0;
-  width: 0;
-  height: 0.9em;
-  border-left: none;
+.toc-rail {
+  width: calc(var(--toc-depth) * 0.8rem + 1px);
+  min-height: 1.2rem;
+  background-image: repeating-linear-gradient(
+    to right,
+    color-mix(in srgb, var(--a-color-border) 52%, transparent) 0 1px,
+    transparent 1px 0.8rem
+  );
+  background-repeat: no-repeat;
+  opacity: 0.9;
 }
 
-.toc-h1::before { width: 0; }
-.toc-h2::before { width: 0.7rem; border-left: 2px solid #d1d5db; }
-.toc-h3::before { width: 1.4rem; border-left: 2px solid #d1d5db; box-shadow: -6px 0 0 0 #d1d5db; }
-.toc-h4::before { width: 2.1rem; border-left: 2px solid #d1d5db; box-shadow: -6px 0 0 0 #d1d5db, -12px 0 0 0 #d1d5db; }
+.toc-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-.toc-h1 { font-weight: 900; color: #111; }
-.toc-h2 { color: #374151; }
-.toc-h3 { color: #6b7280; font-weight: 700; }
-.toc-h4 { color: #9ca3af; font-weight: 600; }
+.toc-h1 { --toc-depth: 0; font-weight: 900; color: var(--a-color-fg); }
+.toc-h2 { --toc-depth: 1; color: var(--a-color-muted); }
+.toc-h3 { --toc-depth: 2; color: var(--a-color-muted); font-weight: 700; }
+.toc-h4 { --toc-depth: 3; color: var(--a-color-muted-soft); font-weight: 600; }
+
+.cover-upload-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 0.9rem;
+}
+
+.cover-preview-wrap {
+  overflow: hidden;
+  border: var(--a-border);
+  background: var(--a-color-surface);
+}
+
+.cover-preview-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.cover-empty-state {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem;
+  border: var(--a-border);
+  background: var(--a-color-surface);
+}
+
+.cover-empty-state strong {
+  font-size: 0.92rem;
+  font-weight: 900;
+}
+
+.cover-empty-state .a-muted,
+.cover-upload-hint {
+  margin: 0;
+}
+
+.cover-upload-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.cover-upload-error {
+  margin: 0;
+  color: var(--a-color-danger);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
 
 .options-list {
   display: flex;
@@ -1686,25 +1666,28 @@ onBeforeUnmount(() => {
   gap: 1rem;
 }
 
-.option-check,
-.status-row {
+.option-check {
   display: flex;
   align-items: center;
   gap: 0.6rem;
   font-size: 0.82rem;
   font-weight: 700;
-  color: #374151;
+  color: var(--a-color-fg);
 }
 
-.status-dot {
-  width: 0.55rem;
-  height: 0.55rem;
-  border-radius: 9999px;
-  flex-shrink: 0;
+.option-check {
+  justify-content: space-between;
+  padding: 0.875rem 1rem;
+  background: var(--a-color-bg);
+  cursor: pointer;
 }
 
-.status-dot.ok { background: #16a34a; }
-.status-dot.warn { background: #f59e0b; }
+.option-check input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--a-color-fg);
+}
 
 @media (max-width: 1100px) {
   .editor-layout {
@@ -1729,13 +1712,13 @@ onBeforeUnmount(() => {
   }
 
   .editor-meta-actions,
-  .draft-status-group,
   .draft-recovery-actions {
     width: 100%;
   }
 
   .draft-status,
-  .draft-status-btn {
+  .publish-actions :deep(.a-btn),
+  .editor-meta-actions :deep(.a-btn) {
     width: 100%;
     justify-content: center;
   }
