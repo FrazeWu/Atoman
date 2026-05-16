@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -238,12 +240,38 @@ func findOrCreateFeedSource(db *gorm.DB, targetType string, targetID *uuid.UUID,
 	return &source, nil
 }
 
+// internalRSSPattern 匹配 /api/feed/rss/:username 或 http(s)://host/api/feed/rss/:username
+var internalRSSPattern = regexp.MustCompile(`(?:^|/)api/feed/rss/([^/?#]+)$`)
+
+// resolveInternalRSSURL 检测 URL 是否为站内 RSS 地址，如果是则返回对应用户的 UUID。
+func resolveInternalRSSURL(db *gorm.DB, rawURL string) (uuid.UUID, error) {
+	m := internalRSSPattern.FindStringSubmatch(rawURL)
+	if len(m) < 2 {
+		return uuid.UUID{}, fmt.Errorf("not an internal RSS URL")
+	}
+	username := m[1]
+	var user model.User
+	if err := db.Where("username = ?", username).First(&user).Error; err != nil {
+		return uuid.UUID{}, err
+	}
+	return user.UUID, nil
+}
+
 func CreateSubscription(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var input SubscriptionInput
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
+		}
+
+		// 检测内部 RSS URL（/api/feed/rss/:username），自动转换为 internal_user 类型
+		if input.TargetType == "external_rss" && input.RssURL != "" {
+			if userID, err := resolveInternalRSSURL(db, input.RssURL); err == nil {
+				input.TargetType = "internal_user"
+				input.TargetID = &userID
+				input.RssURL = ""
+			}
 		}
 
 		if input.TargetType != "external_rss" && input.TargetID == nil {
@@ -253,6 +281,12 @@ func CreateSubscription(db *gorm.DB) gin.HandlerFunc {
 		if input.TargetType == "external_rss" && input.RssURL == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "rss_url is required for external subscriptions"})
 			return
+		}
+		if input.TargetType == "external_rss" {
+			if u, err := url.ParseRequestURI(input.RssURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "rss_url must be an absolute http/https URL"})
+				return
+			}
 		}
 
 		userIDVal, _ := c.Get("user_id")

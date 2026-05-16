@@ -95,6 +95,10 @@ func GetChannels(db *gorm.DB) gin.HandlerFunc {
 		query := db.Preload("User")
 
 		if userID := c.Query("user_id"); userID != "" {
+			if _, err := uuid.Parse(userID); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user_id"})
+				return
+			}
 			query = query.Where("user_id = ?", userID)
 		}
 

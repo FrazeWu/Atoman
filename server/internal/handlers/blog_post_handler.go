@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"atoman/internal/middleware"
 	"atoman/internal/model"
@@ -518,38 +519,25 @@ func PutBlogDraft(db *gorm.DB) gin.HandlerFunc {
 			allowComments = *input.AllowComments
 		}
 
-		var draft model.BlogDraft
-		result := db.Where("user_id = ? AND context_key = ?", userID, strings.TrimSpace(input.ContextKey)).First(&draft)
-		if result.Error != nil {
-			draft = model.BlogDraft{
-				UserID:        userID,
-				ContextKey:    strings.TrimSpace(input.ContextKey),
-				SourcePostID:  sourcePostID,
-				Title:         input.Title,
-				Content:       input.Content,
-				Summary:       input.Summary,
-				CoverURL:      input.CoverURL,
-				AllowComments: allowComments,
-				ChannelID:     channelID,
-				CollectionIDs: strings.Join(collectionIDs, ","),
-			}
-			if err := db.Create(&draft).Error; err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save draft"})
-				return
-			}
-		} else {
-			draft.SourcePostID = sourcePostID
-			draft.Title = input.Title
-			draft.Content = input.Content
-			draft.Summary = input.Summary
-			draft.CoverURL = input.CoverURL
-			draft.AllowComments = allowComments
-			draft.ChannelID = channelID
-			draft.CollectionIDs = strings.Join(collectionIDs, ",")
-			if err := db.Save(&draft).Error; err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save draft"})
-				return
-			}
+		draft := model.BlogDraft{
+			UserID:        userID,
+			ContextKey:    strings.TrimSpace(input.ContextKey),
+			SourcePostID:  sourcePostID,
+			Title:         input.Title,
+			Content:       input.Content,
+			Summary:       input.Summary,
+			CoverURL:      input.CoverURL,
+			AllowComments: allowComments,
+			ChannelID:     channelID,
+			CollectionIDs: strings.Join(collectionIDs, ","),
+		}
+		upsertCols := []string{"source_post_id", "title", "content", "summary", "cover_url", "allow_comments", "channel_id", "collection_ids", "updated_at"}
+		if err := db.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "user_id"}, {Name: "context_key"}},
+			DoUpdates: clause.AssignmentColumns(upsertCols),
+		}).Create(&draft).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save draft"})
+			return
 		}
 
 		c.JSON(http.StatusOK, gin.H{"data": buildBlogDraftResponse(draft), "message": "ok"})

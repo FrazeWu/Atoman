@@ -111,6 +111,11 @@ func syncAllRSSFeeds(db *gorm.DB) {
 		if url == "" {
 			continue
 		}
+		// 跳过相对路径或非 http(s) URL（内部 RSS 端点误存为 external_rss 时的兜底保护）
+		if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+			log.Printf("RSS sync skipping non-absolute URL: %s", url)
+			continue
+		}
 
 		// 2. Fetch and parse the feed
 		items, sourceTitle, err := FetchAndParseRSS(url)
@@ -197,6 +202,10 @@ func syncAllRSSFeeds(db *gorm.DB) {
 
 func SyncSingleRSS(db *gorm.DB, src model.FeedSource) {
 	if src.SourceType != "external_rss" || src.RssURL == "" {
+		return
+	}
+	if !strings.HasPrefix(src.RssURL, "http://") && !strings.HasPrefix(src.RssURL, "https://") {
+		log.Printf("SyncSingleRSS skipping non-absolute URL: %s", src.RssURL)
 		return
 	}
 
