@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -20,7 +21,7 @@ func SetupUserRoutes(router *gin.Engine, db *gorm.DB) {
 	users := router.Group("/api/users")
 	{
 		// Public routes — lookup by username (must come before /:id routes)
-		users.GET("/search", SearchUsers(db))
+		users.GET("/search", middleware.OptionalAuthMiddleware(), SearchUsers(db))
 		users.GET("/by-username/:username", GetUserByUsername(db))
 		users.GET("/:id/profile", GetUserProfile(db))
 		users.GET("/:id/followers", GetUserFollowers(db))
@@ -52,7 +53,8 @@ type UserProfileInput struct {
 
 // UserSettingsInput represents the request body for updating user settings
 type UserSettingsInput struct {
-	PrivateProfile *bool `json:"private_profile"`
+	PrivateProfile *bool   `json:"private_profile"`
+	DMPermission   *string `json:"dm_permission"`
 }
 
 // ExplorePostResponse represents a post in the explore feed
@@ -273,6 +275,16 @@ func UpdateUserSettings(db *gorm.DB) gin.HandlerFunc {
 		if input.PrivateProfile != nil {
 			updates["private_profile"] = *input.PrivateProfile
 		}
+		if input.DMPermission != nil {
+			permission := strings.TrimSpace(*input.DMPermission)
+			switch permission {
+			case "anyone", "following_only", "one_before_reply":
+				updates["dm_permission"] = permission
+			default:
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid dm_permission"})
+				return
+			}
+		}
 
 		if len(updates) > 0 {
 			if err := db.Model(&settings).Updates(updates).Error; err != nil {
@@ -393,11 +405,12 @@ func GetUserFollowing(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-// SearchUsers returns users matching the query string (for @mention autocomplete)
-// GET /api/users/search?q=<query>&limit=<n>
+// SearchUsers returns users matching the query string.
+// GET /api/users/search?q=<query>&limit=<n>&scope=mention
 func SearchUsers(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		q := c.Query("q")
+		q := strings.TrimSpace(c.Query("q"))
+		scope := strings.TrimSpace(c.Query("scope"))
 		limit := 5
 		if l, err := strconv.Atoi(c.Query("limit")); err == nil && l > 0 && l <= 20 {
 			limit = l
@@ -410,22 +423,34 @@ func SearchUsers(db *gorm.DB) gin.HandlerFunc {
 			AvatarURL   string `json:"avatar_url"`
 		}
 
-		var results []UserResult
 		query := db.Model(&model.User{}).
-			Select("uuid, username, display_name, avatar_url").
-			Where("is_active = ?", true).
-			Limit(limit)
+			Select("Users.uuid, Users.username, Users.display_name, Users.avatar_url").
+			Where("Users.is_active = ?", true)
+
+		if scope == "mention" {
+			userIDVal, ok := c.Get("user_id")
+			if !ok {
+				c.JSON(http.StatusOK, gin.H{"data": []UserResult{}})
+				return
+			}
+			userID, ok := userIDVal.(uuid.UUID)
+			if !ok {
+				c.JSON(http.StatusOK, gin.H{"data": []UserResult{}})
+				return
+			}
+			query = query.Joins(`JOIN follows ON follows.follower_id = "Users".uuid AND follows.following_id = ?`, userID)
+		}
 
 		if q != "" {
 			like := "%" + q + "%"
-			query = query.Where("username ILIKE ? OR display_name ILIKE ?", like, like)
+			query = query.Where("LOWER(Users.username) LIKE LOWER(?) OR LOWER(Users.display_name) LIKE LOWER(?)", like, like)
 		}
 
-		if err := query.Scan(&results).Error; err != nil {
+		var results []UserResult
+		if err := query.Limit(limit).Scan(&results).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "search failed"})
 			return
 		}
-
 		if results == nil {
 			results = []UserResult{}
 		}

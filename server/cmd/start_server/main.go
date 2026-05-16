@@ -205,6 +205,7 @@ func main() {
 			&model.BookmarkFolder{},
 			&model.FeedSource{},
 			&model.Subscription{},
+			&model.Follow{},
 			&model.FeedItem{},
 			&model.FeedItemRead{},
 			&model.FeedItemStar{},
