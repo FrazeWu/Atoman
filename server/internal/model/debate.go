@@ -64,10 +64,10 @@ type Argument struct {
 	SourceTitle   string `json:"source_title" gorm:"type:varchar(512);default:''"`
 	SourceExcerpt string `json:"source_excerpt" gorm:"type:text;default:''"`
 	// Admin moderation
-	IsFolded bool   `json:"is_folded" gorm:"default:false"`
-	FoldNote  string `json:"fold_note" gorm:"type:text;default:''"` // admin note for why folded
-	CreatedAt         time.Time    `json:"created_at"`
-	UpdatedAt         time.Time    `json:"updated_at"`
+	IsFolded  bool      `json:"is_folded" gorm:"default:false"`
+	FoldNote  string    `json:"fold_note" gorm:"type:text;default:''"` // admin note for why folded
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 func (Argument) TableName() string { return "arguments" }

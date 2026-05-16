@@ -97,6 +97,10 @@ go run cmd/create_admin/main.go
 - 规划文档只写在 `docs/superpowers/specs/`（需求/决策）或 `docs/superpowers/plans/`（执行步骤）。
 - 架构或产品行为变动 → 更新对应 spec；执行顺序或验证步骤变动 → 更新对应 plan。
 
+## Claude Rules
+
+- 前端实现额外遵循 `.claude/rules/frontend-ui.md`。
+
 ## Action Principles
 
 - **强制规划**：3 个以上步骤的任务，先输出计划并等待确认，再动代码。
@@ -104,5 +108,4 @@ go run cmd/create_admin/main.go
 - **强制验证**：前端改动跑 type-check；后端改动跑 `go build ./...`；完成前必须证明代码无误。
 - **及时止损**：需求模糊、多次尝试不收敛时，主动停止并请求确认。
 - **最小改动**：不添加推测性抽象、不清理无关代码、不加与任务无关的错误处理。
-
 

@@ -38,6 +38,10 @@
         <label class="a-field-label">头像 URL</label>
         <input v-model="form.avatar_url" placeholder="https://example.com/avatar.jpg" class="a-input" />
       </div>
+      <div class="a-field">
+        <label class="a-field-label">私信权限</label>
+        <ASelect v-model="form.dm_permission" :options="dmPermissionOptions" />
+      </div>
 
       <div style="border-top:2px solid #000;padding-top:1.5rem">
         <h2 class="a-subtitle" style="margin-bottom:1rem">修改密码</h2>
@@ -65,11 +69,19 @@
 import { ref, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import ABtn from '@/components/ui/ABtn.vue'
+import ASelect from '@/components/ui/ASelect.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useApi } from '@/composables/useApi'
+import type { DMPermission } from '@/types'
 
 const authStore = useAuthStore()
 const api = useApi()
+
+const dmPermissionOptions = [
+  { label: '任意人可私信', value: 'anyone' },
+  { label: '仅我关注的人', value: 'following_only' },
+  { label: '陌生人仅可发一条', value: 'one_before_reply' },
+]
 
 const form = ref({
   display_name: '',
@@ -77,6 +89,7 @@ const form = ref({
   website: '',
   location: '',
   avatar_url: '',
+  dm_permission: 'anyone' as DMPermission,
 })
 
 const newPassword = ref('')
@@ -99,6 +112,15 @@ const loadProfile = async () => {
         website: u.website || '',
         location: u.location || '',
         avatar_url: u.avatar_url || '',
+        dm_permission: 'anyone',
+      }
+
+      const settingsRes = await fetch(api.users.meSettings, {
+        headers: { Authorization: `Bearer ${authStore.token}` }
+      })
+      if (settingsRes.ok) {
+        const settingsData = await settingsRes.json()
+        form.value.dm_permission = settingsData.data?.dm_permission || 'anyone'
       }
     }
   } catch (e) {
@@ -119,6 +141,15 @@ const save = async () => {
   try {
     const payload: Record<string, string> = { ...form.value }
     if (newPassword.value) payload.password = newPassword.value
+
+    await fetch(api.users.meSettings, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authStore.token}`
+      },
+      body: JSON.stringify({ dm_permission: form.value.dm_permission })
+    })
 
     const res = await fetch(api.users.settings, {
       method: 'PUT',

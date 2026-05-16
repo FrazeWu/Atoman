@@ -79,6 +79,7 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
   },
   { path: '/feed', component: () => import('@/views/feed/FeedView.vue'), meta: { requiresAuth: true } },
+  { path: '/inbox', component: () => import('@/views/feed/InboxPage.vue'), meta: { requiresAuth: true } },
   { path: '/feed/stats', component: () => import('@/views/feed/FeedStatsView.vue'), meta: { requiresAuth: true } },
   { path: '/feed/item/:id', component: () => import('@/views/feed/FeedItemDetailView.vue'), meta: { requiresAuth: true } },
   { path: '/feed/starred', component: () => import('@/views/feed/FeedStarredView.vue'), meta: { requiresAuth: true } },
@@ -102,6 +103,11 @@ const routes: RouteRecordRaw[] = [
   { path: '/podcast/new', component: () => import('@/views/podcast/PodcastEditorView.vue'), meta: { requiresAuth: true } },
   { path: '/podcast/:id/edit', component: () => import('@/views/podcast/PodcastEditorView.vue'), meta: { requiresAuth: true } },
   { path: '/podcast/:id', component: () => import('@/views/podcast/PodcastEpisodeView.vue') },
+  // Video routes — order matters: /new before /:id
+  { path: '/video', component: () => import('@/views/video/VideoHomeView.vue') },
+  { path: '/video/new', component: () => import('@/views/video/VideoEditorView.vue'), meta: { requiresAuth: true } },
+  { path: '/video/:id/edit', component: () => import('@/views/video/VideoEditorView.vue'), meta: { requiresAuth: true } },
+  { path: '/video/:id', component: () => import('@/views/video/VideoDetailView.vue') },
   { path: '/:pathMatch(.*)*', component: () => import('@/views/NotFoundView.vue') },
 ]
 
