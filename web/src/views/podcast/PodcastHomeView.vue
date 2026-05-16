@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import APageHeader from '@/components/ui/APageHeader.vue'
+import ABtn from '@/components/ui/ABtn.vue'
+import { useAuthStore } from '@/stores/auth'
 import type { PodcastEpisode } from '@/types'
+
+const authStore = useAuthStore()
 
 const API_URL = import.meta.env.VITE_API_URL || '/api'
 const episodes = ref<PodcastEpisode[]>([])
@@ -27,8 +32,12 @@ function fmtDuration(sec: number) {
 </script>
 
 <template>
-  <div class="ph-wrap">
-    <h1 class="ph-title">播客</h1>
+  <div class="a-page-md">
+    <APageHeader title="播客" accent sub="探索播客音频节目">
+      <template #action>
+        <ABtn v-if="authStore.isAuthenticated" to="/podcast/new">+ 发布节目</ABtn>
+      </template>
+    </APageHeader>
 
     <div v-if="loading" class="ph-state">加载中…</div>
     <div v-else-if="episodes.length === 0" class="ph-state">暂无节目</div>
@@ -57,8 +66,6 @@ function fmtDuration(sec: number) {
 </template>
 
 <style scoped>
-.ph-wrap { max-width: 48rem; margin: 0 auto; padding: 2rem 1rem; }
-.ph-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; }
 .ph-state { text-align: center; padding: 4rem 0; color: #9ca3af; }
 .ph-list { display: flex; flex-direction: column; gap: 0.75rem; list-style: none; padding: 0; }
 .ph-item { display: flex; gap: 0.75rem; align-items: flex-start; border-bottom: 1px solid #f3f4f6; padding-bottom: 0.75rem; }

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-import APageHeader from '@/components/ui/APageHeader.vue'
 import ABtn from '@/components/ui/ABtn.vue'
 import { useAuthStore } from '@/stores/auth'
 import type { Video } from '@/types'
@@ -28,27 +27,39 @@ watch(sort, fetchVideos)
 
 <template>
   <div class="vh-wrap">
-    <APageHeader title="视频" accent sub="探索视频内容">
-      <template #action>
-        <ABtn v-if="authStore.isAuthenticated" to="/video/new" variant="primary">+ 上传视频</ABtn>
-      </template>
-    </APageHeader>
-
-    <!-- Sort tabs -->
-    <div class="vh-tabs">
-      <button
-        v-for="s in [{ v: 'latest', label: '最新' }, { v: 'popular', label: '最热' }]"
-        :key="s.v"
-        class="vh-tab"
-        :class="{ 'vh-tab--active': sort === s.v }"
-        @click="sort = s.v as 'latest' | 'popular'"
-      >{{ s.label }}</button>
+    <!-- Sticky filter bar (YouTube style) -->
+    <div class="vh-bar">
+      <div class="vh-bar-inner">
+        <button
+          v-for="s in [{ v: 'latest', label: '最新上传' }, { v: 'popular', label: '最热播放' }]"
+          :key="s.v"
+          class="vh-chip"
+          :class="{ 'vh-chip--active': sort === s.v }"
+          @click="sort = s.v as 'latest' | 'popular'"
+        >{{ s.label }}</button>
+      </div>
+      <div class="vh-bar-action">
+        <ABtn v-if="authStore.isAuthenticated" to="/video/new" variant="primary" size="sm">+ 上传</ABtn>
+      </div>
     </div>
 
+    <!-- Skeleton -->
     <div v-if="loading" class="vh-grid">
-      <div v-for="i in 8" :key="i" class="vh-skeleton" />
+      <div v-for="i in 12" :key="i" class="vh-skel">
+        <div class="vh-skel-thumb" />
+        <div class="vh-skel-info">
+          <div class="vh-skel-avatar" />
+          <div class="vh-skel-lines">
+            <div class="vh-skel-line" style="width:85%" />
+            <div class="vh-skel-line" style="width:55%" />
+            <div class="vh-skel-line" style="width:40%" />
+          </div>
+        </div>
+      </div>
     </div>
+
     <div v-else-if="videos.length === 0" class="vh-empty">暂无视频</div>
+
     <div v-else class="vh-grid">
       <VideoCard v-for="v in videos" :key="v.id" :video="v" />
     </div>
@@ -57,58 +68,104 @@ watch(sort, fetchVideos)
 
 <style scoped>
 .vh-wrap {
-  max-width: 80rem;
+  max-width: 82rem;
   margin: 0 auto;
-  padding: 2rem 1.5rem 6rem;
+  padding: 0 1rem 6rem;
 }
 
-.vh-tabs {
+/* Sticky filter bar */
+.vh-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--a-color-bg);
   display: flex;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--a-color-border, #e5e7eb);
   margin-bottom: 1.5rem;
 }
-.vh-tab {
-  padding: 0.35rem 0.875rem;
+.vh-bar-inner {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  flex: 1;
+  scrollbar-width: none;
+}
+.vh-bar-inner::-webkit-scrollbar { display: none; }
+
+.vh-chip {
+  flex-shrink: 0;
+  padding: 0.3rem 0.75rem;
   font-size: 0.8rem;
-  font-weight: 700;
-  border: 1px solid var(--a-color-disabled-border, #e5e7eb);
-  border-radius: 9999px;
-  background: none;
+  font-weight: 600;
+  border: none;
+  border-radius: 0.5rem;
+  background: var(--a-color-surface);
   cursor: pointer;
-  color: var(--a-color-muted, #6b7280);
-  transition: all 0.15s;
-  letter-spacing: 0.02em;
-}
-.vh-tab:hover {
-  border-color: var(--a-color-muted, #6b7280);
   color: var(--a-color-fg);
+  transition: background 0.12s;
+  white-space: nowrap;
 }
-.vh-tab--active {
+.vh-chip:hover { background: var(--a-color-border); }
+.vh-chip--active {
   background: var(--a-color-fg);
   color: var(--a-color-bg);
-  border-color: var(--a-color-fg);
 }
 
+/* Grid */
 .vh-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 1rem 1rem;
 }
 
-.vh-skeleton {
+/* Skeleton card */
+.vh-skel { display: flex; flex-direction: column; gap: 0; }
+.vh-skel-thumb {
+  width: 100%;
   aspect-ratio: 16/9;
-  background: var(--a-color-surface, #f3f4f6);
-  border-radius: 0.375rem;
-  animation: pulse 1.5s ease-in-out infinite;
+  background: var(--a-color-surface);
+  border-radius: 0.75rem;
+  animation: pulse 1.4s ease-in-out infinite;
 }
+.vh-skel-info {
+  display: flex;
+  gap: 0.65rem;
+  padding: 0.6rem 0 0;
+}
+.vh-skel-avatar {
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: var(--a-color-surface);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.vh-skel-lines {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding-top: 0.1rem;
+}
+.vh-skel-line {
+  height: 0.75rem;
+  background: var(--a-color-surface);
+  border-radius: 0.25rem;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  50% { opacity: 0.45; }
 }
 
 .vh-empty {
   text-align: center;
   padding: 6rem 0;
-  color: var(--a-color-muted, #9ca3af);
+  color: var(--a-color-muted);
+  font-size: 0.9rem;
 }
 </style>

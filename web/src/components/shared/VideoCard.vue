@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Video } from '@/types'
 
-defineProps<{ video: Video }>()
+const props = defineProps<{ video: Video }>()
 
 function fmtDuration(sec: number): string {
   if (!sec) return ''
@@ -14,29 +14,51 @@ function fmtDuration(sec: number): string {
 
 function fmtViews(n: number): string {
   if (n >= 10000) return `${(n / 10000).toFixed(1)}万`
-  return n.toString()
+  return String(n)
 }
 
-function fmtDate(s: string): string {
-  return new Date(s).toLocaleDateString('zh-CN')
+function timeAgo(s: string): string {
+  const diff = (Date.now() - new Date(s).getTime()) / 1000
+  if (diff < 60) return '刚刚'
+  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
+  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`
+  if (diff < 2592000) return `${Math.floor(diff / 86400)} 天前`
+  if (diff < 31536000) return `${Math.floor(diff / 2592000)} 个月前`
+  return `${Math.floor(diff / 31536000)} 年前`
 }
+
+const avatarLetter = () =>
+  (props.video.channel?.name ?? props.video.user?.username ?? '?')[0].toUpperCase()
 </script>
 
 <template>
   <RouterLink :to="`/video/${video.id}`" class="vc-card">
+    <!-- Thumbnail -->
     <div class="vc-thumb">
-      <img v-if="video.thumbnail_url" :src="video.thumbnail_url" :alt="video.title" class="vc-img" />
+      <img v-if="video.thumbnail_url" :src="video.thumbnail_url" :alt="video.title" class="vc-img" loading="lazy" />
       <div v-else class="vc-thumb-placeholder">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.3">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor" style="opacity:0.25">
           <path d="M8 5v14l11-7z"/>
         </svg>
       </div>
       <span v-if="video.duration_sec" class="vc-duration">{{ fmtDuration(video.duration_sec) }}</span>
     </div>
-    <div class="vc-body">
-      <p class="vc-title">{{ video.title }}</p>
-      <p v-if="video.channel" class="vc-channel">{{ video.channel.name }}</p>
-      <p class="vc-meta">{{ fmtViews(video.view_count) }} 次播放 · {{ fmtDate(video.created_at) }}</p>
+
+    <!-- Info row: avatar + text -->
+    <div class="vc-info">
+      <div class="vc-avatar" aria-hidden="true">
+        <img v-if="video.channel?.cover_url" :src="video.channel.cover_url" :alt="video.channel.name" />
+        <span v-else>{{ avatarLetter() }}</span>
+      </div>
+      <div class="vc-text">
+        <p class="vc-title">{{ video.title }}</p>
+        <p v-if="video.channel" class="vc-channel">{{ video.channel.name }}</p>
+        <p class="vc-meta">
+          <span>{{ fmtViews(video.view_count) }} 次播放</span>
+          <span class="vc-dot">·</span>
+          <span>{{ timeAgo(video.created_at) }}</span>
+        </p>
+      </div>
     </div>
   </RouterLink>
 </template>
@@ -46,24 +68,24 @@ function fmtDate(s: string): string {
   display: block;
   text-decoration: none;
   color: inherit;
-  border-radius: 0.5rem;
-  overflow: hidden;
-  transition: opacity 0.15s;
 }
-.vc-card:hover { opacity: 0.85; }
 .vc-card:hover .vc-title { text-decoration: underline; }
 
+/* Thumbnail */
 .vc-thumb {
   position: relative;
   aspect-ratio: 16/9;
-  background: var(--a-color-surface, #f3f4f6);
-  border-radius: 0.375rem;
+  background: var(--a-color-surface);
+  border-radius: 0.75rem;
   overflow: hidden;
 }
+.vc-thumb:hover .vc-img { transform: scale(1.02); }
 .vc-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 0.2s ease;
+  display: block;
 }
 .vc-thumb-placeholder {
   position: absolute;
@@ -71,24 +93,47 @@ function fmtDate(s: string): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--a-color-muted, #9ca3af);
+  color: var(--a-color-muted);
 }
 .vc-duration {
   position: absolute;
-  bottom: 0.3rem;
-  right: 0.4rem;
-  background: rgba(0, 0, 0, 0.8);
+  bottom: 0.35rem;
+  right: 0.45rem;
+  background: rgba(0, 0, 0, 0.82);
   color: #fff;
   font-size: 0.7rem;
   font-weight: 700;
-  padding: 0.1rem 0.35rem;
-  border-radius: 0.2rem;
-  letter-spacing: 0.02em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.25rem;
+  letter-spacing: 0.03em;
 }
 
-.vc-body {
-  padding: 0.5rem 0.25rem;
+/* Info */
+.vc-info {
+  display: flex;
+  gap: 0.65rem;
+  padding: 0.6rem 0 0;
 }
+.vc-avatar {
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--a-color-accent, #6366f1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #fff;
+}
+.vc-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.vc-text { min-width: 0; flex: 1; }
 .vc-title {
   font-size: 0.875rem;
   font-weight: 600;
@@ -101,13 +146,17 @@ function fmtDate(s: string): string {
   margin: 0 0 0.2rem 0;
 }
 .vc-channel {
-  font-size: 0.75rem;
-  color: var(--a-color-muted, #6b7280);
-  margin: 0 0 0.1rem 0;
+  font-size: 0.775rem;
+  color: var(--a-color-muted);
+  margin: 0 0 0.15rem 0;
 }
 .vc-meta {
-  font-size: 0.7rem;
-  color: var(--a-color-muted-soft, #9ca3af);
+  font-size: 0.75rem;
+  color: var(--a-color-muted);
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
 }
+.vc-dot { opacity: 0.5; }
 </style>

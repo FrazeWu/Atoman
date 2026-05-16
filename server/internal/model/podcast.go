@@ -12,8 +12,8 @@ type PodcastEpisode struct {
 	ChannelID uuid.UUID `json:"channel_id" gorm:"type:uuid;not null;index"`
 	Channel   *Channel  `json:"channel,omitempty" gorm:"foreignKey:ChannelID"`
 	// Audio file: always local upload (S3/MinIO)
-	AudioURL string `json:"audio_url" gorm:"type:text;not null"`
-	DurationSec int `json:"duration_sec" gorm:"default:0"`
+	AudioURL    string `json:"audio_url" gorm:"type:text;not null"`
+	DurationSec int    `json:"duration_sec" gorm:"default:0"`
 	// Episode cover: optional; falls back to channel cover in RSS
 	EpisodeCoverURL string `json:"episode_cover_url" gorm:"type:text"`
 	// Episode ordering
