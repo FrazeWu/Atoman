@@ -93,6 +93,21 @@ export function useApi() {
       timeline: `${apiUrl}/feed/timeline`,
       rss: (username: string) => `${apiUrl}/feed/rss/${username}`,
     },
-    
+
+    notifications: {
+      list: `${apiUrl}/notifications`,
+      unreadCount: `${apiUrl}/notifications/unread-count`,
+      markRead: (id: string) => `${apiUrl}/notifications/${id}/read`,
+      markAllRead: `${apiUrl}/notifications/read-all`,
+    },
+
+    dm: {
+      conversations: `${apiUrl}/dm/conversations`,
+      conversation: (username: string) => `${apiUrl}/dm/conversations/${username}`,
+      markRead: (username: string) => `${apiUrl}/dm/conversations/${username}/read`,
+      unreadCount: `${apiUrl}/dm/unread-count`,
+      upload: `${apiUrl}/dm/upload`,
+    },
+
   };
 }

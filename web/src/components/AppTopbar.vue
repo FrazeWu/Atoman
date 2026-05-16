@@ -9,8 +9,11 @@
         <RouterLink to="/feed" class="nav-link" :class="{ active: $route.path === '/' || $route.path.startsWith('/feed') }">订阅</RouterLink>
         <RouterLink to="/music" class="nav-link" :class="{ active: $route.path.startsWith('/music') || $route.path.startsWith('/artist=') }">音乐</RouterLink>
         <RouterLink to="/blog" class="nav-link" :class="{ active: isBlogContext }">博客</RouterLink>
+        <RouterLink to="/forum" class="nav-link" :class="{ active: $route.path.startsWith('/forum') }">社区</RouterLink>
         <RouterLink to="/debate" class="nav-link" :class="{ active: $route.path.startsWith('/debate') }">辩论</RouterLink>
         <RouterLink to="/timeline" class="nav-link" :class="{ active: $route.path.startsWith('/timeline') }">时间线</RouterLink>
+        <RouterLink to="/podcast" class="nav-link" :class="{ active: $route.path.startsWith('/podcast') }">播客</RouterLink>
+        <RouterLink to="/video" class="nav-link" :class="{ active: $route.path.startsWith('/video') }">视频</RouterLink>
 
         <!-- Blog sub-links when in blog context -->
         <template v-if="isBlogContext">
@@ -22,6 +25,11 @@
 
       <!-- Right side -->
       <div class="nav-right">
+        <RouterLink v-if="authStore.isAuthenticated" to="/inbox" class="notif-btn">
+          收件箱
+          <span v-if="inboxStore.totalUnread > 0" class="notif-count">{{ inboxStore.totalUnread }}</span>
+        </RouterLink>
+
         <!-- User menu -->
         <div v-if="authStore.isAuthenticated" class="dropdown-wrap" data-dropdown="user">
           <button class="user-btn" @click="toggleDropdown('user')">
@@ -46,11 +54,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { RouterLink, useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useInboxStore } from '@/stores/inbox'
 
 const authStore = useAuthStore()
+const inboxStore = useInboxStore()
 const router = useRouter()
 
 const activeDropdown = ref<string | null>(null)
@@ -81,6 +91,17 @@ const handleClickOutside = (e: MouseEvent) => {
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
+  if (authStore.isAuthenticated) {
+    inboxStore.bootstrap()
+  }
+})
+
+watch(() => authStore.isAuthenticated, (isAuthenticated) => {
+  if (isAuthenticated) {
+    inboxStore.bootstrap()
+  } else {
+    inboxStore.disconnect()
+  }
 })
 
 onUnmounted(() => document.removeEventListener('click', handleClickOutside))
