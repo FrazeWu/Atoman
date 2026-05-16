@@ -73,52 +73,40 @@
       <!-- Top tab bar -->
       <div class="tab-bar">
         <div class="tab-bar-left">
-          <button
+          <ABtn
             v-for="(label, key) in tabOptions"
             :key="key"
-            class="tab-btn"
-            :class="{ 'tab-btn-active': activeTab === key }"
+            outline
+            size="sm"
+            class="forum-tab-btn"
+            :class="{ 'forum-tab-btn-active': activeTab === key }"
             @click="setTab(key as TabKey)"
           >
             {{ label }}
-          </button>
+          </ABtn>
         </div>
         <div class="tab-bar-right">
-          <button class="tab-btn" @click="router.push('/forum/new')" v-if="authStore.isAuthenticated">
-            + 发新话题
-          </button>
-          <button class="tab-btn" @click="catReqModalOpen = true" v-if="authStore.isAuthenticated">
+          <ABtn v-if="authStore.isAuthenticated" outline size="sm" @click="router.push('/forum/new')">
+            发新话题
+          </ABtn>
+          <ABtn v-if="authStore.isAuthenticated" outline size="sm" @click="catReqModalOpen = true">
             申请分类
-          </button>
+          </ABtn>
         </div>
       </div>
 
       <!-- Filter bar -->
       <div class="filter-bar">
         <div class="filter-left">
-          <div class="category-dropdown" @click.stop="catDropdownOpen = !catDropdownOpen">
-            <span>{{ activeCategoryId ? currentCategoryName : 'All Categories' }}</span>
-            <span class="dropdown-arrow">▾</span>
-            <div v-if="catDropdownOpen" class="dropdown-menu" @click.stop>
-              <div
-                class="dropdown-item"
-                :class="{ 'dropdown-item-active': !activeCategoryId }"
-                @click="selectCategory(null); catDropdownOpen = false"
-              >All Categories</div>
-              <div
-                v-for="cat in forumStore.categories"
-                :key="cat.id"
-                class="dropdown-item"
-                :class="{ 'dropdown-item-active': activeCategoryId === cat.id }"
-                @click="selectCategory(cat.id); catDropdownOpen = false"
-              >
-                <span class="dropdown-cat-dot" :style="{ background: cat.color || 'var(--a-color-fg)' }" />
-                {{ cat.name }}
-              </div>
-            </div>
+          <div class="forum-category-select">
+            <ASelect
+              v-model="selectedCategoryValue"
+              :options="categoryOptions"
+              placeholder="全部分类"
+            />
           </div>
 
-          <div v-if="activeTag" class="active-tag-chip">
+          <div v-if="activeTag" class="active-tag-chip a-badge a-badge-fill">
             # {{ activeTag }}
             <button @click="clearTag" class="tag-chip-close">×</button>
           </div>
@@ -126,9 +114,8 @@
 
         <div class="filter-right">
           <div class="search-wrap">
-            <input
+            <AInput
               v-model="searchQuery"
-              type="text"
               placeholder="搜索话题..."
               class="search-input"
               @keydown.enter="doSearch"
@@ -142,8 +129,8 @@
 
       <!-- Topic list header row -->
       <div class="topic-list-header">
-        <span class="th-title">话题</span>
-        <span class="th-stats">
+        <span class="th-title a-label">话题</span>
+        <span class="th-stats a-label">
           <span>回复</span>
           <span>浏览</span>
           <span>活跃</span>
@@ -152,7 +139,7 @@
 
       <!-- Loading state -->
       <div v-if="forumStore.loading" class="topic-list">
-        <div v-for="i in 8" :key="i" class="topic-row-skeleton" />
+        <div v-for="i in 8" :key="i" class="topic-row-skeleton a-skeleton" />
       </div>
 
       <!-- Empty state -->
@@ -163,7 +150,7 @@
         <div
           v-for="(topic, index) in forumStore.topics"
           :key="topic.id"
-          class="topic-row"
+          class="topic-row a-card"
           :class="{
             'topic-row-pinned': topic.pinned,
             'topic-row-focused': focusedIndex === index,
@@ -174,18 +161,18 @@
           <div class="tr-left">
             <!-- Category badge -->
             <div class="tr-tags">
-              <span v-if="topic.pinned" class="tr-badge tr-badge-pin">置顶</span>
-              <span v-if="topic.closed" class="tr-badge tr-badge-closed">已关闭</span>
+              <span v-if="topic.pinned" class="tr-badge a-badge tr-badge-pin">置顶</span>
+              <span v-if="topic.closed" class="tr-badge a-badge tr-badge-closed">已关闭</span>
               <span
                 v-if="topic.category"
-                class="tr-badge tr-badge-cat"
+                class="tr-badge a-badge tr-badge-cat"
                 :style="{ borderColor: topic.category.color, color: topic.category.color }"
                 @click.stop="selectCategory(topic.category!.id)"
               >{{ topic.category.name }}</span>
               <span
                 v-for="tag in (topic.tags || []).slice(0, 2)"
                 :key="tag"
-                class="tr-badge tr-badge-tag"
+                class="tr-badge a-badge tr-badge-tag"
                 @click.stop="filterByTag(tag)"
               ># {{ tag }}</span>
             </div>
@@ -260,6 +247,7 @@ import { useAuthStore } from '@/stores/auth'
 import ABtn from '@/components/ui/ABtn.vue'
 import AEmpty from '@/components/ui/AEmpty.vue'
 import AInput from '@/components/ui/AInput.vue'
+import ASelect from '@/components/ui/ASelect.vue'
 import ATextarea from '@/components/ui/ATextarea.vue'
 import AModal from '@/components/ui/AModal.vue'
 
@@ -274,11 +262,11 @@ const activeTab = ref<TabKey>('latest')
 const activeTag = ref('')
 const page = ref(1)
 const loadingMore = ref(false)
-const catDropdownOpen = ref(false)
 const focusedIndex = ref(-1)
 const searchQuery = ref('')
 const topicListRef = ref<HTMLElement | null>(null)
 const searchInputRef = ref<HTMLInputElement | null>(null)
+const ALL_CATEGORY_VALUE = '__all__'
 
 const tabOptions: Record<TabKey, string> = {
   latest: '最新',
@@ -312,9 +300,16 @@ const popularTags = computed(() => {
     .map(([tag]) => tag)
 })
 
-const currentCategoryName = computed(() => {
-  if (!activeCategoryId.value) return 'All Categories'
-  return forumStore.categories.find((c) => c.id === activeCategoryId.value)?.name || 'All Categories'
+const categoryOptions = computed(() => [
+  { label: '全部分类', value: ALL_CATEGORY_VALUE },
+  ...forumStore.categories.map((cat) => ({ label: cat.name, value: cat.id })),
+])
+
+const selectedCategoryValue = computed({
+  get: () => activeCategoryId.value ?? ALL_CATEGORY_VALUE,
+  set: (value: string | number | null) => {
+    void selectCategory(value === ALL_CATEGORY_VALUE ? null : String(value))
+  },
 })
 
 // ─── Formatters ──────────────────────────────────────────────────────────────
@@ -375,7 +370,6 @@ const loadTopics = async (resetPage = true) => {
 
 const selectCategory = async (id: string | null) => {
   activeCategoryId.value = id
-  catDropdownOpen.value = false
   await loadTopics()
 }
 
@@ -476,22 +470,14 @@ const scrollToFocused = () => {
   el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
 }
 
-// ─── Click outside to close dropdown ─────────────────────────────────────────
-
-const handleClickOutside = () => {
-  catDropdownOpen.value = false
-}
-
 onMounted(async () => {
   await forumStore.fetchCategories()
   await forumStore.fetchTopics({ sort: 'latest', page: 1 })
   window.addEventListener('keydown', handleKeydown)
-  document.addEventListener('click', handleClickOutside)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown)
-  document.removeEventListener('click', handleClickOutside)
   if (searchTimer) clearTimeout(searchTimer)
 })
 
@@ -636,11 +622,12 @@ const submitCategoryRequest = async () => {
 .sidebar-tag {
   display: inline-block;
   font-size: 0.7rem;
-  font-weight: 700;
+  font-weight: var(--a-font-weight-strong);
   padding: 0.2rem 0.6rem;
   margin: 0.15rem 0.25rem;
   margin-left: 1.25rem;
-  border: 1.5px solid var(--a-color-disabled-border);
+  border: var(--a-border);
+  border-color: var(--a-color-disabled-border);
   color: var(--a-color-muted);
   cursor: pointer;
   transition: all 0.12s;
@@ -701,36 +688,24 @@ kbd {
 .tab-bar-left {
   display: flex;
   align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .tab-bar-right {
   display: flex;
   align-items: center;
+  gap: 0.75rem;
 }
 
-.tab-btn {
-  font-size: 0.78rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  padding: 0.875rem 1rem;
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: var(--a-color-muted);
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
-  transition: all 0.12s;
-  white-space: nowrap;
+.forum-tab-btn {
+  box-shadow: none;
 }
 
-.tab-btn:hover {
-  color: var(--a-color-fg);
-}
-
-.tab-btn-active {
-  color: var(--a-color-fg);
-  border-bottom-color: var(--a-color-fg);
+.forum-tab-btn-active {
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
+  border-color: var(--a-color-fg);
 }
 
 /* ── Filter bar ──────────────────────────────────────────────────────────── */
@@ -754,70 +729,19 @@ kbd {
   align-items: center;
 }
 
-/* Category dropdown */
-.category-dropdown {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
+.forum-category-select {
+  min-width: 12rem;
+}
+
+.forum-category-select :deep(.a-field) {
+  gap: 0;
+}
+
+.forum-category-select :deep(.a-select-trigger) {
+  min-height: 2.5rem;
   font-size: 0.8rem;
-  font-weight: 900;
-  padding: 0.45rem 0.875rem;
-  border: var(--a-border);
-  cursor: pointer;
-  background: var(--a-color-bg);
-  user-select: none;
-  transition: all 0.12s;
-  white-space: nowrap;
-}
-
-.category-dropdown:hover {
-  background: var(--a-color-fg);
-  color: var(--a-color-bg);
-}
-
-.dropdown-arrow {
-  font-size: 0.65rem;
-}
-
-.dropdown-menu {
-  position: absolute;
-  top: calc(100% + 2px);
-  left: 0;
-  min-width: 200px;
-  border: var(--a-border);
-  background: var(--a-color-bg);
-  z-index: var(--a-z-dropdown);
-  box-shadow: var(--a-shadow-dropdown);
-}
-
-.dropdown-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.6rem 1rem;
-  font-size: 0.8rem;
-  font-weight: 700;
-  cursor: pointer;
-  border-bottom: 1px solid var(--a-color-disabled-border);
-  transition: background 0.1s;
-}
-
-.dropdown-item:last-child {
-  border-bottom: none;
-}
-
-.dropdown-item:hover,
-.dropdown-item-active {
-  background: var(--a-color-fg);
-  color: var(--a-color-bg);
-}
-
-.dropdown-cat-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
+  font-weight: var(--a-font-weight-black);
+  letter-spacing: var(--a-letter-spacing-wide);
 }
 
 /* Active tag chip */
@@ -825,12 +749,6 @@ kbd {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  padding: 0.3rem 0.7rem;
-  background: var(--a-color-fg);
-  color: var(--a-color-bg);
-  font-size: 0.72rem;
-  font-weight: 900;
-  letter-spacing: 0.05em;
 }
 
 .tag-chip-close {
@@ -853,20 +771,17 @@ kbd {
   position: relative;
 }
 
-.search-input {
-  padding: 0.45rem 2rem 0.45rem 0.875rem;
-  border: var(--a-border);
-  background: var(--a-color-bg);
-  font-size: 0.8rem;
-  font-weight: 500;
-  font-family: inherit;
-  outline: none;
-  width: 200px;
-  transition: box-shadow 0.15s;
+.search-wrap :deep(.a-field) {
+  gap: 0;
 }
 
-.search-input:focus {
-  box-shadow: var(--a-shadow-button);
+.search-input {
+  width: 200px;
+}
+
+.search-input :deep(.a-input) {
+  padding-right: 2rem;
+  font-size: 0.8rem;
 }
 
 .search-clear {
@@ -894,10 +809,6 @@ kbd {
 }
 
 .th-title {
-  font-size: 0.65rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
   color: var(--a-color-muted-soft);
   flex: 1;
 }
@@ -905,10 +816,6 @@ kbd {
 .th-stats {
   display: flex;
   gap: 0;
-  font-size: 0.65rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
   color: var(--a-color-muted-soft);
 }
 
@@ -919,36 +826,24 @@ kbd {
 
 /* ── Topic rows ──────────────────────────────────────────────────────────── */
 .topic-list {
-  border-bottom: var(--a-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 .topic-row-skeleton {
   height: 68px;
-  border-bottom: 1px solid var(--a-color-disabled-border);
-  background: linear-gradient(90deg, var(--a-color-disabled-bg) 25%, var(--a-color-disabled-border) 50%, var(--a-color-disabled-bg) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.4s infinite;
-}
-
-@keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
 }
 
 .topic-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.875rem 1.5rem;
-  border-bottom: 1px solid var(--a-color-disabled-border);
-  background: var(--a-color-bg);
+  padding: 0.875rem 1.25rem;
   cursor: pointer;
   transition: background 0.1s;
   gap: 1rem;
-}
-
-.topic-row:last-child {
-  border-bottom: none;
+  margin: 0;
 }
 
 .topic-row:hover,
@@ -976,27 +871,21 @@ kbd {
 
 .tr-badge {
   font-size: 0.6rem;
-  font-weight: 900;
-  letter-spacing: 0.06em;
-  padding: 0.1rem 0.45rem;
-  line-height: 1.6;
-  white-space: nowrap;
+  font-weight: var(--a-font-weight-black);
 }
 
 .tr-badge-pin {
-  border: 1.5px solid var(--a-color-fg);
   color: var(--a-color-fg);
   text-transform: uppercase;
 }
 
 .tr-badge-closed {
-  border: 1.5px solid var(--a-color-muted-soft);
+  border-color: var(--a-color-disabled-border);
   color: var(--a-color-muted-soft);
   text-transform: uppercase;
 }
 
 .tr-badge-cat {
-  border: 1.5px solid;
   cursor: pointer;
   text-transform: uppercase;
   transition: all 0.1s;
@@ -1008,7 +897,7 @@ kbd {
 }
 
 .tr-badge-tag {
-  border: 1.5px solid var(--a-color-disabled-border);
+  border-color: var(--a-color-disabled-border);
   color: var(--a-color-muted);
   cursor: pointer;
   transition: all 0.1s;
@@ -1149,6 +1038,10 @@ kbd {
   .tab-bar {
     padding: 0 0.75rem;
     overflow-x: auto;
+  }
+
+  .tab-bar-left {
+    flex-wrap: nowrap;
   }
 
   .filter-bar {

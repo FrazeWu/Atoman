@@ -8,38 +8,42 @@
 
     <div class="form-wrap">
       <!-- Category picker -->
-      <div class="field">
-        <label class="field-label">分类</label>
+      <div class="a-field">
+        <label class="a-field-label">分类</label>
         <div v-if="!forumStore.categoriesLoaded" class="a-muted" style="font-size:0.875rem">
           加载中...
         </div>
-        <div v-else-if="forumStore.categories.length === 0" style="font-size:0.875rem;font-weight:700;color:#6b7280;padding:.5rem 0">
+        <div v-else-if="forumStore.categories.length === 0" class="a-muted empty-category-note">
           暂无分类，请联系管理员创建分类后再发帖
         </div>
         <div v-else class="category-grid">
-          <button
+          <ABtn
             v-for="cat in forumStore.categories"
             :key="cat.id"
-            type="button"
+            outline
+            size="sm"
             class="category-btn"
-            :class="{ selected: selectedCategoryId === cat.id }"
+            :class="{ 'category-btn-selected': selectedCategoryId === cat.id }"
             @click="selectedCategoryId = cat.id"
           >
-            <span class="category-dot" :style="{ background: cat.color || '#000' }" />
+            <span class="category-dot" :style="{ background: cat.color || 'var(--a-color-fg)' }" />
             <span>{{ cat.name }}</span>
-          </button>
+          </ABtn>
         </div>
-        <p v-if="errors.category" class="field-error">{{ errors.category }}</p>
+        <p v-if="errors.category" class="a-field-error">{{ errors.category }}</p>
       </div>
 
       <!-- Tag input -->
-      <div class="field">
-        <label class="field-label">标签 <span style="font-weight:500;text-transform:none;letter-spacing:0">（可选，回车或逗号添加）</span></label>
+      <div class="a-field">
+        <label class="a-field-label">
+          标签
+          <span class="field-label-meta">（可选，回车或逗号添加）</span>
+        </label>
         <div class="tag-input-wrap">
           <span
             v-for="(tag, i) in tags"
             :key="i"
-            class="tag-chip"
+            class="tag-chip a-badge a-badge-fill"
           >
             {{ tag }}
             <button type="button" class="tag-remove" @click="removeTag(i)">×</button>
@@ -58,17 +62,17 @@
       </div>
 
       <!-- Editor (title + content) -->
-      <div class="field">
-        <label class="field-label">
+      <div class="a-field">
+        <label class="a-field-label">
           标题 &amp; 正文
-          <span v-if="draftSavedAt" style="font-weight:500;text-transform:none;letter-spacing:0;color:#6b7280">
+          <span v-if="draftSavedAt" class="field-label-meta field-label-saved">
             — 草稿已保存 {{ draftSavedAt }}
           </span>
         </label>
         <div class="editor-wrap" :class="{ 'editor-error': !!errors.editor }">
           <AEditor v-model="editorValue" mode="sv" :enable-mentions="true" placeholder="话题标题…" />
         </div>
-        <p v-if="errors.editor" class="field-error">{{ errors.editor }}</p>
+        <p v-if="errors.editor" class="a-field-error">{{ errors.editor }}</p>
       </div>
 
       <!-- Submit -->
@@ -248,25 +252,20 @@ onMounted(async () => {
   gap: 2rem;
 }
 
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+.field-label-meta {
+  font-weight: var(--a-font-weight-normal);
+  text-transform: none;
+  letter-spacing: 0;
 }
 
-.field-label {
-  font-size: 0.75rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: #000;
+.field-label-saved {
+  color: var(--a-color-muted);
 }
 
-.field-error {
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: #dc2626;
-  margin: 0;
+.empty-category-note {
+  padding: 0.5rem 0;
+  font-size: 0.875rem;
+  font-weight: var(--a-font-weight-strong);
 }
 
 /* Category grid */
@@ -280,26 +279,17 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.375rem 0.875rem;
-  border: 2px solid #000;
-  background: #fff;
-  font-weight: 700;
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: all 0.15s;
+  box-shadow: none;
 }
 
-.category-btn:hover {
-  background: #f3f4f6;
+.category-btn-selected {
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
+  border-color: var(--a-color-fg);
 }
 
-.category-btn.selected {
-  background: #000;
-  color: #fff;
-}
-
-.category-btn.selected .category-dot {
-  outline: 2px solid #fff;
+.category-btn-selected .category-dot {
+  outline: 2px solid var(--a-color-bg);
   outline-offset: 1px;
 }
 
@@ -315,9 +305,9 @@ onMounted(async () => {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
-  border: 2px solid #000;
+  border: var(--a-border);
   padding: 0.5rem 0.75rem;
-  background: #fff;
+  background: var(--a-color-bg);
   min-height: 2.75rem;
   align-items: center;
   cursor: text;
@@ -327,18 +317,13 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.15rem 0.5rem;
-  background: #000;
-  color: #fff;
   font-size: 0.75rem;
-  font-weight: 900;
-  letter-spacing: 0.05em;
 }
 
 .tag-remove {
   background: none;
   border: none;
-  color: #fff;
+  color: currentColor;
   cursor: pointer;
   font-size: 1rem;
   line-height: 1;
@@ -349,11 +334,10 @@ onMounted(async () => {
 .tag-input {
   flex: 1;
   min-width: 120px;
-  border: none;
-  outline: none;
-  font-size: 0.875rem;
+  font-size: var(--a-text-sm);
   font-family: inherit;
   background: transparent;
+  color: var(--a-color-fg);
 }
 
 /* Editor */
@@ -364,7 +348,7 @@ onMounted(async () => {
 }
 
 .editor-error :deep(.markdown-editor) {
-  border-color: #dc2626;
+  border-color: var(--a-color-danger);
 }
 
 /* Form actions */
@@ -374,19 +358,4 @@ onMounted(async () => {
   align-items: center;
 }
 
-.clear-draft-btn {
-  font-size: 0.7rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #9ca3af;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-}
-
-.clear-draft-btn:hover {
-  color: #ef4444;
-}
 </style>

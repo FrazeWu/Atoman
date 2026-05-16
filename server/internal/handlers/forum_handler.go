@@ -10,12 +10,20 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"atoman/internal/collab"
 	"atoman/internal/middleware"
 	"atoman/internal/model"
 	"atoman/internal/service"
 )
 
-func SetupForumRoutes(router *gin.Engine, db *gorm.DB) {
+type forumHandler struct {
+	db       *gorm.DB
+	notifSvc *service.NotificationService
+	userHub  *collab.UserHub
+}
+
+func SetupForumRoutes(router *gin.Engine, db *gorm.DB, notifSvc *service.NotificationService, userHub *collab.UserHub) {
+	h := &forumHandler{db: db, notifSvc: notifSvc, userHub: userHub}
 	forum := router.Group("/api/forum")
 	{
 		// Public / optional-auth routes
@@ -32,17 +40,17 @@ func SetupForumRoutes(router *gin.Engine, db *gorm.DB) {
 			protected.POST("/topics", CreateForumTopic(db))
 			protected.PUT("/topics/:id", UpdateForumTopic(db))
 			protected.DELETE("/topics/:id", DeleteForumTopic(db))
-			protected.POST("/topics/:id/like", ToggleForumTopicLike(db))
+			protected.POST("/topics/:id/like", h.ToggleForumTopicLike())
 			protected.POST("/topics/:id/bookmark", ToggleForumTopicBookmark(db))
 			protected.POST("/topics/:id/pin", PinForumTopic(db))
 			protected.POST("/topics/:id/close", CloseForumTopic(db))
 
 			// Replies
-			protected.POST("/topics/:id/replies", CreateForumReply(db))
+			protected.POST("/topics/:id/replies", h.CreateForumReply())
 			protected.PUT("/replies/:id", UpdateForumReply(db))
 			protected.DELETE("/replies/:id", DeleteForumReply(db))
-			protected.POST("/replies/:id/like", ToggleForumReplyLike(db))
-			protected.POST("/replies/:id/solve", SolveForumReply(db))
+			protected.POST("/replies/:id/like", h.ToggleForumReplyLike())
+			protected.POST("/replies/:id/solve", h.SolveForumReply())
 			protected.DELETE("/replies/:id/solve", UnsolveForumReply(db))
 
 			// Drafts
@@ -336,8 +344,9 @@ func DeleteForumTopic(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func ToggleForumTopicLike(db *gorm.DB) gin.HandlerFunc {
+func (h *forumHandler) ToggleForumTopicLike() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := h.db
 		id, err := uuid.Parse(c.Param("id"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid topic id"})
@@ -345,6 +354,15 @@ func ToggleForumTopicLike(db *gorm.DB) gin.HandlerFunc {
 		}
 		userID, _ := c.Get("user_id")
 		uid, _ := userID.(uuid.UUID)
+
+		var topic model.ForumTopic
+		if err := db.Select("id", "user_id", "title").First(&topic, "id = ?", id).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Topic not found"})
+			return
+		}
+
+		var actor model.User
+		db.Select("uuid", "username", "display_name").First(&actor, "uuid = ?", uid)
 
 		var like model.ForumLike
 		if db.Where("user_id = ? AND target_type = ? AND target_id = ?", uid, "topic", id).First(&like).Error == nil {
@@ -354,6 +372,9 @@ func ToggleForumTopicLike(db *gorm.DB) gin.HandlerFunc {
 		} else {
 			db.Create(&model.ForumLike{UserID: uid, TargetType: "topic", TargetID: id})
 			db.Model(&model.ForumTopic{}).Where("id = ?", id).UpdateColumn("like_count", gorm.Expr("like_count + 1"))
+			if h.notifSvc != nil {
+				_ = h.notifSvc.NotifyForumLike(topic.UserID, uid, getDisplayName(&actor), "forum_topic", topic.ID, topic.ID, topic.Title, WsPushNotif(h.userHub))
+			}
 			c.JSON(http.StatusOK, gin.H{"liked": true})
 		}
 	}
@@ -473,8 +494,9 @@ func GetForumReplies(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func CreateForumReply(db *gorm.DB) gin.HandlerFunc {
+func (h *forumHandler) CreateForumReply() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := h.db
 		topicID, err := uuid.Parse(c.Param("id"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid topic id"})
@@ -557,6 +579,10 @@ func CreateForumReply(db *gorm.DB) gin.HandlerFunc {
 		// 3. Log activity
 		service.LogActivity(db, uid, "create_reply", "reply", reply.ID)
 
+		if h.notifSvc != nil {
+			_ = h.notifSvc.NotifyForumReply(&reply, &topic, WsPushNotif(h.userHub))
+		}
+
 		c.JSON(http.StatusCreated, gin.H{"data": reply})
 	}
 }
@@ -620,8 +646,9 @@ func DeleteForumReply(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func ToggleForumReplyLike(db *gorm.DB) gin.HandlerFunc {
+func (h *forumHandler) ToggleForumReplyLike() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := h.db
 		id, err := uuid.Parse(c.Param("id"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid reply id"})
@@ -638,10 +665,19 @@ func ToggleForumReplyLike(db *gorm.DB) gin.HandlerFunc {
 		} else {
 			db.Create(&model.ForumLike{UserID: uid, TargetType: "reply", TargetID: id})
 			db.Model(&model.ForumReply{}).Where("id = ?", id).UpdateColumn("like_count", gorm.Expr("like_count + 1"))
-			// Notify reply owner
 			var replyOwner model.ForumReply
-			if db.First(&replyOwner, "id = ?", id).Error == nil && replyOwner.UserID != uid {
-				service.LogActivity(db, replyOwner.UserID, "receive_like", "reply", id)
+			if db.Preload("User").First(&replyOwner, "id = ?", id).Error == nil {
+				if replyOwner.UserID != uid {
+					service.LogActivity(db, replyOwner.UserID, "receive_like", "reply", id)
+					if h.notifSvc != nil {
+						var actor model.User
+						db.Select("uuid", "username", "display_name").First(&actor, "uuid = ?", uid)
+						var topic model.ForumTopic
+						if db.Select("id", "title").First(&topic, "id = ?", replyOwner.TopicID).Error == nil {
+							_ = h.notifSvc.NotifyForumLike(replyOwner.UserID, uid, getDisplayName(&actor), "forum_reply", replyOwner.ID, topic.ID, topic.Title, WsPushNotif(h.userHub))
+						}
+					}
+				}
 			}
 			// Auto-solve: if like count reaches threshold, mark topic as solved
 			var likeCount int64
@@ -670,8 +706,9 @@ func ToggleForumReplyLike(db *gorm.DB) gin.HandlerFunc {
 
 // SolveForumReply marks a reply as the solution (topic owner or admin only).
 // Route: POST /api/forum/replies/:id/solve
-func SolveForumReply(db *gorm.DB) gin.HandlerFunc {
+func (h *forumHandler) SolveForumReply() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		db := h.db
 		replyID, err := uuid.Parse(c.Param("id"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid reply id"})
@@ -705,6 +742,9 @@ func SolveForumReply(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		db.Model(&reply).Update("is_solved", true)
+		if h.notifSvc != nil {
+			_ = h.notifSvc.NotifyForumSolved(&reply, &topic, uid, WsPushNotif(h.userHub))
+		}
 		c.JSON(http.StatusOK, gin.H{"message": "solved"})
 	}
 }

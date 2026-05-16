@@ -1,50 +1,61 @@
 <template>
   <div class="reply-node" :class="{ 'reply-node-solution': isSolution }">
     <!-- Solution badge -->
-    <div v-if="isSolution" class="reply-solution-badge">✓ 采纳答案</div>
+    <div v-if="isSolution" class="reply-solution-badge a-badge">✓ 采纳答案</div>
 
     <!-- Reply header -->
     <div class="reply-header">
       <div class="reply-meta">
         <span class="reply-author">{{ displayName }}</span>
-        <span class="reply-floor">{{ floorLabel }}</span>
+        <span v-if="floorLabel" class="reply-floor a-badge">{{ floorLabel }}</span>
         <span class="reply-time">{{ formatTime(reply.created_at) }}</span>
       </div>
       <div class="reply-actions">
-        <button
+        <ABtn
           v-if="isAuthenticated"
+          outline
+          size="sm"
           class="reply-btn"
           @click="$emit('quote', reply)"
-        >引用</button>
-        <button
+        >引用</ABtn>
+        <ABtn
           v-if="isAuthenticated"
+          outline
+          size="sm"
           class="reply-btn"
-          :class="{ 'reply-btn-liked': reply.is_liked }"
+          :class="{ 'reply-btn-active': reply.is_liked }"
           @click="$emit('toggle-like', reply.id)"
         >
           赞 {{ reply.like_count }}
-        </button>
-        <button
+        </ABtn>
+        <ABtn
           v-if="isOwn"
-          class="reply-btn reply-btn-danger"
+          danger
+          size="sm"
+          class="reply-btn"
           @click="$emit('delete', reply.id)"
-        >删除</button>
-        <button
+        >删除</ABtn>
+        <ABtn
           v-if="isAuthenticated && !isOwn"
+          outline
+          size="sm"
           class="reply-btn"
           @click="$emit('report', reply.id)"
-        >举报</button>
-        <!-- Solve / Unsolve (topic owner only) -->
-        <button
+        >举报</ABtn>
+        <ABtn
           v-if="isTopicOwner && isSolution"
-          class="reply-btn reply-btn-unsolved"
+          outline
+          size="sm"
+          class="reply-btn"
           @click="$emit('unsolve', reply.id)"
-        >取消采纳</button>
-        <button
+        >取消采纳</ABtn>
+        <ABtn
           v-if="isTopicOwner && !topicIsSolved && !isSolution"
-          class="reply-btn reply-btn-solve"
+          outline
+          size="sm"
+          class="reply-btn"
           @click="$emit('solve', reply.id)"
-        >✓ 采纳</button>
+        >采纳</ABtn>
       </div>
     </div>
 
@@ -68,6 +79,7 @@
 import { computed } from 'vue'
 import type { ForumReply } from '@/types'
 import { useMarkdownRenderer } from '@/composables/useMarkdownRenderer'
+import ABtn from '@/components/ui/ABtn.vue'
 
 const props = defineProps<{
   reply: ForumReply
@@ -127,26 +139,21 @@ const formatTime = (iso: string) => {
 
 <style scoped>
 .reply-node {
-  border: 2px solid #000;
-  background: #fff;
+  border: var(--a-border);
+  background: var(--a-color-bg);
   padding: 1.25rem 1.5rem;
   margin-bottom: 0.75rem;
 }
 
 .reply-node-solution {
-  border-color: #16a34a;
+  border-color: var(--a-color-success);
   border-left-width: 4px;
 }
 
 .reply-solution-badge {
-  display: inline-block;
-  font-size: 0.65rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  padding: 0.15rem 0.5rem;
-  background: #16a34a;
-  color: #fff;
+  background: var(--a-color-success);
+  color: var(--a-color-bg);
+  border-color: var(--a-color-success);
   margin-bottom: 0.6rem;
 }
 
@@ -166,88 +173,34 @@ const formatTime = (iso: string) => {
 }
 
 .reply-author {
-  font-weight: 900;
+  font-weight: var(--a-font-weight-black);
   font-size: 0.85rem;
 }
 
 .reply-floor {
-  font-size: 0.7rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
   padding: 0.1rem 0.35rem;
-  border: 1.5px solid #000;
-  color: #000;
-  background: transparent;
 }
 
 .reply-time {
   font-size: 0.7rem;
-  font-weight: 500;
-  color: #9ca3af;
+  font-weight: var(--a-font-weight-normal);
+  color: var(--a-color-muted-soft);
 }
 
 .reply-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.4rem;
 }
 
 .reply-btn {
-  font-size: 0.65rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  padding: 0.25rem 0.5rem;
-  border: 1.5px solid #000;
-  cursor: pointer;
-  transition: all 0.15s;
-  background: #fff;
-  color: #000;
+  box-shadow: none;
 }
 
-.reply-btn:hover {
-  background: #000;
-  color: #fff;
-}
-
-.reply-btn-liked {
-  background: #000;
-  color: #fff;
-}
-
-.reply-btn-liked:hover {
-  background: #fff;
-  color: #000;
-}
-
-.reply-btn-danger {
-  border-color: #ef4444;
-  color: #ef4444;
-}
-
-.reply-btn-danger:hover {
-  background: #ef4444;
-  color: #fff;
-}
-
-.reply-btn-solve {
-  border-color: #16a34a;
-  color: #16a34a;
-}
-
-.reply-btn-solve:hover {
-  background: #16a34a;
-  color: #fff;
-}
-
-.reply-btn-unsolved {
-  border-color: #9ca3af;
-  color: #9ca3af;
-}
-
-.reply-btn-unsolved:hover {
-  background: #9ca3af;
-  color: #fff;
+.reply-btn-active {
+  background: var(--a-color-fg);
+  color: var(--a-color-bg);
+  border-color: var(--a-color-fg);
 }
 
 .reply-body {
@@ -260,8 +213,8 @@ const formatTime = (iso: string) => {
 .reply-quote {
   margin-bottom: 0.9rem;
   padding: 0.85rem 1rem;
-  background: #f3f4f6;
-  border-left: 3px solid #000;
+  background: var(--a-color-disabled-bg);
+  border-left: 3px solid var(--a-color-fg);
 }
 
 .reply-quote-meta {
@@ -270,16 +223,16 @@ const formatTime = (iso: string) => {
   gap: 0.5rem;
   margin-bottom: 0.35rem;
   font-size: 0.7rem;
-  font-weight: 900;
+  font-weight: var(--a-font-weight-black);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--a-letter-spacing-wide);
 }
 
 .reply-quote-text {
   margin: 0;
   font-size: 0.8rem;
   line-height: 1.6;
-  color: #4b5563;
+  color: var(--a-color-muted);
   word-break: break-word;
 }
 
@@ -297,8 +250,8 @@ const formatTime = (iso: string) => {
 }
 
 .reply-body :deep(pre) {
-  background: #f3f4f6;
-  border: 2px solid #000;
+  background: var(--a-color-disabled-bg);
+  border: var(--a-border);
   padding: 0.875rem;
   overflow-x: auto;
   margin: 0.75rem 0;
@@ -308,7 +261,7 @@ const formatTime = (iso: string) => {
 .reply-body :deep(code) {
   font-family: monospace;
   font-size: 0.875em;
-  background: #f3f4f6;
+  background: var(--a-color-disabled-bg);
   padding: 0.1em 0.3em;
 }
 
@@ -318,14 +271,14 @@ const formatTime = (iso: string) => {
 }
 
 .reply-body :deep(blockquote) {
-  border-left: 3px solid #000;
+  border-left: 3px solid var(--a-color-fg);
   padding-left: 1rem;
   margin: 0.75rem 0;
-  color: #6b7280;
+  color: var(--a-color-muted);
 }
 
 .reply-body :deep(a) {
-  color: #000;
+  color: var(--a-color-fg);
   text-decoration: underline;
 }
 

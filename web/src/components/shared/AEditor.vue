@@ -234,7 +234,9 @@ function initCodeMirror() {
       if (update.docChanged) {
         const val = update.state.doc.toString()
         emit('update:modelValue', val)
-        if (props.enableMentions) detectMentionFromCm(update)
+      }
+      if (props.enableMentions && (update.docChanged || update.selectionSet || update.viewportChanged || update.focusChanged)) {
+        detectMentionFromCm(update)
       }
     }),
     EditorView.theme({
@@ -600,7 +602,7 @@ async function fetchMentionUsers(q: string) {
   try {
     const headers: Record<string, string> = {}
     if (authStore.token) headers.Authorization = `Bearer ${authStore.token}`
-    const res = await fetch(`/api/users/search?q=${encodeURIComponent(q)}&limit=5`, { headers })
+    const res = await fetch(`/api/users/search?scope=mention&q=${encodeURIComponent(q)}&limit=5`, { headers })
     if (!res.ok) return
     const data = await res.json()
     mention.value.results = data.data || []
@@ -612,7 +614,7 @@ async function fetchMentionUsers(q: string) {
 function applyMention(user: MentionUser) {
   if (!cmView) return
   const pos = cmView.state.selection.main.head
-  const insertText = `[@${user.display_name || user.username}](/user/${user.username})`
+  const insertText = `@${user.username}`
   cmView.dispatch({
     changes: { from: mention.value.startPos, to: pos, insert: insertText },
     selection: { anchor: mention.value.startPos + insertText.length },

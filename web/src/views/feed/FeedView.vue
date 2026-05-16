@@ -90,8 +90,13 @@
                       <span class="a-label" style="display:block;margin-bottom:.15rem;color:var(--a-color-muted-soft);font-size:.65rem">
                         {{ sourceTypeLabel(sub.feed_source?.source_type || '') }}
                       </span>
-                      <span style="font-weight:700;font-size:.8rem;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                      <span style="font-weight:700;font-size:.8rem;display:flex;align-items:center;gap:.3rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
                         {{ sub.title || sub.feed_source?.title || '未命名' }}
+                        <span
+                          v-if="sub.health_status && sub.health_status !== 'healthy'"
+                          :title="sub.error_message || '订阅源异常'"
+                          :style="`display:inline-block;width:.45rem;height:.45rem;border-radius:9999px;flex-shrink:0;background:${sub.health_status === 'error' ? 'var(--a-color-danger)' : '#f59e0b'}`"
+                        />
                       </span>
                     </div>
                     <div style="display:flex;gap:.25rem;align-items:center;margin-left:.5rem;flex-shrink:0">
@@ -151,8 +156,13 @@
                   <span class="a-label" style="display:block;margin-bottom:.15rem;color:var(--a-color-muted-soft);font-size:.65rem">
                     {{ sourceTypeLabel(sub.feed_source?.source_type || '') }}
                   </span>
-                  <span style="font-weight:700;font-size:.8rem;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                  <span style="font-weight:700;font-size:.8rem;display:flex;align-items:center;gap:.3rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
                     {{ sub.title || sub.feed_source?.title || '未命名' }}
+                    <span
+                      v-if="sub.health_status && sub.health_status !== 'healthy'"
+                      :title="sub.error_message || '订阅源异常'"
+                      :style="`display:inline-block;width:.45rem;height:.45rem;border-radius:9999px;flex-shrink:0;background:${sub.health_status === 'error' ? 'var(--a-color-danger)' : '#f59e0b'}`"
+                    />
                   </span>
                 </div>
                 <div style="display:flex;gap:.25rem;align-items:center;margin-left:.5rem;flex-shrink:0">

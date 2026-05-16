@@ -31,6 +31,7 @@
                 class="a-toggle-btn"
                 :class="{ 'a-toggle-btn-active': following }"
               >{{ following ? '已关注' : '关注' }}</button>
+              <button v-if="authStore.isAuthenticated && !isSelf" @click="openDM" class="a-toggle-btn">发私信</button>
               <RouterLink v-if="isSelf" to="/blog/settings" class="a-btn-outline-sm">编辑资料</RouterLink>
             </div>
           </div>
@@ -82,7 +83,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import PostCard from '@/components/blog/PostCard.vue'
 import AEmpty from '@/components/ui/AEmpty.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -91,6 +92,7 @@ import { useApi } from '@/composables/useApi'
 import type { UserProfile, Post, Channel } from '@/types'
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const api = useApi()
 
@@ -157,6 +159,10 @@ const toggleFollow = async () => {
       toastVisible.value = true
     }
   } catch (e) { console.error(e) }
+}
+
+const openDM = () => {
+  router.push({ path: '/inbox', query: { tab: 'dm', user: username.value } })
 }
 
 onMounted(async () => {
